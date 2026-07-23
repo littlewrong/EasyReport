@@ -136,3 +136,9 @@ java -Deasyreport.fileStoreDir=/data/easyreport/templates \
 | HTTP API | - | - | 支持 | 支持 |
 | SQL 查询 | - | - | 支持 | 支持 |
 | Python 脚本 | - | - | - | 支持 |
+
+## 开源协议
+
+EasyReport 自有代码采用 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0) 许可。您可以在遵守协议的前提下将其用于个人或商业用途，并可以使用、修改和分发；重新分发时须保留版权与许可证声明，并对修改过的文件作出明确说明。
+
+本项目包含按各自许可证提供的第三方组件，包括 UReport2（Apache-2.0）、RuoYi、GoView、Vben Admin（MIT）以及 iText 5.5.13（AGPLv3 / 商业双许可证）。Apache License 2.0 仅适用于 EasyReport 自有代码，第三方组件继续适用其原许可证；使用和分发本项目时，须同时遵守相应的第三方许可条款。
