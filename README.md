@@ -4,9 +4,9 @@
 
 **EasyReport** 是一套企业级数据报表与数据集成中间件集合，覆盖数据同步、报表设计和 BI 大屏三类场景。项目既可以作为独立产品部署，也可以按模块嵌入企业内部系统。
 
-官网地址：[www.easyreport.cn](https://www.easyreport.cn)
+官网地址：[www.easyreport.cn](http://www.easyreport.cn)
 
-试用账号：admin admin123，请勿修改密码，会定期重置
+项目地址：[https://github.com/littlewrong/easyreport](https://github.com/littlewrong/easyreport)
 
 ## 核心能力
 
@@ -48,80 +48,138 @@
 | ER-BI 大屏设计器 | GoView、Vue 3、Naive UI、ECharts、VChart、Three.js、Monaco Editor |
 | 官网文档 | 静态 HTML、Markdown、marked.js |
 
-## 发布包结构
+## 项目结构
 
 ```text
-EasyReport-release/
-├── er-sync/
-│   ├── api/                    # er-admin.jar、配置文件和数据库脚本
-│   └── dist/                   # 已构建的管理端静态文件
-├── er-report/
-│   └── easyreport-web/
-│       ├── target/             # 可直接运行的报表服务 JAR
-│       ├── lib/                # EasyReport 运行库
-│       └── src/main/resources/ # 配置示例
-├── er-bi/
-│   ├── api/
-│   │   ├── windows-x64/        # Windows x64 可执行文件
-│   │   └── linux-amd64/        # Linux AMD64 可执行文件
-│   ├── ui/                     # BI 管理端静态文件
-│   ├── bi_designer/            # 大屏设计器静态文件
-│   └── sql/easyreport_bi.sql
-└── nginx/nginx.conf            # 整套产品同域部署参考配置
+EasyReport
+├── er-sync/                   # 数据同步管理平台
+│   ├── er-api/                # 数据同步后端（基于 RuoYi，默认端口 8080）
+│   └── er-ui/                 # 数据同步前端
+├── er-report/                 # 报表设计中间件
+│   ├── easyreport-core/       # 报表核心（解析、计算、导出）
+│   ├── easyreport-console/    # 报表 Web 控制台与 REST API
+│   ├── easyreport-js/         # 报表设计器前端
+│   ├── easyreport-font/       # 字体渲染支持
+│   └── easyreport-web/        # 报表设计器独立启动模块（默认端口 8083）
+├── er-bi/                     # BI 大屏项目
+│   ├── api/                   # FastAPI 后端（默认端口 5320）
+│   ├── ui/                    # Vben 管理端（默认端口 5777）
+│   └── bi_designer/           # GoView 大屏设计器（默认端口 3020）
+├── website/                   # 官网与在线文档
+└── doc/                       # 项目资料与扩展说明
 ```
 
-## 运行要求
+## 环境要求
 
-| 模块 | 运行要求 |
-|------|----------|
-| ER-Sync | JDK 1.8+、MySQL 8.0+、Redis、Nginx |
-| ER-Report | JDK 1.8+ |
-| ER-BI | Windows x64 或 Linux AMD64、MySQL 5.7+ / 8.0+、Nginx |
+| 模块 | 要求 |
+|------|------|
+| ER-Sync | JDK 1.8+、Maven 3.6+、MySQL 5.7+ / 8.0+、Redis、Node.js 12+ |
+| ER-Report | JDK 1.8+、Maven 3.6+ |
+| ER-BI API | Python 3.10+、MySQL 5.7+ / 8.0+ |
+| ER-BI 管理端 | Node.js 22.18+ 或 24+、pnpm 11+ |
+| ER-BI 大屏设计器 | Node.js 16.14+、pnpm |
 
 ## 快速开始
 
-获取 EasyReport 发布包并解压。下面是最短启动路径，完整配置与生产部署要求请查看官网文档。
+### 启动 ER-Sync 数据同步
 
-### ER-Sync 数据同步
-
-1. 创建 MySQL 8.0 系统库 `easyreport`，并将 `er-sync/api/easyreport.sql` 导入该数据库。
-2. 修改 `er-sync/api/application-druid.yml` 中的数据库配置，以及 `application.yml` 中的 Redis、文件目录和令牌密钥。
-3. 从 `api` 目录启动后端：
+1. 导入数据库脚本：
 
 ```bash
-cd er-sync/api
-java -jar er-admin.jar
+er-sync/er-api/sql/easyreport.sql
 ```
 
-4. 使用 Nginx 托管 `er-sync/dist`，并把 `/prod-api/` 转发到 `http://127.0.0.1:8080/`。
+2. 修改数据库和 Redis 配置：
 
-详细步骤：[数据同步快速开始](https://www.easyreport.cn/doc.html#datasync-quickstart)
+```text
+er-sync/er-api/er-admin/src/main/resources/application-druid.yml
+```
 
-### ER-Report 报表设计
-
-创建报表模板和上传资源目录后启动发布包中的 JAR：
+3. 启动后端：
 
 ```bash
-cd er-report/easyreport-web
-java -Deasyreport.fileStoreDir=/data/easyreport/templates \
-  -jar target/easyreport-web-2.0.6.jar \
-  --tw.profile=/data/easyreport/uploads/ \
-  --server.port=8083
+cd er-sync/er-api
+mvn clean package -DskipTests
+java -jar er-admin/target/er-admin.jar
 ```
 
-设计器地址：`http://localhost:8083/easyreport/designer`
+4. 启动前端：
 
-详细步骤：[报表设计快速开始](https://www.easyreport.cn/doc.html#report-quickstart)
+```bash
+cd er-sync/er-ui
+npm install
+npm run dev
+```
 
-### ER-BI BI 大屏
+管理端默认访问：`http://localhost:80`
 
-1. 创建系统库 `easyreport_bi`，并将 `er-bi/sql/easyreport_bi.sql` 导入该数据库。
-2. 选择 `windows-x64` 或 `linux-amd64`，分别为 `er-bi-api` 和 `er-bi-datasource-api` 创建 `config.ini`，替换所有 `CHANGE_ME`。
-3. 启动主 API（`5320`）和数据源 API（`5321`）。
-4. 使用 Nginx 托管 `er-bi/ui` 和 `er-bi/bi_designer`，并按发布包示例配置 `/biapi/`、`/dsapi/http/`、`/dsapi/sql/` 与 `/dsapi/python/` 反向代理。
-5. 访问 `/biui/#/auth/login`，使用 `admin / 123456` 首次登录并立即修改密码。
+### 启动 ER-Report 报表设计器
 
-详细步骤：[BI 大屏快速开始](https://www.easyreport.cn/doc.html#bi-quickstart)
+```bash
+cd er-report
+mvn clean package -DskipTests
+java -jar easyreport-web/target/easyreport-web-*.jar
+```
+
+报表设计器默认访问：`http://localhost:8083/easyreport/designer`
+
+### 启动 ER-BI BI 大屏
+
+1. 启动 API：
+
+```bash
+cd er-bi/api
+pip install -r requirements.txt
+python -m scripts.init_db
+python run.py
+```
+
+API 默认访问：
+
+```text
+API 状态: http://localhost:5320/api/status
+Swagger:  http://localhost:5320/api/docs
+```
+
+默认账号：
+
+```text
+admin / 123456
+jack  / 123456
+```
+
+如果是在已有数据库上升级 BI 菜单和数据源表结构，可执行：
+
+```bash
+cd er-bi/api
+python -m scripts.add_bi_designer_menus
+```
+
+2. 启动 Vben 管理端：
+
+```bash
+cd er-bi/ui
+pnpm install
+pnpm dev
+```
+
+管理端默认访问：`http://localhost:5777`
+
+3. 启动 GoView 大屏设计器：
+
+```bash
+cd er-bi/bi_designer
+pnpm install
+pnpm dev
+```
+
+设计器默认访问：`http://localhost:3020`
+
+推荐使用流程：
+
+```text
+登录 BI 管理端 -> 配置 DB/HTTP/SQL/Python 数据源 -> 新建大屏 -> 打开设计器 -> 绑定数据 -> 预览并发布
+```
 
 ## 数据源支持
 
@@ -136,6 +194,14 @@ java -Deasyreport.fileStoreDir=/data/easyreport/templates \
 | HTTP API | - | - | 支持 | 支持 |
 | SQL 查询 | - | - | 支持 | 支持 |
 | Python 脚本 | - | - | - | 支持 |
+
+## 文档入口
+
+- 官网首页：`website/index.html`
+- 在线文档：`website/doc.html`
+- ER-BI API 说明：`er-bi/api/README.md`
+- 报表功能说明：`er-report/说明文档/`
+- 数据同步说明：`doc/`
 
 ## 开源协议
 
