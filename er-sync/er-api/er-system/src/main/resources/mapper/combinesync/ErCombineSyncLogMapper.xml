@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.easyreport.combinesync.mapper.ErCombineSyncLogMapper">
+
+    <resultMap type="ErCombineSyncLog" id="ErCombineSyncLogResult">
+        <result property="logId"            column="log_id"            />
+        <result property="combineId"        column="combine_id"        />
+        <result property="sourceDatabase"   column="source_database"   />
+        <result property="sourceTable"      column="source_table"      />
+        <result property="targetTable"      column="target_table"      />
+        <result property="syncMode"         column="sync_mode"         />
+        <result property="syncAction"       column="sync_action"       />
+        <result property="totalCount"       column="total_count"       />
+        <result property="successCount"     column="success_count"     />
+        <result property="failCount"        column="fail_count"        />
+        <result property="startTime"        column="start_time"        />
+        <result property="endTime"          column="end_time"          />
+        <result property="executeTime"      column="execute_time"      />
+        <result property="syncResult"       column="sync_result"       />
+        <result property="errorMessage"     column="error_message"     />
+        <result property="lastSyncValue"    column="last_sync_value"   />
+        <result property="createTime"       column="create_time"       />
+    </resultMap>
+
+    <sql id="selectErCombineSyncLogVo">
+        SELECT log_id, combine_id, source_database, source_table, target_table, sync_mode, sync_action,
+               total_count, success_count, fail_count, start_time, end_time, execute_time,
+               sync_result, error_message, last_sync_value, create_time
+        FROM er_combine_sync_log
+    </sql>
+
+    <select id="selectErCombineSyncLogList" parameterType="ErCombineSyncLog" resultMap="ErCombineSyncLogResult">
+        <include refid="selectErCombineSyncLogVo"/>
+        <where>
+            <if test="combineId != null">
+                AND combine_id = #{combineId}
+            </if>
+            <if test="sourceDatabase != null and sourceDatabase != ''">
+                AND source_database LIKE CONCAT('%', #{sourceDatabase}, '%')
+            </if>
+            <if test="sourceTable != null and sourceTable != ''">
+                AND source_table LIKE CONCAT('%', #{sourceTable}, '%')
+            </if>
+            <if test="syncMode != null and syncMode != ''">
+                AND sync_mode = #{syncMode}
+            </if>
+            <if test="syncAction != null and syncAction != ''">
+                AND sync_action = #{syncAction}
+            </if>
+            <if test="syncResult != null and syncResult != ''">
+                AND sync_result = #{syncResult}
+            </if>
+        </where>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="selectErCombineSyncLogByLogId" parameterType="Long" resultMap="ErCombineSyncLogResult">
+        <include refid="selectErCombineSyncLogVo"/>
+        WHERE log_id = #{logId}
+    </select>
+
+    <select id="selectErCombineSyncLogByCombineId" parameterType="Long" resultMap="ErCombineSyncLogResult">
+        <include refid="selectErCombineSyncLogVo"/>
+        WHERE combine_id = #{combineId}
+        ORDER BY create_time DESC
+    </select>
+
+    <insert id="insertErCombineSyncLog" parameterType="ErCombineSyncLog" useGeneratedKeys="true" keyProperty="logId">
+        INSERT INTO er_combine_sync_log
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="combineId != null">combine_id,</if>
+            <if test="sourceDatabase != null">source_database,</if>
+            <if test="sourceTable != null">source_table,</if>
+            <if test="targetTable != null">target_table,</if>
+            <if test="syncMode != null">sync_mode,</if>
+            <if test="syncAction != null">sync_action,</if>
+            <if test="totalCount != null">total_count,</if>
+            <if test="successCount != null">success_count,</if>
+            <if test="failCount != null">fail_count,</if>
+            <if test="startTime != null">start_time,</if>
+            <if test="endTime != null">end_time,</if>
+            <if test="executeTime != null">execute_time,</if>
+            <if test="syncResult != null">sync_result,</if>
+            <if test="errorMessage != null">error_message,</if>
+            <if test="lastSyncValue != null">last_sync_value,</if>
+            create_time
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="combineId != null">#{combineId},</if>
+            <if test="sourceDatabase != null">#{sourceDatabase},</if>
+            <if test="sourceTable != null">#{sourceTable},</if>
+            <if test="targetTable != null">#{targetTable},</if>
+            <if test="syncMode != null">#{syncMode},</if>
+            <if test="syncAction != null">#{syncAction},</if>
+            <if test="totalCount != null">#{totalCount},</if>
+            <if test="successCount != null">#{successCount},</if>
+            <if test="failCount != null">#{failCount},</if>
+            <if test="startTime != null">#{startTime},</if>
+            <if test="endTime != null">#{endTime},</if>
+            <if test="executeTime != null">#{executeTime},</if>
+            <if test="syncResult != null">#{syncResult},</if>
+            <if test="errorMessage != null">#{errorMessage},</if>
+            <if test="lastSyncValue != null">#{lastSyncValue},</if>
+            SYSDATE()
+        </trim>
+    </insert>
+
+    <delete id="deleteErCombineSyncLogByLogId" parameterType="Long">
+        DELETE FROM er_combine_sync_log WHERE log_id = #{logId}
+    </delete>
+
+    <delete id="deleteErCombineSyncLogByLogIds" parameterType="String">
+        DELETE FROM er_combine_sync_log WHERE log_id IN
+        <foreach item="logId" collection="array" open="(" separator="," close=")">
+            #{logId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteErCombineSyncLogByCombineId" parameterType="Long">
+        DELETE FROM er_combine_sync_log WHERE combine_id = #{combineId}
+    </delete>
+
+</mapper>

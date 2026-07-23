@@ -1,0 +1,2000 @@
+{
+  "editCanvasConfig": {
+    "projectName": "城市应急响应指挥屏",
+    "width": 1920,
+    "height": 1080,
+    "filterShow": false,
+    "hueRotate": 0,
+    "saturate": 1,
+    "contrast": 1,
+    "brightness": 1,
+    "opacity": 1,
+    "rotateZ": 0,
+    "rotateX": 0,
+    "rotateY": 0,
+    "skewX": 0,
+    "skewY": 0,
+    "blendMode": "normal",
+    "background": "#07111f",
+    "backgroundImage": null,
+    "selectColor": true,
+    "chartThemeColor": "dark",
+    "chartCustomThemeColorInfo": null,
+    "chartThemeSetting": {},
+    "vChartThemeName": "vScreenVolcanoBlue",
+    "previewScaleType": "fit"
+  },
+  "requestGlobalConfig": {
+    "requestDataPond": [],
+    "requestOriginUrl": "",
+    "requestInterval": 30,
+    "requestIntervalUnit": "second",
+    "requestParams": {
+      "Body": {
+        "form-data": {},
+        "x-www-form-urlencoded": {},
+        "json": "",
+        "xml": ""
+      },
+      "Header": {},
+      "Params": {}
+    }
+  },
+  "componentList": [
+    {
+      "id": "demo08_title",
+      "isGroup": false,
+      "key": "TextGradient",
+      "chartConfig": {
+        "key": "TextGradient",
+        "chartKey": "VTextGradient",
+        "conKey": "VCTextGradient",
+        "title": "大屏标题",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "naiveUI",
+        "image": "text_gradient.png"
+      },
+      "attr": {
+        "x": 430,
+        "y": 22,
+        "w": 1060,
+        "h": 72,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": "城市应急响应指挥屏",
+        "size": 44,
+        "gradient": {
+          "from": "#fb7185",
+          "to": "#f8fafc",
+          "deg": 90
+        }
+      }
+    },
+    {
+      "id": "demo08_subtitle",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 490,
+        "y": 82,
+        "w": 940,
+        "h": 32,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "事件态势、资源调派、响应时效和处置闭环",
+        "fontSize": 18,
+        "fontColor": "#8fb6d8",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "center",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_time",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1515,
+        "y": 34,
+        "w": 330,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "数据更新时间 2026-07-07 10:30",
+        "fontSize": 17,
+        "fontColor": "#8fb6d8",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_kpi_b_0",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 70,
+        "y": 118,
+        "w": 360,
+        "h": 126,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#fb7185",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo08_kpi_l_0",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 92,
+        "y": 132,
+        "w": 180,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "今日事件",
+        "fontSize": 18,
+        "fontColor": "#b9c7e6",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_kpi_n_0",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 84,
+        "y": 166,
+        "w": 240,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 286,
+        "from": 0,
+        "dur": 2,
+        "precision": 0,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#fb7185",
+        "prefixText": "",
+        "prefixColor": "#fb7185",
+        "suffixText": "起",
+        "suffixColor": "#fb7185"
+      }
+    },
+    {
+      "id": "demo08_kpi_d_0",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 315,
+        "y": 176,
+        "w": 90,
+        "h": 36,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "-8.3%",
+        "fontSize": 18,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_kpi_b_1",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 500,
+        "y": 118,
+        "w": 360,
+        "h": 126,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#facc15",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo08_kpi_l_1",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 522,
+        "y": 132,
+        "w": 180,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "平均响应",
+        "fontSize": 18,
+        "fontColor": "#b9c7e6",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_kpi_n_1",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 514,
+        "y": 166,
+        "w": 240,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 7.6,
+        "from": 0,
+        "dur": 2,
+        "precision": 1,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#facc15",
+        "prefixText": "",
+        "prefixColor": "#facc15",
+        "suffixText": "min",
+        "suffixColor": "#facc15"
+      }
+    },
+    {
+      "id": "demo08_kpi_d_1",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 745,
+        "y": 176,
+        "w": 90,
+        "h": 36,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "-1.2",
+        "fontSize": 18,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_kpi_b_2",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 930,
+        "y": 118,
+        "w": 360,
+        "h": 126,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#67e8f9",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo08_kpi_l_2",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 952,
+        "y": 132,
+        "w": 180,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "处置完成率",
+        "fontSize": 18,
+        "fontColor": "#b9c7e6",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_kpi_n_2",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 944,
+        "y": 166,
+        "w": 240,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 94.8,
+        "from": 0,
+        "dur": 2,
+        "precision": 1,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#67e8f9",
+        "prefixText": "",
+        "prefixColor": "#67e8f9",
+        "suffixText": "%",
+        "suffixColor": "#67e8f9"
+      }
+    },
+    {
+      "id": "demo08_kpi_d_2",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1175,
+        "y": 176,
+        "w": 90,
+        "h": 36,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "+3.5%",
+        "fontSize": 18,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_kpi_b_3",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1360,
+        "y": 118,
+        "w": 360,
+        "h": 126,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#86efac",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo08_kpi_l_3",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1382,
+        "y": 132,
+        "w": 180,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "在线资源",
+        "fontSize": 18,
+        "fontColor": "#b9c7e6",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_kpi_n_3",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 1374,
+        "y": 166,
+        "w": 240,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 1264,
+        "from": 0,
+        "dur": 2,
+        "precision": 0,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#86efac",
+        "prefixText": "",
+        "prefixColor": "#86efac",
+        "suffixText": "组",
+        "suffixColor": "#86efac"
+      }
+    },
+    {
+      "id": "demo08_kpi_d_3",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1605,
+        "y": 176,
+        "w": 90,
+        "h": 36,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "+42",
+        "fontSize": 18,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_live_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 50,
+        "y": 285,
+        "w": 430,
+        "h": 715,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#fb7185",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo08_live_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 72,
+        "y": 299,
+        "w": 386,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "实时事件",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_live",
+      "isGroup": false,
+      "key": "TableScrollBoard",
+      "chartConfig": {
+        "key": "TableScrollBoard",
+        "chartKey": "VTableScrollBoard",
+        "conKey": "VCTableScrollBoard",
+        "title": "实时事件",
+        "category": "Tables",
+        "categoryName": "表格",
+        "package": "Tables",
+        "chartFrame": "common",
+        "image": "table_scrollboard.png"
+      },
+      "attr": {
+        "x": 80,
+        "y": 345,
+        "w": 370,
+        "h": 610,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "header": [
+          "区域",
+          "事件",
+          "状态"
+        ],
+        "dataset": [
+          [
+            "东城区",
+            "道路拥堵",
+            "派单"
+          ],
+          [
+            "高新区",
+            "电梯困人",
+            "到场"
+          ],
+          [
+            "滨江路",
+            "积水处置",
+            "处理中"
+          ],
+          [
+            "西客站",
+            "人员救助",
+            "完成"
+          ],
+          [
+            "南环",
+            "车辆事故",
+            "派单"
+          ],
+          [
+            "北城",
+            "燃气报警",
+            "复核"
+          ]
+        ],
+        "index": true,
+        "indexHeader": "#",
+        "columnWidth": [
+          42,
+          150,
+          110,
+          110
+        ],
+        "align": [
+          "center",
+          "left",
+          "right",
+          "right"
+        ],
+        "rowNum": 6,
+        "waitTime": 2,
+        "headerHeight": 34,
+        "carousel": "single",
+        "hoverPause": true,
+        "headerBGC": "#0e7490",
+        "oddRowBGC": "rgba(8, 47, 73, 0.72)",
+        "evenRowBGC": "rgba(15, 23, 42, 0.72)"
+      }
+    },
+    {
+      "id": "demo08_funnel_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 530,
+        "y": 285,
+        "w": 520,
+        "h": 360,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#34d399",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo08_funnel_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 552,
+        "y": 299,
+        "w": 476,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "处置闭环漏斗",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_funnel",
+      "isGroup": false,
+      "key": "Funnel",
+      "chartConfig": {
+        "key": "Funnel",
+        "chartKey": "VFunnel",
+        "conKey": "VCFunnel",
+        "title": "处置闭环漏斗",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "funnel.png"
+      },
+      "attr": {
+        "x": 565,
+        "y": 345,
+        "w": 450,
+        "h": 260,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#34d399",
+          "#facc15",
+          "#38bdf8",
+          "#a78bfa"
+        ],
+        "tooltip": {},
+        "legend": {
+          "show": false
+        },
+        "dataset": {
+          "dimensions": [
+            "product",
+            "dataOne"
+          ],
+          "source": [
+            {
+              "product": "受理",
+              "dataOne": 286
+            },
+            {
+              "product": "派单",
+              "dataOne": 266
+            },
+            {
+              "product": "到场",
+              "dataOne": 248
+            },
+            {
+              "product": "处置",
+              "dataOne": 232
+            },
+            {
+              "product": "归档",
+              "dataOne": 214
+            }
+          ]
+        },
+        "series": [
+          {
+            "name": "Funnel",
+            "type": "funnel",
+            "top": 46,
+            "left": "8%",
+            "width": "86%",
+            "min": 0,
+            "minSize": "0%",
+            "maxSize": "100%",
+            "sort": "descending",
+            "gap": 4,
+            "label": {
+              "show": true,
+              "position": "inside",
+              "fontSize": 13,
+              "color": "#ffffff"
+            },
+            "itemStyle": {
+              "borderColor": "#07111f",
+              "borderWidth": 1
+            },
+            "emphasis": {
+              "label": {
+                "fontSize": 18
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo08_pie_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1090,
+        "y": 285,
+        "w": 360,
+        "h": 360,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#fbbf24",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo08_pie_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1112,
+        "y": 299,
+        "w": 316,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "事件类型",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_pie",
+      "isGroup": false,
+      "key": "PieCommon",
+      "chartConfig": {
+        "key": "PieCommon",
+        "chartKey": "VPieCommon",
+        "conKey": "VCPieCommon",
+        "title": "事件类型",
+        "category": "Pies",
+        "categoryName": "饼图",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "pie.png"
+      },
+      "attr": {
+        "x": 1120,
+        "y": 345,
+        "w": 310,
+        "h": 260,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#fb7185",
+          "#facc15",
+          "#38bdf8",
+          "#34d399"
+        ],
+        "isCarousel": false,
+        "type": "ring",
+        "tooltip": {
+          "show": true,
+          "trigger": "item"
+        },
+        "legend": {
+          "show": true,
+          "type": "scroll",
+          "x": "center",
+          "y": "top",
+          "icon": "circle",
+          "orient": "horizontal",
+          "textStyle": {
+            "color": "#b9c7e6",
+            "fontSize": 13
+          },
+          "itemHeight": 10,
+          "itemWidth": 10,
+          "pageTextStyle": {
+            "color": "#b9c7e6"
+          }
+        },
+        "dataset": {
+          "dimensions": [
+            "product",
+            "data1"
+          ],
+          "source": [
+            {
+              "product": "交通事故",
+              "data1": 34
+            },
+            {
+              "product": "消防警情",
+              "data1": 20
+            },
+            {
+              "product": "群众求助",
+              "data1": 19
+            },
+            {
+              "product": "城市内涝",
+              "data1": 15
+            },
+            {
+              "product": "其他",
+              "data1": 12
+            }
+          ]
+        },
+        "series": [
+          {
+            "type": "pie",
+            "radius": [
+              "42%",
+              "66%"
+            ],
+            "center": [
+              "50%",
+              "58%"
+            ],
+            "roseType": false,
+            "avoidLabelOverlap": true,
+            "itemStyle": {
+              "show": true,
+              "borderRadius": 6,
+              "borderColor": "#07111f",
+              "borderWidth": 2
+            },
+            "label": {
+              "show": true,
+              "color": "#dbeafe",
+              "fontSize": 12
+            },
+            "labelLine": {
+              "show": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo08_radar_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1490,
+        "y": 285,
+        "w": 380,
+        "h": 360,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#22d3ee",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo08_radar_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1512,
+        "y": 299,
+        "w": 336,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "资源状态",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_radar",
+      "isGroup": false,
+      "key": "Radar",
+      "chartConfig": {
+        "key": "Radar",
+        "chartKey": "VRadar",
+        "conKey": "VCRadar",
+        "title": "资源状态",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Charts",
+        "chartFrame": "common",
+        "image": "radar.png"
+      },
+      "attr": {
+        "x": 1515,
+        "y": 345,
+        "w": 330,
+        "h": 260,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#22d3ee",
+          "#60a5fa",
+          "#a78bfa",
+          "#34d399"
+        ],
+        "tooltip": {
+          "show": true
+        },
+        "legend": {
+          "show": true,
+          "type": "scroll",
+          "x": "center",
+          "y": "top",
+          "icon": "circle",
+          "orient": "horizontal",
+          "textStyle": {
+            "color": "#b9c7e6",
+            "fontSize": 13
+          },
+          "itemHeight": 10,
+          "itemWidth": 10,
+          "pageTextStyle": {
+            "color": "#b9c7e6"
+          },
+          "data": [
+            "可用",
+            "需求"
+          ]
+        },
+        "dataset": {
+          "radarIndicator": [
+            {
+              "name": "消防",
+              "max": 100
+            },
+            {
+              "name": "交警",
+              "max": 100
+            },
+            {
+              "name": "医疗",
+              "max": 100
+            },
+            {
+              "name": "排涝",
+              "max": 100
+            },
+            {
+              "name": "燃气",
+              "max": 100
+            }
+          ],
+          "seriesData": [
+            {
+              "name": "可用",
+              "value": [
+                86,
+                92,
+                78,
+                81,
+                88
+              ]
+            },
+            {
+              "name": "需求",
+              "value": [
+                72,
+                84,
+                69,
+                76,
+                70
+              ]
+            }
+          ]
+        },
+        "radar": {
+          "shape": "polygon",
+          "radius": [
+            "0%",
+            "62%"
+          ],
+          "center": [
+            "50%",
+            "56%"
+          ],
+          "splitArea": {
+            "show": true
+          },
+          "splitLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#24415f"
+            }
+          },
+          "axisName": {
+            "show": true,
+            "color": "#c7d2fe",
+            "fontSize": 12
+          },
+          "axisLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#24415f"
+            }
+          },
+          "axisTick": {
+            "show": false
+          },
+          "indicator": [
+            {
+              "name": "消防",
+              "max": 100
+            },
+            {
+              "name": "交警",
+              "max": 100
+            },
+            {
+              "name": "医疗",
+              "max": 100
+            },
+            {
+              "name": "排涝",
+              "max": 100
+            },
+            {
+              "name": "燃气",
+              "max": 100
+            }
+          ]
+        },
+        "series": [
+          {
+            "name": "radar",
+            "type": "radar",
+            "areaStyle": {
+              "opacity": 0.18
+            },
+            "data": [
+              {
+                "name": "可用",
+                "value": [
+                  86,
+                  92,
+                  78,
+                  81,
+                  88
+                ]
+              },
+              {
+                "name": "需求",
+                "value": [
+                  72,
+                  84,
+                  69,
+                  76,
+                  70
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo08_trend_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 530,
+        "y": 690,
+        "w": 820,
+        "h": 310,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#fb7185",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo08_trend_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 552,
+        "y": 704,
+        "w": 776,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "事件趋势",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_trend",
+      "isGroup": false,
+      "key": "LineCommon",
+      "chartConfig": {
+        "key": "LineCommon",
+        "chartKey": "VLineCommon",
+        "conKey": "VCLineCommon",
+        "title": "事件趋势",
+        "category": "Lines",
+        "categoryName": "折线图",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "line.png"
+      },
+      "attr": {
+        "x": 565,
+        "y": 745,
+        "w": 760,
+        "h": 210,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#fb7185",
+          "#facc15",
+          "#38bdf8",
+          "#34d399"
+        ],
+        "tooltip": {
+          "show": true,
+          "trigger": "axis",
+          "axisPointer": {
+            "type": "line"
+          }
+        },
+        "legend": {
+          "show": true,
+          "type": "scroll",
+          "x": "center",
+          "y": "top",
+          "icon": "circle",
+          "orient": "horizontal",
+          "textStyle": {
+            "color": "#b9c7e6",
+            "fontSize": 13
+          },
+          "itemHeight": 10,
+          "itemWidth": 10,
+          "pageTextStyle": {
+            "color": "#b9c7e6"
+          }
+        },
+        "grid": {
+          "show": false,
+          "left": "8%",
+          "right": "6%",
+          "top": 52,
+          "bottom": 38,
+          "containLabel": true
+        },
+        "xAxis": {
+          "show": true,
+          "type": "category",
+          "axisLabel": {
+            "show": true,
+            "fontSize": 12,
+            "color": "#b9c7e6",
+            "rotate": 0
+          },
+          "axisLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#35527a",
+              "width": 1
+            },
+            "onZero": true
+          },
+          "axisTick": {
+            "show": false
+          },
+          "splitLine": {
+            "show": false
+          }
+        },
+        "yAxis": {
+          "show": true,
+          "type": "value",
+          "axisLabel": {
+            "show": true,
+            "fontSize": 12,
+            "color": "#b9c7e6"
+          },
+          "axisLine": {
+            "show": false
+          },
+          "axisTick": {
+            "show": false
+          },
+          "splitLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#203651",
+              "width": 1,
+              "type": "dashed"
+            }
+          }
+        },
+        "dataset": {
+          "dimensions": [
+            "time",
+            "火情",
+            "交通",
+            "救助"
+          ],
+          "source": [
+            {
+              "time": "00",
+              "火情": 6,
+              "交通": 12,
+              "救助": 4
+            },
+            {
+              "time": "04",
+              "火情": 4,
+              "交通": 8,
+              "救助": 3
+            },
+            {
+              "time": "08",
+              "火情": 8,
+              "交通": 18,
+              "救助": 9
+            },
+            {
+              "time": "12",
+              "火情": 12,
+              "交通": 26,
+              "救助": 11
+            },
+            {
+              "time": "16",
+              "火情": 10,
+              "交通": 30,
+              "救助": 14
+            },
+            {
+              "time": "20",
+              "火情": 7,
+              "交通": 22,
+              "救助": 10
+            },
+            {
+              "time": "24",
+              "火情": 5,
+              "交通": 14,
+              "救助": 6
+            }
+          ]
+        },
+        "series": [
+          {
+            "name": "火情",
+            "type": "line",
+            "smooth": true,
+            "symbolSize": 5,
+            "label": {
+              "show": false
+            },
+            "lineStyle": {
+              "type": "solid",
+              "width": 3,
+              "color": "#fb7185"
+            },
+            "itemStyle": {
+              "color": "#fb7185"
+            },
+            "areaStyle": {
+              "opacity": 0.16
+            }
+          },
+          {
+            "name": "交通",
+            "type": "line",
+            "smooth": true,
+            "symbolSize": 5,
+            "label": {
+              "show": false
+            },
+            "lineStyle": {
+              "type": "solid",
+              "width": 3,
+              "color": "#facc15"
+            },
+            "itemStyle": {
+              "color": "#facc15"
+            }
+          },
+          {
+            "name": "救助",
+            "type": "line",
+            "smooth": true,
+            "symbolSize": 5,
+            "label": {
+              "show": false
+            },
+            "lineStyle": {
+              "type": "solid",
+              "width": 3,
+              "color": "#38bdf8"
+            },
+            "itemStyle": {
+              "color": "#38bdf8"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo08_rank_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1390,
+        "y": 690,
+        "w": 480,
+        "h": 310,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#38bdf8",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo08_rank_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1412,
+        "y": 704,
+        "w": 436,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "资源调派排行",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo08_rank",
+      "isGroup": false,
+      "key": "TableList",
+      "chartConfig": {
+        "key": "TableList",
+        "chartKey": "VTableList",
+        "conKey": "VCTableList",
+        "title": "资源调派排行",
+        "category": "Tables",
+        "categoryName": "表格",
+        "package": "Tables",
+        "chartFrame": "common",
+        "image": "tables_list.png"
+      },
+      "attr": {
+        "x": 1420,
+        "y": 745,
+        "w": 420,
+        "h": 210,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": [
+          {
+            "name": "消防一中队",
+            "value": 42
+          },
+          {
+            "name": "交警三大队",
+            "value": 38
+          },
+          {
+            "name": "急救中心",
+            "value": 32
+          },
+          {
+            "name": "城管网格",
+            "value": 25
+          },
+          {
+            "name": "排涝小组",
+            "value": 19
+          }
+        ],
+        "rowNum": 6,
+        "waitTime": 2,
+        "unit": "次",
+        "sort": true,
+        "color": "#22d3ee",
+        "textColor": "#dbeafe",
+        "borderColor": "#2563eb80",
+        "carousel": "single",
+        "indexFontSize": 12,
+        "leftFontSize": 13,
+        "rightFontSize": 13
+      }
+    }
+  ]
+}

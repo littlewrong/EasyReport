@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.easyreport.combinesync.mapper.ErCombineSyncProgressMapper">
+
+    <resultMap id="CombineProgressResult" type="ErCombineSyncProgress">
+        <id property="id" column="id" />
+        <result property="combineId" column="combine_id" />
+        <result property="sourceTable" column="source_table" />
+        <result property="lastSyncValue" column="last_sync_value" />
+        <result property="createTime" column="create_time" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <select id="selectByCombineId" parameterType="long" resultMap="CombineProgressResult">
+        SELECT id, combine_id, source_table, last_sync_value, create_time, update_time
+        FROM er_combine_sync_progress
+        WHERE combine_id = #{combineId}
+    </select>
+
+    <insert id="upsert" parameterType="ErCombineSyncProgress">
+        INSERT INTO er_combine_sync_progress
+        (combine_id, source_table, last_sync_value, create_time, update_time)
+        VALUES (#{combineId}, #{sourceTable}, #{lastSyncValue}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE last_sync_value = VALUES(last_sync_value), update_time = NOW()
+    </insert>
+
+    <delete id="deleteByCombineId" parameterType="Long">
+        DELETE FROM er_combine_sync_progress WHERE combine_id = #{combineId}
+    </delete>
+
+</mapper>

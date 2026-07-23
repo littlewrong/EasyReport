@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.easyreport.sync.mapper.ErDataTransferLogMapper">
+
+    <resultMap type="ErDataTransferLog" id="ErDataTransferLogResult">
+        <result property="logId"          column="log_id"          />
+        <result property="transferId"     column="transfer_id"     />
+        <result property="sourceTable"    column="source_table"    />
+        <result property="targetTable"    column="target_table"    />
+        <result property="syncMode"       column="sync_mode"       />
+        <result property="syncAction"     column="sync_action"     />
+        <result property="totalCount"     column="total_count"     />
+        <result property="successCount"   column="success_count"   />
+        <result property="failCount"      column="fail_count"      />
+        <result property="startTime"      column="start_time"      />
+        <result property="endTime"        column="end_time"        />
+        <result property="executeTime"    column="execute_time"    />
+        <result property="syncResult"     column="sync_result"     />
+        <result property="errorMessage"   column="error_message"   />
+        <result property="lastSyncValue"  column="last_sync_value" />
+        <result property="createTime"     column="create_time"     />
+    </resultMap>
+
+    <sql id="selectErDataTransferLogVo">
+        SELECT log_id, transfer_id, source_table, target_table, sync_mode, sync_action,
+               total_count, success_count, fail_count, start_time, end_time, execute_time,
+               sync_result, error_message, last_sync_value, create_time
+        FROM er_data_transfer_log
+    </sql>
+
+    <select id="selectErDataTransferLogList" parameterType="ErDataTransferLog" resultMap="ErDataTransferLogResult">
+        <include refid="selectErDataTransferLogVo"/>
+        <where>
+            <if test="transferId != null">
+                AND transfer_id = #{transferId}
+            </if>
+            <if test="sourceTable != null and sourceTable != ''">
+                AND source_table LIKE CONCAT('%', #{sourceTable}, '%')
+            </if>
+            <if test="syncMode != null and syncMode != ''">
+                AND sync_mode = #{syncMode}
+            </if>
+            <if test="syncAction != null and syncAction != ''">
+                AND sync_action = #{syncAction}
+            </if>
+            <if test="syncResult != null and syncResult != ''">
+                AND sync_result = #{syncResult}
+            </if>
+        </where>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="selectErDataTransferLogByLogId" parameterType="Long" resultMap="ErDataTransferLogResult">
+        <include refid="selectErDataTransferLogVo"/>
+        WHERE log_id = #{logId}
+    </select>
+
+    <select id="selectErDataTransferLogByTransferId" parameterType="Long" resultMap="ErDataTransferLogResult">
+        <include refid="selectErDataTransferLogVo"/>
+        WHERE transfer_id = #{transferId}
+        ORDER BY create_time DESC
+    </select>
+
+    <insert id="insertErDataTransferLog" parameterType="ErDataTransferLog" useGeneratedKeys="true" keyProperty="logId">
+        INSERT INTO er_data_transfer_log
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="transferId != null">transfer_id,</if>
+            <if test="sourceTable != null">source_table,</if>
+            <if test="targetTable != null">target_table,</if>
+            <if test="syncMode != null">sync_mode,</if>
+            <if test="syncAction != null">sync_action,</if>
+            <if test="totalCount != null">total_count,</if>
+            <if test="successCount != null">success_count,</if>
+            <if test="failCount != null">fail_count,</if>
+            <if test="startTime != null">start_time,</if>
+            <if test="endTime != null">end_time,</if>
+            <if test="executeTime != null">execute_time,</if>
+            <if test="syncResult != null">sync_result,</if>
+            <if test="errorMessage != null">error_message,</if>
+            <if test="lastSyncValue != null">last_sync_value,</if>
+            create_time
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="transferId != null">#{transferId},</if>
+            <if test="sourceTable != null">#{sourceTable},</if>
+            <if test="targetTable != null">#{targetTable},</if>
+            <if test="syncMode != null">#{syncMode},</if>
+            <if test="syncAction != null">#{syncAction},</if>
+            <if test="totalCount != null">#{totalCount},</if>
+            <if test="successCount != null">#{successCount},</if>
+            <if test="failCount != null">#{failCount},</if>
+            <if test="startTime != null">#{startTime},</if>
+            <if test="endTime != null">#{endTime},</if>
+            <if test="executeTime != null">#{executeTime},</if>
+            <if test="syncResult != null">#{syncResult},</if>
+            <if test="errorMessage != null">#{errorMessage},</if>
+            <if test="lastSyncValue != null">#{lastSyncValue},</if>
+            SYSDATE()
+        </trim>
+    </insert>
+
+    <update id="updateErDataTransferLog" parameterType="ErDataTransferLog">
+        UPDATE er_data_transfer_log
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="transferId != null">transfer_id = #{transferId},</if>
+            <if test="sourceTable != null">source_table = #{sourceTable},</if>
+            <if test="targetTable != null">target_table = #{targetTable},</if>
+            <if test="syncMode != null">sync_mode = #{syncMode},</if>
+            <if test="syncAction != null">sync_action = #{syncAction},</if>
+            <if test="totalCount != null">total_count = #{totalCount},</if>
+            <if test="successCount != null">success_count = #{successCount},</if>
+            <if test="failCount != null">fail_count = #{failCount},</if>
+            <if test="startTime != null">start_time = #{startTime},</if>
+            <if test="endTime != null">end_time = #{endTime},</if>
+            <if test="executeTime != null">execute_time = #{executeTime},</if>
+            <if test="syncResult != null">sync_result = #{syncResult},</if>
+            <if test="errorMessage != null">error_message = #{errorMessage},</if>
+            <if test="lastSyncValue != null">last_sync_value = #{lastSyncValue},</if>
+        </trim>
+        WHERE log_id = #{logId}
+    </update>
+
+    <delete id="deleteErDataTransferLogByLogId" parameterType="Long">
+        DELETE FROM er_data_transfer_log WHERE log_id = #{logId}
+    </delete>
+
+    <delete id="deleteErDataTransferLogByLogIds" parameterType="String">
+        DELETE FROM er_data_transfer_log WHERE log_id IN
+        <foreach item="logId" collection="array" open="(" separator="," close=")">
+            #{logId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteErDataTransferLogByTransferId" parameterType="Long">
+        DELETE FROM er_data_transfer_log WHERE transfer_id = #{transferId}
+    </delete>
+
+</mapper>

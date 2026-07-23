@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<easyreport>
+  <datasource name="在线演示API" type="http">
+    <dataset name="ds" type="http" url="https://www.easyreport.cn/reportdata/payment-receipt.html" method="GET" dataPath="data.rows">
+      <parameter name="page" type="String" default-value="1"/>
+      <parameter name="page_size" type="String" default-value="50"/>
+      <parameter name="start" type="String" default-value="2026-01-01"/>
+      <parameter name="end" type="String" default-value="2026-12-31"/>
+      <field name="收款单位"/>
+      <field name="票据编号"/>
+      <field name="付款单位"/>
+      <field name="收款事由"/>
+      <field name="人民币大写"/>
+      <field name="金额"/>
+      <field name="收款方式"/>
+      <field name="收款日期"/>
+      <field name="备注"/>
+      <field name="收款人"/>
+      <field name="经办人"/>
+      <field name="复核人"/>
+    </dataset>
+  </datasource>
+
+  <cell expand="None" name="A1" row="1" col="1" col-span="8">
+    <simple-value><![CDATA[收款票据]]></simple-value>
+    <cell-style font-size="20" forecolor="192,57,43" font-family="宋体" align="center" valign="middle" bold="true"></cell-style>
+  </cell>
+
+  <cell expand="None" name="A2" row="2" col="1" col-span="2">
+    <simple-value><![CDATA[收款单位]]></simple-value>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="center" valign="middle" bold="true" bgcolor="253,245,245">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="C2" row="2" col="3" col-span="3">
+    <dataset-value dataset-name="ds" aggregate="select" property="收款单位" order="none" mapping-type="simple"/>
+    <cell-style font-size="11" forecolor="0,0,0" font-family="宋体" align="left" valign="middle">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="F2" row="2" col="6" col-span="2">
+    <simple-value><![CDATA[票据编号]]></simple-value>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="center" valign="middle" bold="true" bgcolor="253,245,245">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="H2" row="2" col="8">
+    <dataset-value dataset-name="ds" aggregate="select" property="票据编号" order="none" mapping-type="simple"/>
+    <cell-style font-size="11" forecolor="0,0,0" font-family="宋体" align="left" valign="middle">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+
+  <cell expand="None" name="A3" row="3" col="1" col-span="2">
+    <simple-value><![CDATA[付款单位]]></simple-value>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="center" valign="middle" bold="true" bgcolor="253,245,245">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="C3" row="3" col="3" col-span="6">
+    <dataset-value dataset-name="ds" aggregate="select" property="付款单位" order="none" mapping-type="simple"/>
+    <cell-style font-size="11" forecolor="0,0,0" font-family="宋体" align="left" valign="middle">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+
+  <cell expand="None" name="A4" row="4" col="1" col-span="2">
+    <simple-value><![CDATA[收款事由]]></simple-value>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="center" valign="middle" bold="true" bgcolor="253,245,245">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="C4" row="4" col="3" col-span="6">
+    <dataset-value dataset-name="ds" aggregate="select" property="收款事由" order="none" mapping-type="simple"/>
+    <cell-style font-size="11" forecolor="0,0,0" font-family="宋体" align="left" valign="middle" wrap-compute="true">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+
+  <cell expand="None" name="A5" row="5" col="1" col-span="2">
+    <simple-value><![CDATA[人民币（大写）]]></simple-value>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="center" valign="middle" bold="true" bgcolor="253,245,245">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="C5" row="5" col="3" col-span="4">
+    <dataset-value dataset-name="ds" aggregate="select" property="人民币大写" order="none" mapping-type="simple"/>
+    <cell-style font-size="11" forecolor="0,0,0" font-family="宋体" align="left" valign="middle">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="G5" row="5" col="7">
+    <simple-value><![CDATA[金额]]></simple-value>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="center" valign="middle" bold="true" bgcolor="253,245,245">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="H5" row="5" col="8">
+    <dataset-value dataset-name="ds" aggregate="select" property="金额" order="none" mapping-type="simple"/>
+    <cell-style font-size="11" forecolor="0,0,0" font-family="宋体" align="right" valign="middle" bold="true" format="￥#,##0.00">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+
+  <cell expand="None" name="A6" row="6" col="1" col-span="2">
+    <simple-value><![CDATA[收款方式]]></simple-value>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="center" valign="middle" bold="true" bgcolor="253,245,245">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="C6" row="6" col="3" col-span="2">
+    <dataset-value dataset-name="ds" aggregate="select" property="收款方式" order="none" mapping-type="simple"/>
+    <cell-style font-size="11" forecolor="0,0,0" font-family="宋体" align="left" valign="middle">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="E6" row="6" col="5" col-span="2">
+    <simple-value><![CDATA[收款日期]]></simple-value>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="center" valign="middle" bold="true" bgcolor="253,245,245">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="G6" row="6" col="7" col-span="2">
+    <dataset-value dataset-name="ds" aggregate="select" property="收款日期" order="none" mapping-type="simple"/>
+    <cell-style font-size="11" forecolor="0,0,0" font-family="宋体" align="left" valign="middle">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+
+  <cell expand="None" name="A7" row="7" col="1" col-span="2">
+    <simple-value><![CDATA[备注]]></simple-value>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="center" valign="middle" bold="true" bgcolor="253,245,245">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="C7" row="7" col="3" col-span="6">
+    <dataset-value dataset-name="ds" aggregate="select" property="备注" order="none" mapping-type="simple"/>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="left" valign="middle" wrap-compute="true">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+
+  <cell expand="None" name="A8" row="8" col="1" col-span="2">
+    <simple-value><![CDATA[收款人]]></simple-value>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="center" valign="middle" bold="true" bgcolor="253,245,245">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="C8" row="8" col="3">
+    <dataset-value dataset-name="ds" aggregate="select" property="收款人" order="none" mapping-type="simple"/>
+    <cell-style font-size="11" forecolor="0,0,0" font-family="宋体" align="left" valign="middle">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="D8" row="8" col="4" col-span="2">
+    <simple-value><![CDATA[经办人]]></simple-value>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="center" valign="middle" bold="true" bgcolor="253,245,245">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="F8" row="8" col="6">
+    <dataset-value dataset-name="ds" aggregate="select" property="经办人" order="none" mapping-type="simple"/>
+    <cell-style font-size="11" forecolor="0,0,0" font-family="宋体" align="left" valign="middle">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="G8" row="8" col="7">
+    <simple-value><![CDATA[复核人]]></simple-value>
+    <cell-style font-size="10" forecolor="0,0,0" font-family="宋体" align="center" valign="middle" bold="true" bgcolor="253,245,245">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+  <cell expand="None" name="H8" row="8" col="8">
+    <dataset-value dataset-name="ds" aggregate="select" property="复核人" order="none" mapping-type="simple"/>
+    <cell-style font-size="11" forecolor="0,0,0" font-family="宋体" align="left" valign="middle">
+      <left-border width="1" style="solid" color="0,0,0"/><right-border width="1" style="solid" color="0,0,0"/><top-border width="1" style="solid" color="0,0,0"/><bottom-border width="1" style="solid" color="0,0,0"/>
+    </cell-style>
+  </cell>
+
+  <cell expand="None" name="A9" row="9" col="1" col-span="8">
+    <simple-value><![CDATA[本收据一式两联，付款单位与收款单位各执一联。]]></simple-value>
+    <cell-style font-size="9" forecolor="96,98,102" font-family="宋体" align="left" valign="middle"></cell-style>
+  </cell>
+
+  <row row-number="1" height="44"/><row row-number="2" height="30"/><row row-number="3" height="34"/>
+  <row row-number="4" height="50"/><row row-number="5" height="36"/><row row-number="6" height="32"/>
+  <row row-number="7" height="42"/><row row-number="8" height="32"/><row row-number="9" height="24"/>
+  <column col-number="1" width="72"/><column col-number="2" width="72"/><column col-number="3" width="112"/>
+  <column col-number="4" width="82"/><column col-number="5" width="82"/><column col-number="6" width="82"/>
+  <column col-number="7" width="72"/><column col-number="8" width="130"/>
+  <paper type="A4" left-margin="54" right-margin="54" top-margin="54" bottom-margin="54" paging-mode="fitpage" fixrows="0" width="842" height="595" orientation="landscape" html-report-align="center" bg-image="" html-interval-refresh-value="0" column-enabled="false" api-page-param="page" api-page-size-param="page_size" api-total-count-path="data.total_count" api-page-size="1" api-start-field="start" api-end-field="end"></paper>
+</easyreport>

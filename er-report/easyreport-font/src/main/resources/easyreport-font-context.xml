@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd
+	">
+	<bean id="easyreport.arialFontRegister" class="cn.easyreport.font.arial.ArialFontRegister"></bean>
+	<bean id="easyreport.comicSansMSFontRegister" class="cn.easyreport.font.comicsansms.ComicSansMSFontRegister"></bean>
+	<bean id="easyreport.courierNewFontRegister" class="cn.easyreport.font.couriernew.CourierNewFontRegister"></bean>
+	<bean id="easyreport.fangSongFontRegister" class="cn.easyreport.font.fangsong.FangSongFontRegister"></bean>
+	<bean id="easyreport.heiTiFontRegister" class="cn.easyreport.font.heiti.HeiTiFontRegister"></bean>
+	<bean id="easyreport.kaiTiFontRegister" class="cn.easyreport.font.kaiti.KaiTiFontRegister"></bean>
+	<bean id="easyreport.songTiFontRegister" class="cn.easyreport.font.songti.SongTiFontRegister"></bean>
+	<bean id="easyreport.timesNewRomanFontRegister" class="cn.easyreport.font.timesnewroman.TimesNewRomanFontRegister"></bean>
+	<bean id="easyreport.yaheiFontRegister" class="cn.easyreport.font.yahei.YaheiFontRegister"></bean>
+</beans>

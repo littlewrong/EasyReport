@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.easyreport.sync.mapper.ErDatasourceMapper">
+
+    <resultMap type="ErDatasource" id="ErDatasourceResult">
+        <result property="datasourceId"    column="datasource_id"    />
+        <result property="datasourceName"    column="datasource_name"    />
+        <result property="datasourceType"    column="datasource_type"    />
+        <result property="host"    column="host"    />
+        <result property="port"    column="port"    />
+        <result property="databaseName"    column="database_name"    />
+        <result property="username"    column="username"    />
+        <result property="password"    column="password"    />
+        <result property="driverClass"    column="driver_class"    />
+        <result property="jdbcUrl"    column="jdbc_url"    />
+        <result property="connectionParams"    column="connection_params"    />
+        <result property="status"    column="status"    />
+        <result property="testStatus"    column="test_status"    />
+        <result property="testMessage"    column="test_message"    />
+        <result property="testTime"    column="test_time"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"    column="remark"    />
+    </resultMap>
+
+    <sql id="selectErDatasourceVo">
+        select datasource_id, datasource_name, datasource_type, host, port, database_name, username, password, driver_class, jdbc_url, connection_params, status, test_status, test_message, test_time, create_by, create_time, update_by, update_time, remark from er_datasource
+    </sql>
+
+    <select id="selectErDatasourceList" parameterType="ErDatasource" resultMap="ErDatasourceResult">
+        <include refid="selectErDatasourceVo"/>
+        <where>
+            <if test="datasourceName != null  and datasourceName != ''"> and datasource_name like concat('%', #{datasourceName}, '%')</if>
+            <if test="datasourceType != null  and datasourceType != ''"> and datasource_type = #{datasourceType}</if>
+            <if test="host != null  and host != ''"> and host like concat('%', #{host}, '%')</if>
+            <if test="port != null "> and port = #{port}</if>
+            <if test="databaseName != null  and databaseName != ''"> and database_name like concat('%', #{databaseName}, '%')</if>
+            <if test="username != null  and username != ''"> and username like concat('%', #{username}, '%')</if>
+            <if test="status != null  and status != ''"> and status = #{status}</if>
+            <if test="testStatus != null  and testStatus != ''"> and test_status = #{testStatus}</if>
+            <if test="params.beginTime != null and params.beginTime != ''"><!-- 开始时间检索 -->
+                and date_format(create_time,'%Y%m%d') &gt;= date_format(#{params.beginTime},'%Y%m%d')
+            </if>
+            <if test="params.endTime != null and params.endTime != ''"><!-- 结束时间检索 -->
+                and date_format(create_time,'%Y%m%d') &lt;= date_format(#{params.endTime},'%Y%m%d')
+            </if>
+        </where>
+        order by datasource_id desc
+    </select>
+
+    <select id="selectErDatasourceByDatasourceId" parameterType="Long" resultMap="ErDatasourceResult">
+        <include refid="selectErDatasourceVo"/>
+        where datasource_id = #{datasourceId}
+    </select>
+
+    <select id="checkDatasourceNameUnique" parameterType="String" resultMap="ErDatasourceResult">
+        <include refid="selectErDatasourceVo"/>
+        where datasource_name = #{datasourceName} limit 1
+    </select>
+
+    <insert id="insertErDatasource" parameterType="ErDatasource" useGeneratedKeys="true" keyProperty="datasourceId">
+        insert into er_datasource
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="datasourceName != null and datasourceName != ''">datasource_name,</if>
+            <if test="datasourceType != null and datasourceType != ''">datasource_type,</if>
+            <if test="host != null and host != ''">host,</if>
+            <if test="port != null">port,</if>
+            <if test="databaseName != null and databaseName != ''">database_name,</if>
+            <if test="username != null and username != ''">username,</if>
+            <if test="password != null">password,</if>
+            <if test="driverClass != null">driver_class,</if>
+            <if test="jdbcUrl != null">jdbc_url,</if>
+            <if test="connectionParams != null">connection_params,</if>
+            <if test="status != null">status,</if>
+            <if test="testStatus != null">test_status,</if>
+            <if test="testMessage != null">test_message,</if>
+            <if test="testTime != null">test_time,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="remark != null">remark,</if>
+            create_time
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="datasourceName != null and datasourceName != ''">#{datasourceName},</if>
+            <if test="datasourceType != null and datasourceType != ''">#{datasourceType},</if>
+            <if test="host != null and host != ''">#{host},</if>
+            <if test="port != null">#{port},</if>
+            <if test="databaseName != null and databaseName != ''">#{databaseName},</if>
+            <if test="username != null and username != ''">#{username},</if>
+            <if test="password != null">#{password},</if>
+            <if test="driverClass != null">#{driverClass},</if>
+            <if test="jdbcUrl != null">#{jdbcUrl},</if>
+            <if test="connectionParams != null">#{connectionParams},</if>
+            <if test="status != null">#{status},</if>
+            <if test="testStatus != null">#{testStatus},</if>
+            <if test="testMessage != null">#{testMessage},</if>
+            <if test="testTime != null">#{testTime},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="remark != null">#{remark},</if>
+            sysdate()
+         </trim>
+    </insert>
+
+    <update id="updateErDatasource" parameterType="ErDatasource">
+        update er_datasource
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="datasourceName != null and datasourceName != ''">datasource_name = #{datasourceName},</if>
+            <if test="datasourceType != null and datasourceType != ''">datasource_type = #{datasourceType},</if>
+            <if test="host != null and host != ''">host = #{host},</if>
+            <if test="port != null">port = #{port},</if>
+            <if test="databaseName != null and databaseName != ''">database_name = #{databaseName},</if>
+            <if test="username != null and username != ''">username = #{username},</if>
+            <if test="password != null">password = #{password},</if>
+            <if test="driverClass != null">driver_class = #{driverClass},</if>
+            <if test="jdbcUrl != null">jdbc_url = #{jdbcUrl},</if>
+            <if test="connectionParams != null">connection_params = #{connectionParams},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="testStatus != null">test_status = #{testStatus},</if>
+            <if test="testMessage != null">test_message = #{testMessage},</if>
+            <if test="testTime != null">test_time = #{testTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = sysdate()
+        </trim>
+        where datasource_id = #{datasourceId}
+    </update>
+
+    <delete id="deleteErDatasourceByDatasourceId" parameterType="Long">
+        delete from er_datasource where datasource_id = #{datasourceId}
+    </delete>
+
+    <delete id="deleteErDatasourceByDatasourceIds" parameterType="String">
+        delete from er_datasource where datasource_id in
+        <foreach item="datasourceId" collection="array" open="(" separator="," close=")">
+            #{datasourceId}
+        </foreach>
+    </delete>
+</mapper>

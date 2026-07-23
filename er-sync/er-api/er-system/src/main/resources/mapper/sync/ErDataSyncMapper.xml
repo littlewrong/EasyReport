@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.easyreport.sync.mapper.ErDataSyncMapper">
+
+    <resultMap type="ErDataSync" id="ErDataSyncResult">
+        <result property="syncId"             column="sync_id"              />
+        <result property="syncName"           column="sync_name"            />
+        <result property="syncCode"           column="sync_code"            />
+        <result property="sourceDatasourceId" column="source_datasource_id" />
+        <result property="sourceDatasourceName" column="source_datasource_name" />
+        <result property="sourceSchemaPattern" column="source_schema_pattern" />
+        <result property="sourceTablePattern" column="source_table_pattern" />
+        <result property="targetDatasourceId" column="target_datasource_id" />
+        <result property="targetDatasourceName" column="target_datasource_name" />
+        <result property="ifExistsAction"     column="if_exists_action"     />
+        <result property="syncStatus"         column="sync_status"          />
+        <result property="syncProgress"       column="sync_progress"        />
+        <result property="lastSyncTime"       column="last_sync_time"       />
+        <result property="lastSyncResult"     column="last_sync_result"     />
+        <result property="cronExpression"     column="cron_expression"      />
+        <result property="jobId"              column="job_id"               />
+        <result property="status"             column="status"               />
+        <result property="createBy"           column="create_by"            />
+        <result property="createTime"         column="create_time"          />
+        <result property="updateBy"           column="update_by"            />
+        <result property="updateTime"         column="update_time"          />
+        <result property="remark"             column="remark"               />
+    </resultMap>
+
+    <sql id="selectErDataSyncVo">
+        select s.sync_id, s.sync_name, s.sync_code, s.source_datasource_id, s.source_schema_pattern, s.source_table_pattern,
+               s.target_datasource_id, s.if_exists_action, s.sync_status, s.sync_progress, s.last_sync_time, s.last_sync_result,
+               s.cron_expression, s.job_id, s.status, s.create_by, s.create_time, s.update_by, s.update_time, s.remark,
+               sd.datasource_name as source_datasource_name,
+               td.datasource_name as target_datasource_name
+        from er_data_sync s
+        left join er_datasource sd on s.source_datasource_id = sd.datasource_id
+        left join er_datasource td on s.target_datasource_id = td.datasource_id
+    </sql>
+
+    <!-- 查询列表 -->
+    <select id="selectErDataSyncList" parameterType="ErDataSync" resultMap="ErDataSyncResult">
+        <include refid="selectErDataSyncVo"/>
+        <where>
+            <if test="syncName != null and syncName != ''">
+                and s.sync_name like concat('%', #{syncName}, '%')
+            </if>
+            <if test="syncCode != null and syncCode != ''">
+                and s.sync_code like concat('%', #{syncCode}, '%')
+            </if>
+            <if test="sourceDatasourceId != null">
+                and s.source_datasource_id = #{sourceDatasourceId}
+            </if>
+            <if test="targetDatasourceId != null">
+                and s.target_datasource_id = #{targetDatasourceId}
+            </if>
+            <if test="syncStatus != null and syncStatus != ''">
+                and s.sync_status = #{syncStatus}
+            </if>
+            <if test="status != null and status != ''">
+                and s.status = #{status}
+            </if>
+        </where>
+        order by s.sync_id desc
+    </select>
+
+    <!-- 查询详情 -->
+    <select id="selectErDataSyncBySyncId" parameterType="Long" resultMap="ErDataSyncResult">
+        <include refid="selectErDataSyncVo"/>
+        where s.sync_id = #{syncId}
+    </select>
+
+    <!-- 校验名称唯一 -->
+    <select id="checkSyncNameUnique" parameterType="String" resultMap="ErDataSyncResult">
+        select sync_id, sync_name from er_data_sync
+        where sync_name = #{syncName} limit 1
+    </select>
+
+    <!-- 新增 -->
+    <insert id="insertErDataSync" parameterType="ErDataSync" useGeneratedKeys="true" keyProperty="syncId">
+        insert into er_data_sync
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="syncName != null and syncName != ''">sync_name,</if>
+            <if test="syncCode != null">sync_code,</if>
+            <if test="sourceDatasourceId != null">source_datasource_id,</if>
+            <if test="sourceSchemaPattern != null and sourceSchemaPattern != ''">source_schema_pattern,</if>
+            <if test="sourceTablePattern != null and sourceTablePattern != ''">source_table_pattern,</if>
+            <if test="targetDatasourceId != null">target_datasource_id,</if>
+            <if test="ifExistsAction != null">if_exists_action,</if>
+            <if test="syncStatus != null">sync_status,</if>
+            <if test="syncProgress != null">sync_progress,</if>
+            <if test="cronExpression != null">cron_expression,</if>
+            <if test="jobId != null">job_id,</if>
+            <if test="status != null">status,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="remark != null">remark,</if>
+            create_time
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="syncName != null and syncName != ''">#{syncName},</if>
+            <if test="syncCode != null">#{syncCode},</if>
+            <if test="sourceDatasourceId != null">#{sourceDatasourceId},</if>
+            <if test="sourceSchemaPattern != null and sourceSchemaPattern != ''">#{sourceSchemaPattern},</if>
+            <if test="sourceTablePattern != null and sourceTablePattern != ''">#{sourceTablePattern},</if>
+            <if test="targetDatasourceId != null">#{targetDatasourceId},</if>
+            <if test="ifExistsAction != null">#{ifExistsAction},</if>
+            <if test="syncStatus != null">#{syncStatus},</if>
+            <if test="syncProgress != null">#{syncProgress},</if>
+            <if test="cronExpression != null">#{cronExpression},</if>
+            <if test="jobId != null">#{jobId},</if>
+            <if test="status != null">#{status},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="remark != null">#{remark},</if>
+            sysdate()
+        </trim>
+    </insert>
+
+    <!-- 修改 -->
+    <update id="updateErDataSync" parameterType="ErDataSync">
+        update er_data_sync
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="syncName != null and syncName != ''">sync_name = #{syncName},</if>
+            <if test="syncCode != null">sync_code = #{syncCode},</if>
+            <if test="sourceDatasourceId != null">source_datasource_id = #{sourceDatasourceId},</if>
+            <if test="sourceSchemaPattern != null">source_schema_pattern = #{sourceSchemaPattern},</if>
+            <if test="sourceTablePattern != null and sourceTablePattern != ''">source_table_pattern = #{sourceTablePattern},</if>
+            <if test="targetDatasourceId != null">target_datasource_id = #{targetDatasourceId},</if>
+            <if test="ifExistsAction != null">if_exists_action = #{ifExistsAction},</if>
+            <if test="syncStatus != null">sync_status = #{syncStatus},</if>
+            <if test="syncProgress != null">sync_progress = #{syncProgress},</if>
+            <if test="lastSyncTime != null">last_sync_time = #{lastSyncTime},</if>
+            <if test="lastSyncResult != null">last_sync_result = #{lastSyncResult},</if>
+            <if test="cronExpression != null">cron_expression = #{cronExpression},</if>
+            <if test="jobId != null">job_id = #{jobId},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = sysdate()
+        </trim>
+        where sync_id = #{syncId}
+    </update>
+
+    <!-- 删除 -->
+    <delete id="deleteErDataSyncBySyncId" parameterType="Long">
+        delete from er_data_sync where sync_id = #{syncId}
+    </delete>
+
+    <!-- 批量删除 -->
+    <delete id="deleteErDataSyncBySyncIds" parameterType="String">
+        delete from er_data_sync where sync_id in
+        <foreach item="syncId" collection="array" open="(" separator="," close=")">
+            #{syncId}
+        </foreach>
+    </delete>
+</mapper>

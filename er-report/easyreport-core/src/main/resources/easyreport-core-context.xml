@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd
+	">
+	
+	<bean id="easyreport.props" class="cn.easyreport.UReportPropertyPlaceholderConfigurer" abstract="true">
+		<property name="ignoreUnresolvablePlaceholders" value="true"></property>
+	</bean>
+	
+	<context:property-placeholder location="classpath:easyreport.properties" ignore-unresolvable="true"/>
+	
+	<bean id="easyreport.exportManager" class="cn.easyreport.export.ExportManagerImpl">
+		<property name="reportRender" ref="easyreport.reportRender"></property>
+	</bean>
+	
+	<bean id="easyreport.reportRender" class="cn.easyreport.export.ReportRender">
+		<property name="reportParser" ref="easyreport.reportParser"></property>
+		<property name="reportBuilder" ref="easyreport.reportBuilder"></property>
+	</bean>
+	
+	<bean id="easyreport.defaultImageProvider" class="cn.easyreport.provider.image.DefaultImageProvider"></bean>
+	
+	<bean id="easyreport.fileReportProvider" class="cn.easyreport.provider.report.file.FileReportProvider">
+		<property name="fileStoreDir" value="${easyreport.fileStoreDir}"></property>
+		<property name="disabled" value="${easyreport.disableFileProvider}"></property>
+	</bean>
+	
+	<bean id="easyreport.httpImageProvider" class="cn.easyreport.provider.image.HttpImageProvider"></bean>
+	<bean id="easyreport.httpsImageProvider" class="cn.easyreport.provider.image.HttpsImageProvider"></bean>
+	
+	<bean id="easyreport.reportBuilder" class="cn.easyreport.build.ReportBuilder">
+		<property name="hideRowColumnBuilder" ref="easyreport.hideRowColumnBuilder"></property>
+	</bean>
+	
+	<bean id="easyreport.hideRowColumnBuilder" class="cn.easyreport.build.HideRowColumnBuilder"></bean>
+	
+	<bean id="easyreport.reportParser" class="cn.easyreport.parser.ReportParser"></bean>
+	
+	<bean id="easyreport.formParserUtils" class="cn.easyreport.parser.impl.searchform.FormParserUtils"></bean>
+	<bean id="easyreport.checkboxParser" class="cn.easyreport.parser.impl.searchform.CheckboxParser"></bean>
+	<bean id="easyreport.gridParser" class="cn.easyreport.parser.impl.searchform.GridParser"></bean>
+	<bean id="easyreport.radioInputParser" class="cn.easyreport.parser.impl.searchform.RadioInputParser"></bean>
+	<bean id="easyreport.rextInputParser" class="cn.easyreport.parser.impl.searchform.TextInputParser"></bean>
+	<bean id="easyreport.resetButtonParser" class="cn.easyreport.parser.impl.searchform.ResetButtonParser"></bean>
+	<bean id="easyreport.submitButtonParser" class="cn.easyreport.parser.impl.searchform.SubmitButtonParser"></bean>
+	<bean id="easyreport.selectInputParser" class="cn.easyreport.parser.impl.searchform.SelectInputParser"></bean>
+	<bean id="easyreport.datetimeInputParser" class="cn.easyreport.parser.impl.searchform.DatetimeInputParser"></bean>
+	
+	<bean id="easyreport.classpathReportProvider" class="cn.easyreport.provider.report.classpath.ClasspathReportProvider"></bean>
+	
+	<bean id="easyreport.fontBuilder" class="cn.easyreport.export.pdf.font.FontBuilder"></bean>
+	
+	<bean id="easyreport.expressionUtils" class="cn.easyreport.expression.ExpressionUtils"></bean>
+	<bean id="easyreport.utils" class="cn.easyreport.Utils">
+		<property name="debug" value="${easyreport.debug}"></property>
+	</bean>
+	<bean id="easyreport.cacheUtils" class="cn.easyreport.cache.CacheUtils"></bean>
+	
+	<bean id="easyreport.countFunction" class="cn.easyreport.expression.function.CountFunction"></bean>
+	<bean id="easyreport.sumFunction" class="cn.easyreport.expression.function.SumFunction"></bean>
+	<bean id="easyreport.maxFunction" class="cn.easyreport.expression.function.MaxFunction"></bean>
+	<bean id="easyreport.minFunction" class="cn.easyreport.expression.function.MinFunction"></bean>
+	<bean id="easyreport.listFunction" class="cn.easyreport.expression.function.ListFunction"></bean>
+	<bean id="easyreport.avgFunction" class="cn.easyreport.expression.function.AvgFunction"></bean>
+	<bean id="easyreport.orderFunction" class="cn.easyreport.expression.function.OrderFunction"></bean>
+	<bean id="easyreport.WeekFunction" class="cn.easyreport.expression.function.date.WeekFunction"></bean>
+	<bean id="easyreport.dayFunction" class="cn.easyreport.expression.function.date.DayFunction"></bean>
+	<bean id="easyreport.monthFunction" class="cn.easyreport.expression.function.date.MonthFunction"></bean>
+	<bean id="easyreport.yearFunction" class="cn.easyreport.expression.function.date.YearFunction"></bean>
+	<bean id="easyreport.dateFunction" class="cn.easyreport.expression.function.date.DateFunction"></bean>
+	<bean id="easyreport.formatNumberFunction" class="cn.easyreport.expression.function.FormatNumberFunction"></bean>
+	<bean id="easyreport.formatDateFunction" class="cn.easyreport.expression.function.FormatDateFunction"></bean>
+	<bean id="easyreport.getFunction" class="cn.easyreport.expression.function.GetFunction"></bean>
+	
+	<bean id="easyreport.absFunction" class="cn.easyreport.expression.function.math.AbsFunction"></bean>
+	<bean id="easyreport.ceilFunction" class="cn.easyreport.expression.function.math.CeilFunction"></bean>
+	<bean id="easyreport.ChnFunction" class="cn.easyreport.expression.function.math.ChnFunction"></bean>
+	<bean id="easyreport.ChnMoneyFunction" class="cn.easyreport.expression.function.math.ChnMoneyFunction"></bean>
+	<bean id="easyreport.CosFunction" class="cn.easyreport.expression.function.math.CosFunction"></bean>
+	<bean id="easyreport.ExpFunction" class="cn.easyreport.expression.function.math.ExpFunction"></bean>
+	<bean id="easyreport.floorFunction" class="cn.easyreport.expression.function.math.FloorFunction"></bean>
+	<bean id="easyreport.log10Function" class="cn.easyreport.expression.function.math.Log10Function"></bean>
+	<bean id="easyreport.logFunction" class="cn.easyreport.expression.function.math.LogFunction"></bean>
+	<bean id="easyreport.powFunction" class="cn.easyreport.expression.function.math.PowFunction"></bean>
+	<bean id="easyreport.randomFunction" class="cn.easyreport.expression.function.math.RandomFunction"></bean>
+	<bean id="easyreport.roundFunction" class="cn.easyreport.expression.function.math.RoundFunction"></bean>
+	<bean id="easyreport.sinFunction" class="cn.easyreport.expression.function.math.SinFunction"></bean>
+	<bean id="easyreport.sqrtFunction" class="cn.easyreport.expression.function.math.SqrtFunction"></bean>
+	<bean id="easyreport.tanFunction" class="cn.easyreport.expression.function.math.TanFunction"></bean>
+	<bean id="easyreport.stdevpFunction" class="cn.easyreport.expression.function.math.StdevpFunction"></bean>
+	<bean id="easyreport.varaFunction" class="cn.easyreport.expression.function.math.VaraFunction"></bean>
+	<bean id="easyreport.modeFunction" class="cn.easyreport.expression.function.math.ModeFunction"></bean>
+	<bean id="easyreport.medianFunction" class="cn.easyreport.expression.function.math.MedianFunction"></bean>
+	
+	
+	<bean id="easyreport.lengthFunction" class="cn.easyreport.expression.function.string.LengthFunction"></bean>
+	<bean id="easyreport.lowerFunction" class="cn.easyreport.expression.function.string.LowerFunction"></bean>
+	<bean id="easyreport.IndexOfFunction" class="cn.easyreport.expression.function.string.IndexOfFunction"></bean>
+	<bean id="easyreport.replaceFunction" class="cn.easyreport.expression.function.string.ReplaceFunction"></bean>
+	<bean id="easyreport.substringFunction" class="cn.easyreport.expression.function.string.SubstringFunction"></bean>
+	<bean id="easyreport.trimFunction" class="cn.easyreport.expression.function.string.TrimFunction"></bean>
+	<bean id="easyreport.upperFunction" class="cn.easyreport.expression.function.string.UpperFunction"></bean>
+	
+	<bean id="easyreport.pageTotalFunction" class="cn.easyreport.expression.function.page.PageTotalFunction"></bean>
+	<bean id="easyreport.pageNumberFunction" class="cn.easyreport.expression.function.page.PageNumberFunction"></bean>
+	<bean id="easyreport.pageAvgFunction" class="cn.easyreport.expression.function.page.PageAvgFunction"></bean>
+	<bean id="easyreport.pageCountFunction" class="cn.easyreport.expression.function.page.PageCountFunction"></bean>
+	<bean id="easyreport.pageMaxFunction" class="cn.easyreport.expression.function.page.PageMaxFunction"></bean>
+	<bean id="easyreport.pageMinFunction" class="cn.easyreport.expression.function.page.PageMinFunction"></bean>
+	<bean id="easyreport.pageRowsFunction" class="cn.easyreport.expression.function.page.PageRowsFunction"></bean>
+	<bean id="easyreport.pageSumFunction" class="cn.easyreport.expression.function.page.PageSumFunction"></bean>
+	<bean id="easyreport.fieldNameFunction" class="cn.easyreport.expression.function.FieldNameFunction"></bean>
+	
+	<bean id="easyreport.parameterFunction" class="cn.easyreport.expression.function.ParameterFunction"></bean>
+	<bean id="easyreport.parameterIsEmptyFunction" class="cn.easyreport.expression.function.ParameterIsEmptyFunction"></bean>
+	<bean id="easyreport.jsonFunction" class="cn.easyreport.expression.function.JsonFunction"></bean>
+	
+	<bean id="easyreport.rowFunction" class="cn.easyreport.expression.function.RowFunction"></bean>
+	<bean id="easyreport.columnFunction" class="cn.easyreport.expression.function.ColumnFunction"></bean>
+</beans>

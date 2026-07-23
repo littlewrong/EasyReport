@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.easyreport.sync.mapper.ErDataSyncLogMapper">
+
+    <resultMap type="ErDataSyncLog" id="ErDataSyncLogResult">
+        <result property="logId"         column="log_id"         />
+        <result property="syncId"        column="sync_id"        />
+        <result property="sourceTable"   column="source_table"   />
+        <result property="targetTable"   column="target_table"   />
+        <result property="syncAction"    column="sync_action"    />
+        <result property="executeSql"    column="execute_sql"    />
+        <result property="syncResult"    column="sync_result"    />
+        <result property="errorMessage"  column="error_message"  />
+        <result property="rowsAffected"  column="rows_affected"  />
+        <result property="executeTime"   column="execute_time"   />
+        <result property="createTime"    column="create_time"    />
+    </resultMap>
+
+    <sql id="selectErDataSyncLogVo">
+        select log_id, sync_id, source_table, target_table, sync_action, execute_sql, sync_result, error_message, rows_affected, execute_time, create_time
+        from er_data_sync_log
+    </sql>
+
+    <!-- 查询列表 -->
+    <select id="selectErDataSyncLogList" parameterType="ErDataSyncLog" resultMap="ErDataSyncLogResult">
+        <include refid="selectErDataSyncLogVo"/>
+        <where>
+            <if test="syncId != null">
+                and sync_id = #{syncId}
+            </if>
+            <if test="sourceTable != null and sourceTable != ''">
+                and source_table like concat('%', #{sourceTable}, '%')
+            </if>
+            <if test="targetTable != null and targetTable != ''">
+                and target_table like concat('%', #{targetTable}, '%')
+            </if>
+            <if test="syncAction != null and syncAction != ''">
+                and sync_action = #{syncAction}
+            </if>
+            <if test="syncResult != null and syncResult != ''">
+                and sync_result = #{syncResult}
+            </if>
+            <if test="beginTime != null and beginTime != ''">
+                and date_format(create_time,'%Y-%m-%d') &gt;= #{beginTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                and date_format(create_time,'%Y-%m-%d') &lt;= #{endTime}
+            </if>
+        </where>
+        order by log_id desc
+    </select>
+
+    <!-- 查询详情 -->
+    <select id="selectErDataSyncLogByLogId" parameterType="Long" resultMap="ErDataSyncLogResult">
+        <include refid="selectErDataSyncLogVo"/>
+        where log_id = #{logId}
+    </select>
+
+    <!-- 根据同步任务ID查询日志 -->
+    <select id="selectErDataSyncLogBySyncId" parameterType="Long" resultMap="ErDataSyncLogResult">
+        <include refid="selectErDataSyncLogVo"/>
+        where sync_id = #{syncId}
+        order by log_id desc
+    </select>
+
+    <!-- 新增 -->
+    <insert id="insertErDataSyncLog" parameterType="ErDataSyncLog" useGeneratedKeys="true" keyProperty="logId">
+        insert into er_data_sync_log
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="syncId != null">sync_id,</if>
+            <if test="sourceTable != null and sourceTable != ''">source_table,</if>
+            <if test="targetTable != null and targetTable != ''">target_table,</if>
+            <if test="syncAction != null">sync_action,</if>
+            <if test="executeSql != null">execute_sql,</if>
+            <if test="syncResult != null">sync_result,</if>
+            <if test="errorMessage != null">error_message,</if>
+            <if test="rowsAffected != null">rows_affected,</if>
+            <if test="executeTime != null">execute_time,</if>
+            create_time
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="syncId != null">#{syncId},</if>
+            <if test="sourceTable != null and sourceTable != ''">#{sourceTable},</if>
+            <if test="targetTable != null and targetTable != ''">#{targetTable},</if>
+            <if test="syncAction != null">#{syncAction},</if>
+            <if test="executeSql != null">#{executeSql},</if>
+            <if test="syncResult != null">#{syncResult},</if>
+            <if test="errorMessage != null">#{errorMessage},</if>
+            <if test="rowsAffected != null">#{rowsAffected},</if>
+            <if test="executeTime != null">#{executeTime},</if>
+            sysdate()
+        </trim>
+    </insert>
+
+    <!-- 批量新增 -->
+    <insert id="batchInsertErDataSyncLog" parameterType="java.util.List">
+        insert into er_data_sync_log (sync_id, source_table, target_table, sync_action, execute_sql, sync_result, error_message, rows_affected, execute_time, create_time)
+        values
+        <foreach collection="list" item="item" separator=",">
+            (#{item.syncId}, #{item.sourceTable}, #{item.targetTable}, #{item.syncAction}, #{item.executeSql}, #{item.syncResult}, #{item.errorMessage}, #{item.rowsAffected}, #{item.executeTime}, sysdate())
+        </foreach>
+    </insert>
+
+    <!-- 删除 -->
+    <delete id="deleteErDataSyncLogByLogId" parameterType="Long">
+        delete from er_data_sync_log where log_id = #{logId}
+    </delete>
+
+    <!-- 根据同步任务ID删除日志 -->
+    <delete id="deleteErDataSyncLogBySyncId" parameterType="Long">
+        delete from er_data_sync_log where sync_id = #{syncId}
+    </delete>
+
+    <!-- 清理指定天数前的日志 -->
+    <delete id="cleanErDataSyncLogByDays" parameterType="int">
+        delete from er_data_sync_log where create_time &lt; date_sub(sysdate(), interval #{days} day)
+    </delete>
+</mapper>

@@ -1,0 +1,2095 @@
+{
+  "editCanvasConfig": {
+    "projectName": "云平台运维态势大屏",
+    "width": 1920,
+    "height": 1080,
+    "filterShow": false,
+    "hueRotate": 0,
+    "saturate": 1,
+    "contrast": 1,
+    "brightness": 1,
+    "opacity": 1,
+    "rotateZ": 0,
+    "rotateX": 0,
+    "rotateY": 0,
+    "skewX": 0,
+    "skewY": 0,
+    "blendMode": "normal",
+    "background": "#06131f",
+    "backgroundImage": null,
+    "selectColor": true,
+    "chartThemeColor": "dark",
+    "chartCustomThemeColorInfo": null,
+    "chartThemeSetting": {},
+    "vChartThemeName": "vScreenVolcanoBlue",
+    "previewScaleType": "fit"
+  },
+  "requestGlobalConfig": {
+    "requestDataPond": [],
+    "requestOriginUrl": "",
+    "requestInterval": 30,
+    "requestIntervalUnit": "second",
+    "requestParams": {
+      "Body": {
+        "form-data": {},
+        "x-www-form-urlencoded": {},
+        "json": "",
+        "xml": ""
+      },
+      "Header": {},
+      "Params": {}
+    }
+  },
+  "componentList": [
+    {
+      "id": "demo02_title",
+      "isGroup": false,
+      "key": "TextGradient",
+      "chartConfig": {
+        "key": "TextGradient",
+        "chartKey": "VTextGradient",
+        "conKey": "VCTextGradient",
+        "title": "大屏标题",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "naiveUI",
+        "image": "text_gradient.png"
+      },
+      "attr": {
+        "x": 410,
+        "y": 22,
+        "w": 1080,
+        "h": 72,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": "云平台运维态势大屏",
+        "size": 44,
+        "gradient": {
+          "from": "#7dd3fc",
+          "to": "#f8fafc",
+          "deg": 90
+        }
+      }
+    },
+    {
+      "id": "demo02_subtitle",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 470,
+        "y": 82,
+        "w": 960,
+        "h": 32,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "资源负载、告警趋势、服务健康和节点排行",
+        "fontSize": 18,
+        "fontColor": "#8fb6d8",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "center",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_time",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1515,
+        "y": 34,
+        "w": 330,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "数据更新时间 2026-07-07 10:30",
+        "fontSize": 17,
+        "fontColor": "#8fb6d8",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_lkpi_b_0",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 50,
+        "y": 130,
+        "w": 300,
+        "h": 126,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#67e8f9",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo02_lkpi_l_0",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 72,
+        "y": 144,
+        "w": 160,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "在线节点",
+        "fontSize": 18,
+        "fontColor": "#b9c7e6",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_lkpi_n_0",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 64,
+        "y": 180,
+        "w": 210,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 1286,
+        "from": 0,
+        "dur": 2,
+        "precision": 0,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#67e8f9",
+        "prefixText": "",
+        "prefixColor": "#67e8f9",
+        "suffixText": "台",
+        "suffixColor": "#67e8f9"
+      }
+    },
+    {
+      "id": "demo02_lkpi_d_0",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 230,
+        "y": 190,
+        "w": 90,
+        "h": 36,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "+18",
+        "fontSize": 18,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_lkpi_b_1",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 50,
+        "y": 280,
+        "w": 300,
+        "h": 126,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#facc15",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo02_lkpi_l_1",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 72,
+        "y": 294,
+        "w": 160,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "CPU负载",
+        "fontSize": 18,
+        "fontColor": "#b9c7e6",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_lkpi_n_1",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 64,
+        "y": 330,
+        "w": 210,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 63.4,
+        "from": 0,
+        "dur": 2,
+        "precision": 1,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#facc15",
+        "prefixText": "",
+        "prefixColor": "#facc15",
+        "suffixText": "%",
+        "suffixColor": "#facc15"
+      }
+    },
+    {
+      "id": "demo02_lkpi_d_1",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 230,
+        "y": 340,
+        "w": 90,
+        "h": 36,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "-3.2%",
+        "fontSize": 18,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_lkpi_b_2",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 50,
+        "y": 430,
+        "w": 300,
+        "h": 126,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#fb7185",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo02_lkpi_l_2",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 72,
+        "y": 444,
+        "w": 160,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "今日告警",
+        "fontSize": 18,
+        "fontColor": "#b9c7e6",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_lkpi_n_2",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 64,
+        "y": 480,
+        "w": 210,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 146,
+        "from": 0,
+        "dur": 2,
+        "precision": 0,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#fb7185",
+        "prefixText": "",
+        "prefixColor": "#fb7185",
+        "suffixText": "条",
+        "suffixColor": "#fb7185"
+      }
+    },
+    {
+      "id": "demo02_lkpi_d_2",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 230,
+        "y": 490,
+        "w": 90,
+        "h": 36,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "-12%",
+        "fontSize": 18,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_lkpi_b_3",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 50,
+        "y": 580,
+        "w": 300,
+        "h": 126,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#86efac",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo02_lkpi_l_3",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 72,
+        "y": 594,
+        "w": 160,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "服务可用性",
+        "fontSize": 18,
+        "fontColor": "#b9c7e6",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_lkpi_n_3",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 64,
+        "y": 630,
+        "w": 210,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 99.96,
+        "from": 0,
+        "dur": 2,
+        "precision": 1,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#86efac",
+        "prefixText": "",
+        "prefixColor": "#86efac",
+        "suffixText": "%",
+        "suffixColor": "#86efac"
+      }
+    },
+    {
+      "id": "demo02_lkpi_d_3",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 230,
+        "y": 640,
+        "w": 90,
+        "h": 36,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "+0.02%",
+        "fontSize": 18,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_main_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 390,
+        "y": 130,
+        "w": 900,
+        "h": 360,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#22d3ee",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo02_main_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 412,
+        "y": 144,
+        "w": 856,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "集群资源负载",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_main",
+      "isGroup": false,
+      "key": "LineCommon",
+      "chartConfig": {
+        "key": "LineCommon",
+        "chartKey": "VLineCommon",
+        "conKey": "VCLineCommon",
+        "title": "集群资源负载",
+        "category": "Lines",
+        "categoryName": "折线图",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "line.png"
+      },
+      "attr": {
+        "x": 420,
+        "y": 185,
+        "w": 840,
+        "h": 270,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#22d3ee",
+          "#60a5fa",
+          "#a78bfa",
+          "#34d399"
+        ],
+        "tooltip": {
+          "show": true,
+          "trigger": "axis",
+          "axisPointer": {
+            "type": "line"
+          }
+        },
+        "legend": {
+          "show": true,
+          "type": "scroll",
+          "x": "center",
+          "y": "top",
+          "icon": "circle",
+          "orient": "horizontal",
+          "textStyle": {
+            "color": "#b9c7e6",
+            "fontSize": 13
+          },
+          "itemHeight": 10,
+          "itemWidth": 10,
+          "pageTextStyle": {
+            "color": "#b9c7e6"
+          }
+        },
+        "grid": {
+          "show": false,
+          "left": "8%",
+          "right": "6%",
+          "top": 52,
+          "bottom": 38,
+          "containLabel": true
+        },
+        "xAxis": {
+          "show": true,
+          "type": "category",
+          "axisLabel": {
+            "show": true,
+            "fontSize": 12,
+            "color": "#b9c7e6",
+            "rotate": 0
+          },
+          "axisLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#35527a",
+              "width": 1
+            },
+            "onZero": true
+          },
+          "axisTick": {
+            "show": false
+          },
+          "splitLine": {
+            "show": false
+          }
+        },
+        "yAxis": {
+          "show": true,
+          "type": "value",
+          "axisLabel": {
+            "show": true,
+            "fontSize": 12,
+            "color": "#b9c7e6"
+          },
+          "axisLine": {
+            "show": false
+          },
+          "axisTick": {
+            "show": false
+          },
+          "splitLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#203651",
+              "width": 1,
+              "type": "dashed"
+            }
+          }
+        },
+        "dataset": {
+          "dimensions": [
+            "day",
+            "CPU",
+            "内存",
+            "磁盘IO"
+          ],
+          "source": [
+            {
+              "day": "周一",
+              "CPU": 62,
+              "内存": 71,
+              "磁盘IO": 38
+            },
+            {
+              "day": "周二",
+              "CPU": 65,
+              "内存": 73,
+              "磁盘IO": 42
+            },
+            {
+              "day": "周三",
+              "CPU": 58,
+              "内存": 75,
+              "磁盘IO": 36
+            },
+            {
+              "day": "周四",
+              "CPU": 68,
+              "内存": 72,
+              "磁盘IO": 45
+            },
+            {
+              "day": "周五",
+              "CPU": 64,
+              "内存": 78,
+              "磁盘IO": 48
+            },
+            {
+              "day": "周六",
+              "CPU": 59,
+              "内存": 74,
+              "磁盘IO": 41
+            },
+            {
+              "day": "周日",
+              "CPU": 63,
+              "内存": 76,
+              "磁盘IO": 40
+            }
+          ]
+        },
+        "series": [
+          {
+            "name": "CPU",
+            "type": "line",
+            "smooth": true,
+            "symbolSize": 5,
+            "label": {
+              "show": false
+            },
+            "lineStyle": {
+              "type": "solid",
+              "width": 3,
+              "color": "#22d3ee"
+            },
+            "itemStyle": {
+              "color": "#22d3ee"
+            },
+            "areaStyle": {
+              "opacity": 0.16
+            }
+          },
+          {
+            "name": "内存",
+            "type": "line",
+            "smooth": true,
+            "symbolSize": 5,
+            "label": {
+              "show": false
+            },
+            "lineStyle": {
+              "type": "solid",
+              "width": 3,
+              "color": "#60a5fa"
+            },
+            "itemStyle": {
+              "color": "#60a5fa"
+            }
+          },
+          {
+            "name": "磁盘IO",
+            "type": "line",
+            "smooth": true,
+            "symbolSize": 5,
+            "label": {
+              "show": false
+            },
+            "lineStyle": {
+              "type": "solid",
+              "width": 3,
+              "color": "#a78bfa"
+            },
+            "itemStyle": {
+              "color": "#a78bfa"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo02_pie_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1330,
+        "y": 130,
+        "w": 540,
+        "h": 360,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#fb7185",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo02_pie_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1352,
+        "y": 144,
+        "w": 496,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "告警类型分布",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_pie",
+      "isGroup": false,
+      "key": "PieCommon",
+      "chartConfig": {
+        "key": "PieCommon",
+        "chartKey": "VPieCommon",
+        "conKey": "VCPieCommon",
+        "title": "告警类型分布",
+        "category": "Pies",
+        "categoryName": "饼图",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "pie.png"
+      },
+      "attr": {
+        "x": 1360,
+        "y": 185,
+        "w": 480,
+        "h": 270,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#fb7185",
+          "#facc15",
+          "#38bdf8",
+          "#34d399"
+        ],
+        "isCarousel": false,
+        "type": "ring",
+        "tooltip": {
+          "show": true,
+          "trigger": "item"
+        },
+        "legend": {
+          "show": true,
+          "type": "scroll",
+          "x": "center",
+          "y": "top",
+          "icon": "circle",
+          "orient": "horizontal",
+          "textStyle": {
+            "color": "#b9c7e6",
+            "fontSize": 13
+          },
+          "itemHeight": 10,
+          "itemWidth": 10,
+          "pageTextStyle": {
+            "color": "#b9c7e6"
+          }
+        },
+        "dataset": {
+          "dimensions": [
+            "product",
+            "data1"
+          ],
+          "source": [
+            {
+              "product": "CPU",
+              "data1": 38
+            },
+            {
+              "product": "内存",
+              "data1": 26
+            },
+            {
+              "product": "网络",
+              "data1": 18
+            },
+            {
+              "product": "存储",
+              "data1": 12
+            },
+            {
+              "product": "应用",
+              "data1": 6
+            }
+          ]
+        },
+        "series": [
+          {
+            "type": "pie",
+            "radius": [
+              "42%",
+              "66%"
+            ],
+            "center": [
+              "50%",
+              "58%"
+            ],
+            "roseType": false,
+            "avoidLabelOverlap": true,
+            "itemStyle": {
+              "show": true,
+              "borderRadius": 6,
+              "borderColor": "#07111f",
+              "borderWidth": 2
+            },
+            "label": {
+              "show": true,
+              "color": "#dbeafe",
+              "fontSize": 12
+            },
+            "labelLine": {
+              "show": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo02_bar_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 390,
+        "y": 540,
+        "w": 600,
+        "h": 420,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#fbbf24",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo02_bar_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 412,
+        "y": 554,
+        "w": 556,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "告警处理闭环",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_bar",
+      "isGroup": false,
+      "key": "BarCommon",
+      "chartConfig": {
+        "key": "BarCommon",
+        "chartKey": "VBarCommon",
+        "conKey": "VCBarCommon",
+        "title": "告警处理闭环",
+        "category": "Bars",
+        "categoryName": "柱状图",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "bar_x.png"
+      },
+      "attr": {
+        "x": 420,
+        "y": 595,
+        "w": 540,
+        "h": 320,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#fb7185",
+          "#34d399"
+        ],
+        "tooltip": {
+          "show": true,
+          "trigger": "axis",
+          "axisPointer": {
+            "show": true,
+            "type": "shadow"
+          }
+        },
+        "legend": {
+          "show": true,
+          "type": "scroll",
+          "x": "center",
+          "y": "top",
+          "icon": "circle",
+          "orient": "horizontal",
+          "textStyle": {
+            "color": "#b9c7e6",
+            "fontSize": 13
+          },
+          "itemHeight": 10,
+          "itemWidth": 10,
+          "pageTextStyle": {
+            "color": "#b9c7e6"
+          }
+        },
+        "grid": {
+          "show": false,
+          "left": "8%",
+          "right": "6%",
+          "top": 52,
+          "bottom": 38,
+          "containLabel": true
+        },
+        "xAxis": {
+          "show": true,
+          "type": "category",
+          "axisLabel": {
+            "show": true,
+            "fontSize": 12,
+            "color": "#b9c7e6",
+            "rotate": 0
+          },
+          "axisLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#35527a",
+              "width": 1
+            },
+            "onZero": true
+          },
+          "axisTick": {
+            "show": false
+          },
+          "splitLine": {
+            "show": false
+          }
+        },
+        "yAxis": {
+          "show": true,
+          "type": "value",
+          "axisLabel": {
+            "show": true,
+            "fontSize": 12,
+            "color": "#b9c7e6"
+          },
+          "axisLine": {
+            "show": false
+          },
+          "axisTick": {
+            "show": false
+          },
+          "splitLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#203651",
+              "width": 1,
+              "type": "dashed"
+            }
+          }
+        },
+        "dataset": {
+          "dimensions": [
+            "day",
+            "新增",
+            "关闭"
+          ],
+          "source": [
+            {
+              "day": "周一",
+              "新增": 28,
+              "关闭": 22
+            },
+            {
+              "day": "周二",
+              "新增": 34,
+              "关闭": 31
+            },
+            {
+              "day": "周三",
+              "新增": 22,
+              "关闭": 25
+            },
+            {
+              "day": "周四",
+              "新增": 41,
+              "关闭": 35
+            },
+            {
+              "day": "周五",
+              "新增": 36,
+              "关闭": 39
+            },
+            {
+              "day": "周六",
+              "新增": 19,
+              "关闭": 24
+            },
+            {
+              "day": "周日",
+              "新增": 17,
+              "关闭": 21
+            }
+          ]
+        },
+        "series": [
+          {
+            "name": "新增",
+            "type": "bar",
+            "barWidth": 14,
+            "label": {
+              "show": false
+            },
+            "itemStyle": {
+              "color": "#fb7185",
+              "borderRadius": 3
+            }
+          },
+          {
+            "name": "关闭",
+            "type": "bar",
+            "barWidth": 14,
+            "label": {
+              "show": false
+            },
+            "itemStyle": {
+              "color": "#34d399",
+              "borderRadius": 3
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo02_radar_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1030,
+        "y": 540,
+        "w": 420,
+        "h": 420,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#34d399",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo02_radar_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1052,
+        "y": 554,
+        "w": 376,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "核心服务健康度",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_radar",
+      "isGroup": false,
+      "key": "Radar",
+      "chartConfig": {
+        "key": "Radar",
+        "chartKey": "VRadar",
+        "conKey": "VCRadar",
+        "title": "核心服务健康度",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Charts",
+        "chartFrame": "common",
+        "image": "radar.png"
+      },
+      "attr": {
+        "x": 1058,
+        "y": 600,
+        "w": 365,
+        "h": 300,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#34d399",
+          "#facc15",
+          "#38bdf8",
+          "#a78bfa"
+        ],
+        "tooltip": {
+          "show": true
+        },
+        "legend": {
+          "show": true,
+          "type": "scroll",
+          "x": "center",
+          "y": "top",
+          "icon": "circle",
+          "orient": "horizontal",
+          "textStyle": {
+            "color": "#b9c7e6",
+            "fontSize": 13
+          },
+          "itemHeight": 10,
+          "itemWidth": 10,
+          "pageTextStyle": {
+            "color": "#b9c7e6"
+          },
+          "data": [
+            "当前",
+            "基线"
+          ]
+        },
+        "dataset": {
+          "radarIndicator": [
+            {
+              "name": "API",
+              "max": 100
+            },
+            {
+              "name": "DB",
+              "max": 100
+            },
+            {
+              "name": "缓存",
+              "max": 100
+            },
+            {
+              "name": "队列",
+              "max": 100
+            },
+            {
+              "name": "网关",
+              "max": 100
+            },
+            {
+              "name": "任务",
+              "max": 100
+            }
+          ],
+          "seriesData": [
+            {
+              "name": "当前",
+              "value": [
+                98,
+                94,
+                96,
+                91,
+                99,
+                93
+              ]
+            },
+            {
+              "name": "基线",
+              "value": [
+                95,
+                95,
+                95,
+                95,
+                95,
+                95
+              ]
+            }
+          ]
+        },
+        "radar": {
+          "shape": "polygon",
+          "radius": [
+            "0%",
+            "62%"
+          ],
+          "center": [
+            "50%",
+            "56%"
+          ],
+          "splitArea": {
+            "show": true
+          },
+          "splitLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#24415f"
+            }
+          },
+          "axisName": {
+            "show": true,
+            "color": "#c7d2fe",
+            "fontSize": 12
+          },
+          "axisLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#24415f"
+            }
+          },
+          "axisTick": {
+            "show": false
+          },
+          "indicator": [
+            {
+              "name": "API",
+              "max": 100
+            },
+            {
+              "name": "DB",
+              "max": 100
+            },
+            {
+              "name": "缓存",
+              "max": 100
+            },
+            {
+              "name": "队列",
+              "max": 100
+            },
+            {
+              "name": "网关",
+              "max": 100
+            },
+            {
+              "name": "任务",
+              "max": 100
+            }
+          ]
+        },
+        "series": [
+          {
+            "name": "radar",
+            "type": "radar",
+            "areaStyle": {
+              "opacity": 0.18
+            },
+            "data": [
+              {
+                "name": "当前",
+                "value": [
+                  98,
+                  94,
+                  96,
+                  91,
+                  99,
+                  93
+                ]
+              },
+              {
+                "name": "基线",
+                "value": [
+                  95,
+                  95,
+                  95,
+                  95,
+                  95,
+                  95
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo02_board_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1480,
+        "y": 540,
+        "w": 390,
+        "h": 420,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#38bdf8",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo02_board_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1502,
+        "y": 554,
+        "w": 346,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "实时事件流",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_board",
+      "isGroup": false,
+      "key": "TableScrollBoard",
+      "chartConfig": {
+        "key": "TableScrollBoard",
+        "chartKey": "VTableScrollBoard",
+        "conKey": "VCTableScrollBoard",
+        "title": "实时事件流",
+        "category": "Tables",
+        "categoryName": "表格",
+        "package": "Tables",
+        "chartFrame": "common",
+        "image": "table_scrollboard.png"
+      },
+      "attr": {
+        "x": 1505,
+        "y": 600,
+        "w": 340,
+        "h": 300,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "header": [
+          "服务",
+          "事件",
+          "级别"
+        ],
+        "dataset": [
+          [
+            "gateway",
+            "QPS突增",
+            "提示"
+          ],
+          [
+            "mysql",
+            "慢查询",
+            "警告"
+          ],
+          [
+            "redis",
+            "连接恢复",
+            "正常"
+          ],
+          [
+            "billing",
+            "接口错误",
+            "严重"
+          ],
+          [
+            "kafka",
+            "积压下降",
+            "正常"
+          ],
+          [
+            "search",
+            "延迟升高",
+            "警告"
+          ]
+        ],
+        "index": true,
+        "indexHeader": "#",
+        "columnWidth": [
+          42,
+          150,
+          110,
+          110
+        ],
+        "align": [
+          "center",
+          "left",
+          "right",
+          "right"
+        ],
+        "rowNum": 6,
+        "waitTime": 2,
+        "headerHeight": 34,
+        "carousel": "single",
+        "hoverPause": true,
+        "headerBGC": "#0e7490",
+        "oddRowBGC": "rgba(8, 47, 73, 0.72)",
+        "evenRowBGC": "rgba(15, 23, 42, 0.72)"
+      }
+    },
+    {
+      "id": "demo02_rank_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 50,
+        "y": 770,
+        "w": 300,
+        "h": 210,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#22d3ee",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo02_rank_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 72,
+        "y": 784,
+        "w": 256,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "节点负载排行",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo02_rank",
+      "isGroup": false,
+      "key": "TableList",
+      "chartConfig": {
+        "key": "TableList",
+        "chartKey": "VTableList",
+        "conKey": "VCTableList",
+        "title": "节点负载排行",
+        "category": "Tables",
+        "categoryName": "表格",
+        "package": "Tables",
+        "chartFrame": "common",
+        "image": "tables_list.png"
+      },
+      "attr": {
+        "x": 72,
+        "y": 825,
+        "w": 256,
+        "h": 130,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": [
+          {
+            "name": "prod-07",
+            "value": 92
+          },
+          {
+            "name": "prod-13",
+            "value": 88
+          },
+          {
+            "name": "prod-02",
+            "value": 83
+          },
+          {
+            "name": "prod-21",
+            "value": 79
+          }
+        ],
+        "rowNum": 6,
+        "waitTime": 2,
+        "unit": "%",
+        "sort": true,
+        "color": "#22d3ee",
+        "textColor": "#dbeafe",
+        "borderColor": "#2563eb80",
+        "carousel": "single",
+        "indexFontSize": 12,
+        "leftFontSize": 13,
+        "rightFontSize": 13
+      }
+    }
+  ]
+}

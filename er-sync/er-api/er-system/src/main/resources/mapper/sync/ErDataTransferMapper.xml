@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.easyreport.sync.mapper.ErDataTransferMapper">
+
+    <resultMap type="ErDataTransfer" id="ErDataTransferResult">
+        <result property="transferId"           column="transfer_id"           />
+        <result property="transferName"         column="transfer_name"         />
+        <result property="transferCode"         column="transfer_code"         />
+        <result property="sourceDatasourceId"   column="source_datasource_id"  />
+        <result property="sourceDatasourceName" column="source_datasource_name"/>
+        <result property="sourceSchemaPattern"  column="source_schema_pattern" />
+        <result property="sourceTable"          column="source_table"          />
+        <result property="targetDatasourceId"   column="target_datasource_id"  />
+        <result property="targetDatasourceName" column="target_datasource_name"/>
+        <result property="syncMode"             column="sync_mode"             />
+        <result property="timestampField"       column="timestamp_field"       />
+        <result property="syncInsert"           column="sync_insert"           />
+        <result property="syncUpdate"           column="sync_update"           />
+        <result property="syncDelete"           column="sync_delete"           />
+        <result property="deleteWindowYears"     column="delete_window_years"   />
+        <result property="batchSize"            column="batch_size"            />
+        <result property="syncStatus"           column="sync_status"           />
+        <result property="syncProgress"         column="sync_progress"         />
+        <result property="lastSyncTime"         column="last_sync_time"        />
+        <result property="lastSyncValue"        column="last_sync_value"       />
+        <result property="lastSyncResult"       column="last_sync_result"      />
+        <result property="cronExpression"       column="cron_expression"       />
+        <result property="jobId"                column="job_id"                />
+        <result property="status"               column="status"                />
+        <result property="createBy"             column="create_by"             />
+        <result property="createTime"           column="create_time"           />
+        <result property="updateBy"             column="update_by"             />
+        <result property="updateTime"           column="update_time"           />
+        <result property="remark"               column="remark"                />
+    </resultMap>
+
+    <sql id="selectErDataTransferVo">
+        SELECT t.transfer_id, t.transfer_name, t.transfer_code, t.source_datasource_id,
+               s.datasource_name AS source_datasource_name, t.source_schema_pattern, t.source_table,
+               t.target_datasource_id, d.datasource_name AS target_datasource_name,
+               t.sync_mode, t.timestamp_field, t.sync_insert, t.sync_update,
+               t.sync_delete, t.delete_window_years, t.batch_size, t.sync_status, t.sync_progress, t.last_sync_time, t.last_sync_value,
+               t.last_sync_result, t.cron_expression, t.job_id, t.status,
+               t.create_by, t.create_time, t.update_by, t.update_time, t.remark
+        FROM er_data_transfer t
+        LEFT JOIN er_datasource s ON t.source_datasource_id = s.datasource_id
+        LEFT JOIN er_datasource d ON t.target_datasource_id = d.datasource_id
+    </sql>
+
+    <select id="selectErDataTransferList" parameterType="ErDataTransfer" resultMap="ErDataTransferResult">
+        <include refid="selectErDataTransferVo"/>
+        <where>
+            <if test="transferName != null and transferName != ''">
+                AND t.transfer_name LIKE CONCAT('%', #{transferName}, '%')
+            </if>
+            <if test="transferCode != null and transferCode != ''">
+                AND t.transfer_code = #{transferCode}
+            </if>
+            <if test="sourceDatasourceId != null">
+                AND t.source_datasource_id = #{sourceDatasourceId}
+            </if>
+            <if test="targetDatasourceId != null">
+                AND t.target_datasource_id = #{targetDatasourceId}
+            </if>
+            <if test="syncMode != null and syncMode != ''">
+                AND t.sync_mode = #{syncMode}
+            </if>
+            <if test="syncStatus != null and syncStatus != ''">
+                AND t.sync_status = #{syncStatus}
+            </if>
+            <if test="status != null and status != ''">
+                AND t.status = #{status}
+            </if>
+        </where>
+        ORDER BY t.create_time DESC
+    </select>
+
+    <select id="selectErDataTransferByTransferId" parameterType="Long" resultMap="ErDataTransferResult">
+        <include refid="selectErDataTransferVo"/>
+        WHERE t.transfer_id = #{transferId}
+    </select>
+
+    <select id="checkTransferNameUnique" parameterType="String" resultMap="ErDataTransferResult">
+        SELECT transfer_id, transfer_name FROM er_data_transfer WHERE transfer_name = #{transferName} LIMIT 1
+    </select>
+
+    <insert id="insertErDataTransfer" parameterType="ErDataTransfer" useGeneratedKeys="true" keyProperty="transferId">
+        INSERT INTO er_data_transfer
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="transferName != null and transferName != ''">transfer_name,</if>
+            <if test="transferCode != null">transfer_code,</if>
+            <if test="sourceDatasourceId != null">source_datasource_id,</if>
+            <if test="sourceSchemaPattern != null and sourceSchemaPattern != ''">source_schema_pattern,</if>
+            <if test="sourceTable != null and sourceTable != ''">source_table,</if>
+            <if test="targetDatasourceId != null">target_datasource_id,</if>
+            <if test="syncMode != null">sync_mode,</if>
+            <if test="timestampField != null">timestamp_field,</if>
+            <if test="syncInsert != null">sync_insert,</if>
+            <if test="syncUpdate != null">sync_update,</if>
+            <if test="syncDelete != null">sync_delete,</if>
+            <if test="deleteWindowYears != null">delete_window_years,</if>
+            <if test="batchSize != null">batch_size,</if>
+            <if test="syncStatus != null">sync_status,</if>
+            <if test="lastSyncTime != null">last_sync_time,</if>
+            <if test="lastSyncValue != null">last_sync_value,</if>
+            <if test="lastSyncResult != null">last_sync_result,</if>
+            <if test="cronExpression != null">cron_expression,</if>
+            <if test="jobId != null">job_id,</if>
+            <if test="status != null">status,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="remark != null">remark,</if>
+            create_time
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="transferName != null and transferName != ''">#{transferName},</if>
+            <if test="transferCode != null">#{transferCode},</if>
+            <if test="sourceDatasourceId != null">#{sourceDatasourceId},</if>
+            <if test="sourceSchemaPattern != null and sourceSchemaPattern != ''">#{sourceSchemaPattern},</if>
+            <if test="sourceTable != null and sourceTable != ''">#{sourceTable},</if>
+            <if test="targetDatasourceId != null">#{targetDatasourceId},</if>
+            <if test="syncMode != null">#{syncMode},</if>
+            <if test="timestampField != null">#{timestampField},</if>
+            <if test="syncInsert != null">#{syncInsert},</if>
+            <if test="syncUpdate != null">#{syncUpdate},</if>
+            <if test="syncDelete != null">#{syncDelete},</if>
+            <if test="deleteWindowYears != null">#{deleteWindowYears},</if>
+            <if test="batchSize != null">#{batchSize},</if>
+            <if test="syncStatus != null">#{syncStatus},</if>
+            <if test="lastSyncTime != null">#{lastSyncTime},</if>
+            <if test="lastSyncValue != null">#{lastSyncValue},</if>
+            <if test="lastSyncResult != null">#{lastSyncResult},</if>
+            <if test="cronExpression != null">#{cronExpression},</if>
+            <if test="jobId != null">#{jobId},</if>
+            <if test="status != null">#{status},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="remark != null">#{remark},</if>
+            SYSDATE()
+        </trim>
+    </insert>
+
+    <update id="updateErDataTransfer" parameterType="ErDataTransfer">
+        UPDATE er_data_transfer
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="transferName != null and transferName != ''">transfer_name = #{transferName},</if>
+            <if test="transferCode != null">transfer_code = #{transferCode},</if>
+            <if test="sourceDatasourceId != null">source_datasource_id = #{sourceDatasourceId},</if>
+            <if test="sourceSchemaPattern != null">source_schema_pattern = #{sourceSchemaPattern},</if>
+            <if test="sourceTable != null and sourceTable != ''">source_table = #{sourceTable},</if>
+            <if test="targetDatasourceId != null">target_datasource_id = #{targetDatasourceId},</if>
+            <if test="syncMode != null">sync_mode = #{syncMode},</if>
+            <if test="timestampField != null">timestamp_field = #{timestampField},</if>
+            <if test="syncInsert != null">sync_insert = #{syncInsert},</if>
+            <if test="syncUpdate != null">sync_update = #{syncUpdate},</if>
+            <if test="syncDelete != null">sync_delete = #{syncDelete},</if>
+            <if test="deleteWindowYears != null">delete_window_years = #{deleteWindowYears},</if>
+            <if test="batchSize != null">batch_size = #{batchSize},</if>
+            <if test="syncStatus != null">sync_status = #{syncStatus},</if>
+            <if test="syncProgress != null">sync_progress = #{syncProgress},</if>
+            <if test="lastSyncTime != null">last_sync_time = #{lastSyncTime},</if>
+            <if test="lastSyncValue != null">last_sync_value = #{lastSyncValue},</if>
+            <if test="lastSyncResult != null">last_sync_result = #{lastSyncResult},</if>
+            <if test="cronExpression != null">cron_expression = #{cronExpression},</if>
+            <if test="jobId != null">job_id = #{jobId},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = SYSDATE()
+        </trim>
+        WHERE transfer_id = #{transferId}
+    </update>
+
+    <delete id="deleteErDataTransferByTransferId" parameterType="Long">
+        DELETE FROM er_data_transfer WHERE transfer_id = #{transferId}
+    </delete>
+
+    <delete id="deleteErDataTransferByTransferIds" parameterType="String">
+        DELETE FROM er_data_transfer WHERE transfer_id IN
+        <foreach item="transferId" collection="array" open="(" separator="," close=")">
+            #{transferId}
+        </foreach>
+    </delete>
+
+</mapper>

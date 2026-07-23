@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.easyreport.system.mapper.ErDashboardMapper">
+
+    <!-- ============ KPI 统计 ============ -->
+
+    <select id="countDatasource" resultType="int">
+        select count(*) from er_datasource where status = '0'
+    </select>
+
+    <select id="countDatasourceConnected" resultType="int">
+        select count(*) from er_datasource where status = '0' and test_status = '0'
+    </select>
+
+    <select id="countDatasourceFailed" resultType="int">
+        select count(*) from er_datasource where status = '0' and test_status = '1'
+    </select>
+
+    <select id="countTransferTask" resultType="int">
+        select (select count(*) from er_data_transfer where status = '0')
+             + (select count(*) from er_data_sync where status = '0')
+    </select>
+
+    <select id="countTransferRunning" resultType="int">
+        select (select count(*) from er_data_transfer where sync_status = '1')
+             + (select count(*) from er_data_sync where sync_status = '1')
+    </select>
+
+    <select id="countTodaySyncTotal" resultType="int">
+        select count(*) from er_data_transfer_log
+        where date(create_time) = curdate()
+    </select>
+
+    <select id="countTodaySyncSuccess" resultType="int">
+        select count(*) from er_data_transfer_log
+        where date(create_time) = curdate() and sync_result = '0'
+    </select>
+
+    <select id="countTodaySyncFail" resultType="int">
+        select count(*) from er_data_transfer_log
+        where date(create_time) = curdate() and sync_result = '1'
+    </select>
+
+    <select id="countTodaySyncRows" resultType="java.lang.Long">
+        select coalesce(sum(success_count), 0) from er_data_transfer_log
+        where date(create_time) = curdate() and sync_result = '0'
+    </select>
+
+    <!-- ============ 图表数据 ============ -->
+
+    <!-- 近7天同步趋势 -->
+    <select id="selectSyncTrend7Days" resultType="java.util.Map">
+        select d.dt as syncDate,
+               coalesce(s.success_count, 0) as successCount,
+               coalesce(f.fail_count, 0) as failCount
+        from (
+            select curdate() as dt
+            union all select date_sub(curdate(), interval 1 day)
+            union all select date_sub(curdate(), interval 2 day)
+            union all select date_sub(curdate(), interval 3 day)
+            union all select date_sub(curdate(), interval 4 day)
+            union all select date_sub(curdate(), interval 5 day)
+            union all select date_sub(curdate(), interval 6 day)
+        ) d
+        left join (
+            select date(create_time) as dt, count(*) as success_count
+            from er_data_transfer_log
+            where sync_result = '0' and create_time >= date_sub(curdate(), interval 6 day)
+            group by date(create_time)
+        ) s on d.dt = s.dt
+        left join (
+            select date(create_time) as dt, count(*) as fail_count
+            from er_data_transfer_log
+            where sync_result = '1' and create_time >= date_sub(curdate(), interval 6 day)
+            group by date(create_time)
+        ) f on d.dt = f.dt
+        order by d.dt
+    </select>
+
+    <!-- 数据源类型分布 -->
+    <select id="selectDatasourceTypeStats" resultType="java.util.Map">
+        select datasource_type as name, count(*) as value
+        from er_datasource
+        where status = '0'
+        group by datasource_type
+        order by value desc
+    </select>
+
+    <!-- 数据同步任务状态分布 -->
+    <select id="selectTransferStatusStats" resultType="java.util.Map">
+        select sync_status as status, count(*) as count
+        from er_data_transfer
+        where status = '0'
+        group by sync_status
+    </select>
+
+    <!-- 结构同步任务状态分布 -->
+    <select id="selectSyncStatusStats" resultType="java.util.Map">
+        select sync_status as status, count(*) as count
+        from er_data_sync
+        where status = '0'
+        group by sync_status
+    </select>
+
+    <!-- 最近10条同步日志 -->
+    <select id="selectRecentTransferLogs" resultType="java.util.Map">
+        select l.log_id as logId,
+               t.transfer_name as transferName,
+               l.source_table as sourceTable,
+               l.target_table as targetTable,
+               l.sync_result as syncResult,
+               l.success_count as successCount,
+               l.execute_time as executeTime,
+               l.create_time as createTime
+        from er_data_transfer_log l
+        left join er_data_transfer t on l.transfer_id = t.transfer_id
+        order by l.create_time desc
+        limit 10
+    </select>
+
+</mapper>

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="${contextPath}/easyreport/res/easyreport-asserts/css/bootstrap.min.css" rel="stylesheet" type="text/css" />
+<meta name="renderer" content="webkit">
+<meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+<meta name ="viewport" content ="initial-scale=1, maximum-scale=3, minimum-scale=1, user-scalable=no">
+<title>${title}</title>
+<style type="text/css" id="_easyreport_table_style">
+	${style}
+</style>
+ 	<script type="text/javascript" src="${contextPath}/easyreport/res/easyreport-asserts/venderjs/jquery.min.js"></script>
+ 	<script type="text/javascript" src="${contextPath}/easyreport/res/easyreport-asserts/venderjs/bootstrap.min.js"></script>
+ 	<script type="text/javascript" src="${contextPath}/easyreport/res/easyreport-asserts/venderjs/Chart.bundle.min.js"></script>
+ 	<script type="text/javascript" src="${contextPath}/easyreport/res/easyreport-asserts/venderjs/chartjs-plugin-datalabels.min.js"></script>
+ 	<script type="text/javascript" src="${contextPath}/easyreport/res/easyreport-asserts/venderjs/bootstrap-datetimepicker.js"></script>
+ 	<script type="text/javascript" src="${contextPath}/easyreport/res/easyreport-asserts/js/preview.bundle.js"></script>
+</head>
+<body style="margin:5px">
+${upSearchFormHtml}
+#if($tools.show)
+<div style="border:solid 1px #ddd;border-radius:5px;height:35px;width:100%;margin-bottom:5px;background:#f8f8f8">
+	<div style="text-align:${reportAlign}">
+		#if($tools.print)
+		<button type="button" class="btn btn-default easyreport-print" style="display:inline-block;padding:0;background:#f8f8f8;border:none;margin:3px" title="在线打印">
+			<img src='${contextPath}/easyreport/res/easyreport-asserts/icons/print.svg' width="20px" height="20px">
+		</button>
+		#end
+		#if($tools.pdfPrint)
+		<button type="button" class="btn btn-default easyreport-pdf-direct-print" style="display:inline-block;padding:0;background:#f8f8f8;border:none;margin:3px" title="PDF在线打印">
+			<img src='${contextPath}/easyreport/res/easyreport-asserts/icons/pdf-direct-print.svg' width="20px" height="20px">
+		</button>
+		#end
+		#if($tools.pdfPreviewPrint)
+		<button type="button" class="btn btn-default easyreport-pdf-print" style="display:inline-block;padding:0;background:#f8f8f8;border:none;margin:3px" title="PDF在线预览打印">
+			<img src='${contextPath}/easyreport/res/easyreport-asserts/icons/pdf-print.svg' width="20px" height="20px">
+		</button>
+		#end
+		#if($tools.pdf)
+		<button type="button" class="btn btn-default easyreport-export-pdf" style="display:inline-block;padding:0;background:#f8f8f8;border:none;margin:3px" title="导出PDF">
+			<img src='${contextPath}/easyreport/res/easyreport-asserts/icons/pdf.svg' width="20px" height="20px">
+		</button>
+		#end
+		#if($tools.word)
+		<button type="button" class="btn btn-default easyreport-export-word" style="display:inline-block;padding:0;background:#f8f8f8;border:none;margin:3px" title="导出WORD">
+			<img src='${contextPath}/easyreport/res/easyreport-asserts/icons/word.svg' width="20px" height="20px">
+		</button>
+		#end
+		#if($tools.excel)
+		<button type="button" class="btn btn-default easyreport-export-excel" style="display:inline-block;padding:0;background:#f8f8f8;border:none;margin:3px" title="导出EXCEL">
+			<img src='${contextPath}/easyreport/res/easyreport-asserts/icons/excel.svg' width="20px" height="20px">
+		</button>
+		#end
+		#if($tools.pagingExcel)
+		<button type="button" class="btn btn-default easyreport-export-excel-paging" style="display:inline-block;padding:0;background:#f8f8f8;border:none;margin:3px" title="分页导出EXCEL">
+			<img src='${contextPath}/easyreport/res/easyreport-asserts/icons/excel-paging.svg' width="20px" height="20px">
+		</button>
+		#end
+		#if($tools.sheetPagingExcel)
+		<button type="button" class="btn btn-default easyreport-export-excel-paging-sheet" style="display:inline-block;padding:0;background:#f8f8f8;border:none;margin:3px" title="分页分Sheet导出EXCEL">
+			<img src='${contextPath}/easyreport/res/easyreport-asserts/icons/excel-with-paging-sheet.svg' width="20px" height="20px">
+		</button>
+		#end
+		#if($tools.paging)
+		<div class="btn-group">
+			<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" style="background:#f8f8f8;border:none;color:#337ab7;height:26px;line-height:1;padding:5px 10px;font-size:13px;">
+				#if($pageIndex>0)
+					分页预览
+				#else
+					预览
+				#end
+				 <span class="caret"></span>
+			</button>
+			<ul class="dropdown-menu" role="menu">
+				#if($hasTools)
+				<li><a href="${contextPath}/easyreport/preview?_u=${file}&_t=${_t}&${customParameters}" style="color:#337ab7">预览</a></li>
+				#else
+				<li><a href="${contextPath}/easyreport/preview?_u=${file}&${customParameters}" style="color:#337ab7">预览</a></li>
+				#end
+				#if($hasTools)
+				<li><a href="${contextPath}/easyreport/preview?_u=${file}&_i=1&_t=${_t}&${customParameters}" style="color:#337ab7">分页预览</a></li>
+				#else
+				<li><a href="${contextPath}/easyreport/preview?_u=${file}&_i=1&${customParameters}" style="color:#337ab7">分页预览</a></li>
+				#end
+			</ul>
+		</div>
+		#end 
+		#if($pageIndex>0) 
+		<span id='pagingContainer' style="font-size:14px;margin-left:1px;color:#337ab7">
+			共<span id='totalPageLabel'>${totalPageWithCol}</span>页
+			<select id="pageSelector" class="form-control" style="display:inline-block;width:inherit;font-size:13px;height:28px;margin-top:2px">
+				#foreach($index in [1..$totalPageWithCol])
+				<option>${index}</option>
+				#end
+			</select>
+			<span id='pageLinkContainer'></span>
+		</span>
+		#end
+		#if($tools.excel)
+		<span class="easyreport-toolbar-separator" style="display:inline-block;border-left:1px solid #ddd;height:20px;margin:7px 6px 7px 10px;vertical-align:middle;"></span>
+		<span id="apiPagingInfo" style="display:none;font-size:13px;color:#337ab7;margin-right:8px;vertical-align:middle;line-height:28px;">
+			共<span id="apiTotalCount">0</span>条 / 共<span id="apiTotalPages">0</span>页
+			第<input type="number" id="apiPageSelector" class="form-control" min="1" value="1" style="display:inline-block;width:80px;font-size:13px;height:24px;margin:0 5px;padding:2px 8px;vertical-align:middle;text-align:center;" title="输入页码后按回车跳转">页
+		</span>
+		<button type="button" class="btn btn-default easyreport-export-excel-api" style="display:inline-block;padding:0;background:#f8f8f8;border:none;margin:3px;vertical-align:middle;" title="数据导出">
+			<span style="display:inline-block;position:relative;">
+				<img src='${contextPath}/easyreport/res/easyreport-asserts/icons/excel.svg' width="20px" height="20px" style="opacity:0.9">
+				<span style="position:absolute;right:-4px;top:-6px;font-size:9px;color:#666;">API</span>
+			</span>
+		</button>
+		#end
+	</div>
+</div>
+#end
+${downSearchFormHtml}
+<div id="_easyreport_table" style="float:${reportAlign}">
+	${content}
+</div>
+<iframe name="_print_frame" width="0" height="0" frameborder="0" src="about:blank"></iframe>
+<iframe name="_print_pdf_frame" width="0" height="0" frameborder="0" src="about:blank"></iframe>
+<script type="text/javascript">
+window._server="${contextPath}/easyreport";
+window._httpDatasets=${httpDatasets};
+window._apiPagingConfig=${apiPagingConfig};
+window.formElements=[];
+$(document).ready(function(){
+
+	window.parent.postMessage('iframeLoaded', '*');
+
+	buildPaging(${pageIndex},${totalPageWithCol});
+	
+	#if($intervalRefreshValue>0)
+		_intervalRefresh($intervalRefreshValue,$totalPageWithCol);
+	#end
+	_buildChartDatas($chartDatas);
+	${searchFormJs}
+	function doSearch(){
+		submitSearchForm("${file}","${customParameters}");
+	}
+});
+</script>
+</body>
+</html>

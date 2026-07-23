@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd
+	">
+	<import resource="classpath:easyreport-core-context.xml"/>
+	<import resource="classpath:easyreport-font-context.xml"/>
+	
+	<bean id="easyreport.datasourceServletAction" class="cn.easyreport.console.designer.DatasourceServletAction"></bean>
+	<bean id="easyreport.resourceLoaderServletAction" class="cn.easyreport.console.res.ResourceLoaderServletAction"></bean>
+	<bean id="easyreport.designerServletAction" class="cn.easyreport.console.designer.DesignerServletAction">
+		<property name="reportRender" ref="easyreport.reportRender"></property>
+		<property name="reportParser" ref="easyreport.reportParser"></property>
+	</bean>
+	
+	<bean id="easyreport.searchFormDesignerAction" class="cn.easyreport.console.designer.SearchFormDesignerAction"></bean>
+	
+	<bean id="easyreport.htmlPreviewServletAction" class="cn.easyreport.console.html.HtmlPreviewServletAction">
+		<property name="exportManager" ref="easyreport.exportManager"></property>
+		<property name="reportBuilder" ref="easyreport.reportBuilder"></property>
+		<property name="reportRender" ref="easyreport.reportRender"></property>
+	</bean>
+	<bean id="easyreport.exportWordServletAction" class="cn.easyreport.console.word.ExportWordServletAction">
+		<property name="exportManager" ref="easyreport.exportManager"></property>
+		<property name="reportBuilder" ref="easyreport.reportBuilder"></property>
+	</bean>
+	
+	<bean id="easyreport.exportPdfServletAction" class="cn.easyreport.console.pdf.ExportPdfServletAction">
+		<property name="exportManager" ref="easyreport.exportManager"></property>
+		<property name="reportBuilder" ref="easyreport.reportBuilder"></property>
+		<property name="reportRender" ref="easyreport.reportRender"></property>
+	</bean>
+	
+	<bean id="easyreport.exportExcelServletAction" class="cn.easyreport.console.excel.ExportExcelServletAction">
+		<property name="exportManager" ref="easyreport.exportManager"></property>
+		<property name="reportBuilder" ref="easyreport.reportBuilder"></property>
+		<property name="reportRender" ref="easyreport.reportRender"></property>
+	</bean>
+	
+	<bean id="easyreport.exportExcel97ServletAction" class="cn.easyreport.console.excel.ExportExcel97ServletAction">
+		<property name="exportManager" ref="easyreport.exportManager"></property>
+		<property name="reportBuilder" ref="easyreport.reportBuilder"></property>
+	</bean>
+	
+	<bean id="easyreport.imageServletAction" class="cn.easyreport.console.image.ImageServletAction"></bean>
+	<bean id="easyreport.importExcelServletAction" class="cn.easyreport.console.importexcel.ImportExcelServletAction"></bean>
+
+	<bean id="easyreport.chartServletAction" class="cn.easyreport.console.chart.ChartServletAction"></bean>
+
+	<bean id="easyreport.exportProgressServletAction" class="cn.easyreport.console.excel.ExportProgressServletAction"></bean>
+
+	<!-- 轮询方式进度接口（更稳定） -->
+	<bean id="easyreport.exportProgressPollingAction" class="cn.easyreport.console.excel.ExportProgressPollingAction"></bean>
+
+	<bean id="easyreport.httpSessionReportCache" class="cn.easyreport.console.cache.HttpSessionReportCache">
+		<property name="disabled" value="${easyreport.disableHttpSessionReportCache}"></property>
+	</bean>
+</beans>

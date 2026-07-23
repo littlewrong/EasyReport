@@ -1,0 +1,252 @@
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] easyreport                                                         [pom]
+[INFO] er-common                                                          [jar]
+[INFO] er-quartz                                                          [jar]
+[INFO] er-system                                                          [jar]
+[INFO] er-framework                                                       [jar]
+[INFO] er-generator                                                       [jar]
+[INFO] er-admin                                                           [jar]
+[INFO] 
+[INFO] ---------------------< com.easyreport:EasyReport >----------------------
+[INFO] Building easyreport 3.9.1                                          [1/7]
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] ----------------------< com.easyreport:er-common >----------------------
+[INFO] Building er-common 3.9.1                                           [2/7]
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- maven-resources-plugin:2.6:resources (default-resources) @ er-common ---
+[INFO] Using 'UTF-8' encoding to copy filtered resources.
+[INFO] skip non existing resourceDirectory D:\EasyReport\er-api\er-common\src\main\resources
+[INFO] 
+[INFO] --- maven-compiler-plugin:3.1:compile (default-compile) @ er-common ---
+[INFO] Nothing to compile - all classes are up to date
+[INFO] 
+[INFO] ----------------------< com.easyreport:er-quartz >----------------------
+[INFO] Building er-quartz 3.9.1                                           [3/7]
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- maven-resources-plugin:2.6:resources (default-resources) @ er-quartz ---
+[INFO] Using 'UTF-8' encoding to copy filtered resources.
+[INFO] Copying 2 resources
+[INFO] 
+[INFO] --- maven-compiler-plugin:3.1:compile (default-compile) @ er-quartz ---
+[INFO] Changes detected - recompiling the module!
+[INFO] Compiling 18 source files to D:\EasyReport\er-api\er-quartz\target\classes
+[INFO] 
+[INFO] ----------------------< com.easyreport:er-system >----------------------
+[INFO] Building er-system 3.9.1                                           [4/7]
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- maven-resources-plugin:2.6:resources (default-resources) @ er-system ---
+[INFO] Using 'UTF-8' encoding to copy filtered resources.
+[INFO] Copying 25 resources
+[INFO] 
+[INFO] --- maven-compiler-plugin:3.1:compile (default-compile) @ er-system ---
+[INFO] Changes detected - recompiling the module!
+[INFO] Compiling 143 source files to D:\EasyReport\er-api\er-system\target\classes
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[32,12] 找不到符号
+  符号:   类 TableMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[38,17] 找不到符号
+  符号:   类 TableMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[52,13] 找不到符号
+  符号:   类 TableMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[3,44] 找不到符号
+  符号:   类 ColumnMeta
+  位置: 程序包 com.easyreport.system.sync.extractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[4,44] 找不到符号
+  符号:   类 IndexMeta
+  位置: 程序包 com.easyreport.system.sync.extractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[5,44] 找不到符号
+  符号:   类 TableMeta
+  位置: 程序包 com.easyreport.system.sync.extractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[17,42] 找不到符号
+  符号:   类 TableMeta
+  位置: 类 com.easyreport.system.sync.dialect.PostgreSqlDialect
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[61,48] 找不到符号
+  符号:   类 TableMeta
+  位置: 类 com.easyreport.system.sync.dialect.PostgreSqlDialect
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[95,37] 找不到符号
+  符号:   类 ColumnMeta
+  位置: 类 com.easyreport.system.sync.dialect.PostgreSqlDialect
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/datasync/PostgreSqlDataSyncExtractor.java:[46,25] com.easyreport.system.sync.datasync.PostgreSqlDataSyncExtractor中的listPrimaryKeys(java.sql.Connection,java.lang.String,java.lang.String)无法实现com.easyreport.system.sync.datasync.DataSyncExtractor中的listPrimaryKeys(java.sql.Connection,java.lang.String,java.lang.String)
+  被覆盖的方法未抛出java.lang.Exception
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/datasync/PostgreSqlDataSyncExtractor.java:[26,25] com.easyreport.system.sync.datasync.PostgreSqlDataSyncExtractor中的listColumns(java.sql.Connection,java.lang.String,java.lang.String)无法实现com.easyreport.system.sync.datasync.DataSyncExtractor中的listColumns(java.sql.Connection,java.lang.String,java.lang.String)
+  被覆盖的方法未抛出java.lang.Exception
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/datasync/PostgreSqlDataSyncExtractor.java:[13,25] com.easyreport.system.sync.datasync.PostgreSqlDataSyncExtractor中的listTables(java.sql.DatabaseMetaData,java.lang.String,java.lang.String,java.lang.String)无法实现com.easyreport.system.sync.datasync.DataSyncExtractor中的listTables(java.sql.DatabaseMetaData,java.lang.String,java.lang.String,java.lang.String)
+  被覆盖的方法未抛出java.lang.Exception
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[21,26] 找不到符号
+  符号:   方法 getSchemaName()
+  位置: 类型为com.easyreport.system.domain.ErDatasource的变量 ds
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[21,57] 找不到符号
+  符号:   方法 getSchemaName()
+  位置: 类型为com.easyreport.system.domain.ErDatasource的变量 ds
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[21,89] 找不到符号
+  符号:   方法 getSchemaName()
+  位置: 类型为com.easyreport.system.domain.ErDatasource的变量 ds
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[33,14] 找不到符号
+  符号:   类 TableMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[42,14] 找不到符号
+  符号:   类 TableMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[44,13] 找不到符号
+  符号:   类 TableMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[53,9] 找不到符号
+  符号:   类 TableMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[53,30] 找不到符号
+  符号:   类 TableMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[61,14] 找不到符号
+  符号:   类 ColumnMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[64,17] 找不到符号
+  符号:   类 ColumnMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[64,38] 找不到符号
+  符号:   类 ColumnMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[89,14] 找不到符号
+  符号:   类 IndexMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[92,13] 找不到符号
+  符号:   类 IndexMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[107,40] 找不到符号
+  符号:   类 IndexMeta
+  位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[128,5] 方法不会覆盖或实现超类型的方法
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[14,8] com.easyreport.system.sync.dialect.PostgreSqlDialect不是抽象的, 并且未覆盖com.easyreport.system.sync.dialect.SchemaDialect中的抽象方法createTable(com.easyreport.system.sync.model.TableMeta)
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[16,5] 方法不会覆盖或实现超类型的方法
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[29,14] 找不到符号
+  符号:   类 ColumnMeta
+  位置: 类 com.easyreport.system.sync.dialect.PostgreSqlDialect
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[60,5] 方法不会覆盖或实现超类型的方法
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[71,14] 找不到符号
+  符号:   类 IndexMeta
+  位置: 类 com.easyreport.system.sync.dialect.PostgreSqlDialect
+[INFO] 32 errors 
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for easyreport 3.9.1:
+[INFO] 
+[INFO] easyreport ......................................... SUCCESS [  0.006 s]
+[INFO] er-common .......................................... SUCCESS [  1.310 s]
+[INFO] er-quartz .......................................... SUCCESS [  1.187 s]
+[INFO] er-system .......................................... FAILURE [  1.710 s]
+[INFO] er-framework ....................................... SKIPPED
+[INFO] er-generator ....................................... SKIPPED
+[INFO] er-admin ........................................... SKIPPED
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  4.581 s
+[INFO] Finished at: 2026-02-07T23:34:57+08:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.1:compile (default-compile) on project er-system: Compilation failure: Compilation failure: 
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[32,12] 找不到符号
+[ERROR]   符号:   类 TableMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[38,17] 找不到符号
+[ERROR]   符号:   类 TableMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[52,13] 找不到符号
+[ERROR]   符号:   类 TableMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[3,44] 找不到符号
+[ERROR]   符号:   类 ColumnMeta
+[ERROR]   位置: 程序包 com.easyreport.system.sync.extractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[4,44] 找不到符号
+[ERROR]   符号:   类 IndexMeta
+[ERROR]   位置: 程序包 com.easyreport.system.sync.extractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[5,44] 找不到符号
+[ERROR]   符号:   类 TableMeta
+[ERROR]   位置: 程序包 com.easyreport.system.sync.extractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[17,42] 找不到符号
+[ERROR]   符号:   类 TableMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.dialect.PostgreSqlDialect
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[61,48] 找不到符号
+[ERROR]   符号:   类 TableMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.dialect.PostgreSqlDialect
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[95,37] 找不到符号
+[ERROR]   符号:   类 ColumnMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.dialect.PostgreSqlDialect
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/datasync/PostgreSqlDataSyncExtractor.java:[46,25] com.easyreport.system.sync.datasync.PostgreSqlDataSyncExtractor中的listPrimaryKeys(java.sql.Connection,java.lang.String,java.lang.String)无法实现com.easyreport.system.sync.datasync.DataSyncExtractor中的listPrimaryKeys(java.sql.Connection,java.lang.String,java.lang.String)
+[ERROR]   被覆盖的方法未抛出java.lang.Exception
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/datasync/PostgreSqlDataSyncExtractor.java:[26,25] com.easyreport.system.sync.datasync.PostgreSqlDataSyncExtractor中的listColumns(java.sql.Connection,java.lang.String,java.lang.String)无法实现com.easyreport.system.sync.datasync.DataSyncExtractor中的listColumns(java.sql.Connection,java.lang.String,java.lang.String)
+[ERROR]   被覆盖的方法未抛出java.lang.Exception
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/datasync/PostgreSqlDataSyncExtractor.java:[13,25] com.easyreport.system.sync.datasync.PostgreSqlDataSyncExtractor中的listTables(java.sql.DatabaseMetaData,java.lang.String,java.lang.String,java.lang.String)无法实现com.easyreport.system.sync.datasync.DataSyncExtractor中的listTables(java.sql.DatabaseMetaData,java.lang.String,java.lang.String,java.lang.String)
+[ERROR]   被覆盖的方法未抛出java.lang.Exception
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[21,26] 找不到符号
+[ERROR]   符号:   方法 getSchemaName()
+[ERROR]   位置: 类型为com.easyreport.system.domain.ErDatasource的变量 ds
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[21,57] 找不到符号
+[ERROR]   符号:   方法 getSchemaName()
+[ERROR]   位置: 类型为com.easyreport.system.domain.ErDatasource的变量 ds
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[21,89] 找不到符号
+[ERROR]   符号:   方法 getSchemaName()
+[ERROR]   位置: 类型为com.easyreport.system.domain.ErDatasource的变量 ds
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[33,14] 找不到符号
+[ERROR]   符号:   类 TableMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[42,14] 找不到符号
+[ERROR]   符号:   类 TableMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[44,13] 找不到符号
+[ERROR]   符号:   类 TableMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[53,9] 找不到符号
+[ERROR]   符号:   类 TableMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[53,30] 找不到符号
+[ERROR]   符号:   类 TableMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[61,14] 找不到符号
+[ERROR]   符号:   类 ColumnMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[64,17] 找不到符号
+[ERROR]   符号:   类 ColumnMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[64,38] 找不到符号
+[ERROR]   符号:   类 ColumnMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[89,14] 找不到符号
+[ERROR]   符号:   类 IndexMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[92,13] 找不到符号
+[ERROR]   符号:   类 IndexMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[107,40] 找不到符号
+[ERROR]   符号:   类 IndexMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.extractor.PostgreSqlSchemaExtractor
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/extractor/PostgreSqlSchemaExtractor.java:[128,5] 方法不会覆盖或实现超类型的方法
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[14,8] com.easyreport.system.sync.dialect.PostgreSqlDialect不是抽象的, 并且未覆盖com.easyreport.system.sync.dialect.SchemaDialect中的抽象方法createTable(com.easyreport.system.sync.model.TableMeta)
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[16,5] 方法不会覆盖或实现超类型的方法
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[29,14] 找不到符号
+[ERROR]   符号:   类 ColumnMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.dialect.PostgreSqlDialect
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[60,5] 方法不会覆盖或实现超类型的方法
+[ERROR] /D:/EasyReport/er-api/er-system/src/main/java/com/easyreport/system/sync/dialect/PostgreSqlDialect.java:[71,14] 找不到符号
+[ERROR]   符号:   类 IndexMeta
+[ERROR]   位置: 类 com.easyreport.system.sync.dialect.PostgreSqlDialect
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[ERROR] 
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <args> -rf :er-system

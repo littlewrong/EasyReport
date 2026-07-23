@@ -1,0 +1,43 @@
+# ===== EasyReport 应用配置 =====
+
+# 图片/资源根路径（PictureUpload 使用）
+# Windows 示例：D:/easyreport/file    Linux 示例：/home/easyreport/file
+tw:
+  profile: C:\share\ureport\
+
+# 服务器配置
+server:
+  # HTTP 端口
+  port: 8083
+  # 单个 HTTP 请求头最大大小（token/Cookie 过大时避免 Request header is too large）
+  max-http-header-size: 65536
+  servlet:
+    # 应用访问路径
+    context-path: /
+  tomcat:
+    # URI 编码
+    uri-encoding: UTF-8
+
+# 日志级别
+logging:
+  level:
+    cn.easyreport: info
+    org.springframework: warn
+
+# Spring 配置
+spring:
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+  # 国际化资源文件路径
+  messages:
+    basename: i18n/messages
+  # 文件上传限制
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+  # 开发热部署（生产可关闭）
+  devtools:
+    restart:
+      enabled: true

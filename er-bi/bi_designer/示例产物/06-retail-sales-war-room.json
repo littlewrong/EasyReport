@@ -1,0 +1,1578 @@
+{
+  "editCanvasConfig": {
+    "projectName": "新零售销售作战室",
+    "width": 1920,
+    "height": 1080,
+    "filterShow": false,
+    "hueRotate": 0,
+    "saturate": 1,
+    "contrast": 1,
+    "brightness": 1,
+    "opacity": 1,
+    "rotateZ": 0,
+    "rotateX": 0,
+    "rotateY": 0,
+    "skewX": 0,
+    "skewY": 0,
+    "blendMode": "normal",
+    "background": "#0b1020",
+    "backgroundImage": null,
+    "selectColor": true,
+    "chartThemeColor": "dark",
+    "chartCustomThemeColorInfo": null,
+    "chartThemeSetting": {},
+    "vChartThemeName": "vScreenVolcanoBlue",
+    "previewScaleType": "fit"
+  },
+  "requestGlobalConfig": {
+    "requestDataPond": [],
+    "requestOriginUrl": "",
+    "requestInterval": 30,
+    "requestIntervalUnit": "second",
+    "requestParams": {
+      "Body": {
+        "form-data": {},
+        "x-www-form-urlencoded": {},
+        "json": "",
+        "xml": ""
+      },
+      "Header": {},
+      "Params": {}
+    }
+  },
+  "componentList": [
+    {
+      "id": "demo06_title",
+      "isGroup": false,
+      "key": "TextGradient",
+      "chartConfig": {
+        "key": "TextGradient",
+        "chartKey": "VTextGradient",
+        "conKey": "VCTextGradient",
+        "title": "大屏标题",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "naiveUI",
+        "image": "text_gradient.png"
+      },
+      "attr": {
+        "x": 390,
+        "y": 22,
+        "w": 1100,
+        "h": 72,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": "新零售销售作战室",
+        "size": 44,
+        "gradient": {
+          "from": "#f472b6",
+          "to": "#f8fafc",
+          "deg": 90
+        }
+      }
+    },
+    {
+      "id": "demo06_subtitle",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 450,
+        "y": 82,
+        "w": 980,
+        "h": 32,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "门店销售、品类表现、会员活跃和渠道转化",
+        "fontSize": 18,
+        "fontColor": "#8fb6d8",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "center",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo06_time",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1515,
+        "y": 34,
+        "w": 330,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "数据更新时间 2026-07-07 10:30",
+        "fontSize": 17,
+        "fontColor": "#8fb6d8",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo06_gmv_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 50,
+        "y": 118,
+        "w": 420,
+        "h": 190,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#f472b6",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo06_gmv_l",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 82,
+        "y": 140,
+        "w": 200,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "实时 GMV",
+        "fontSize": 22,
+        "fontColor": "#f9a8d4",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo06_gmv_n",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 70,
+        "y": 188,
+        "w": 330,
+        "h": 70,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 12873420,
+        "from": 0,
+        "dur": 2,
+        "precision": 0,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#f472b6",
+        "prefixText": "￥",
+        "prefixColor": "#f472b6",
+        "suffixText": "",
+        "suffixColor": "#f472b6"
+      }
+    },
+    {
+      "id": "demo06_gmv_d",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 330,
+        "y": 255,
+        "w": 100,
+        "h": 32,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "+18.4%",
+        "fontSize": 20,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo06_trend_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 500,
+        "y": 118,
+        "w": 840,
+        "h": 430,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#f472b6",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo06_trend_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 522,
+        "y": 132,
+        "w": 796,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "渠道 GMV 趋势",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo06_trend",
+      "isGroup": false,
+      "key": "LineCommon",
+      "chartConfig": {
+        "key": "LineCommon",
+        "chartKey": "VLineCommon",
+        "conKey": "VCLineCommon",
+        "title": "渠道 GMV 趋势",
+        "category": "Lines",
+        "categoryName": "折线图",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "line.png"
+      },
+      "attr": {
+        "x": 532,
+        "y": 176,
+        "w": 780,
+        "h": 320,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#f472b6",
+          "#fbbf24",
+          "#38bdf8",
+          "#34d399"
+        ],
+        "tooltip": {
+          "show": true,
+          "trigger": "axis",
+          "axisPointer": {
+            "type": "line"
+          }
+        },
+        "legend": {
+          "show": true,
+          "type": "scroll",
+          "x": "center",
+          "y": "top",
+          "icon": "circle",
+          "orient": "horizontal",
+          "textStyle": {
+            "color": "#b9c7e6",
+            "fontSize": 13
+          },
+          "itemHeight": 10,
+          "itemWidth": 10,
+          "pageTextStyle": {
+            "color": "#b9c7e6"
+          }
+        },
+        "grid": {
+          "show": false,
+          "left": "8%",
+          "right": "6%",
+          "top": 52,
+          "bottom": 38,
+          "containLabel": true
+        },
+        "xAxis": {
+          "show": true,
+          "type": "category",
+          "axisLabel": {
+            "show": true,
+            "fontSize": 12,
+            "color": "#b9c7e6",
+            "rotate": 0
+          },
+          "axisLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#35527a",
+              "width": 1
+            },
+            "onZero": true
+          },
+          "axisTick": {
+            "show": false
+          },
+          "splitLine": {
+            "show": false
+          }
+        },
+        "yAxis": {
+          "show": true,
+          "type": "value",
+          "axisLabel": {
+            "show": true,
+            "fontSize": 12,
+            "color": "#b9c7e6"
+          },
+          "axisLine": {
+            "show": false
+          },
+          "axisTick": {
+            "show": false
+          },
+          "splitLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#203651",
+              "width": 1,
+              "type": "dashed"
+            }
+          }
+        },
+        "dataset": {
+          "dimensions": [
+            "day",
+            "小程序",
+            "门店",
+            "直播"
+          ],
+          "source": [
+            {
+              "day": "周一",
+              "小程序": 420,
+              "门店": 380,
+              "直播": 220
+            },
+            {
+              "day": "周二",
+              "小程序": 510,
+              "门店": 410,
+              "直播": 260
+            },
+            {
+              "day": "周三",
+              "小程序": 560,
+              "门店": 460,
+              "直播": 330
+            },
+            {
+              "day": "周四",
+              "小程序": 620,
+              "门店": 480,
+              "直播": 390
+            },
+            {
+              "day": "周五",
+              "小程序": 680,
+              "门店": 520,
+              "直播": 450
+            },
+            {
+              "day": "周六",
+              "小程序": 750,
+              "门店": 610,
+              "直播": 530
+            },
+            {
+              "day": "周日",
+              "小程序": 690,
+              "门店": 640,
+              "直播": 510
+            }
+          ]
+        },
+        "series": [
+          {
+            "name": "小程序",
+            "type": "line",
+            "smooth": true,
+            "symbolSize": 5,
+            "label": {
+              "show": false
+            },
+            "lineStyle": {
+              "type": "solid",
+              "width": 3,
+              "color": "#f472b6"
+            },
+            "itemStyle": {
+              "color": "#f472b6"
+            },
+            "areaStyle": {
+              "opacity": 0.16
+            }
+          },
+          {
+            "name": "门店",
+            "type": "line",
+            "smooth": true,
+            "symbolSize": 5,
+            "label": {
+              "show": false
+            },
+            "lineStyle": {
+              "type": "solid",
+              "width": 3,
+              "color": "#fbbf24"
+            },
+            "itemStyle": {
+              "color": "#fbbf24"
+            }
+          },
+          {
+            "name": "直播",
+            "type": "line",
+            "smooth": true,
+            "symbolSize": 5,
+            "label": {
+              "show": false
+            },
+            "lineStyle": {
+              "type": "solid",
+              "width": 3,
+              "color": "#38bdf8"
+            },
+            "itemStyle": {
+              "color": "#38bdf8"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo06_hot_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1380,
+        "y": 118,
+        "w": 490,
+        "h": 430,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#fbbf24",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo06_hot_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1402,
+        "y": 132,
+        "w": 446,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "爆品实时榜",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo06_hot",
+      "isGroup": false,
+      "key": "TableScrollBoard",
+      "chartConfig": {
+        "key": "TableScrollBoard",
+        "chartKey": "VTableScrollBoard",
+        "conKey": "VCTableScrollBoard",
+        "title": "爆品实时榜",
+        "category": "Tables",
+        "categoryName": "表格",
+        "package": "Tables",
+        "chartFrame": "common",
+        "image": "table_scrollboard.png"
+      },
+      "attr": {
+        "x": 1410,
+        "y": 178,
+        "w": 430,
+        "h": 320,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "header": [
+          "商品",
+          "销售额",
+          "趋势"
+        ],
+        "dataset": [
+          [
+            "精华套装",
+            "￥82.6万",
+            "上升"
+          ],
+          [
+            "儿童乳液",
+            "￥61.3万",
+            "上升"
+          ],
+          [
+            "洗护礼盒",
+            "￥48.8万",
+            "持平"
+          ],
+          [
+            "防晒喷雾",
+            "￥42.1万",
+            "上升"
+          ],
+          [
+            "坚果礼盒",
+            "￥36.5万",
+            "下降"
+          ]
+        ],
+        "index": true,
+        "indexHeader": "#",
+        "columnWidth": [
+          42,
+          150,
+          110,
+          110
+        ],
+        "align": [
+          "center",
+          "left",
+          "right",
+          "right"
+        ],
+        "rowNum": 6,
+        "waitTime": 2,
+        "headerHeight": 34,
+        "carousel": "single",
+        "hoverPause": true,
+        "headerBGC": "#0e7490",
+        "oddRowBGC": "rgba(8, 47, 73, 0.72)",
+        "evenRowBGC": "rgba(15, 23, 42, 0.72)"
+      }
+    },
+    {
+      "id": "demo06_orders_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 50,
+        "y": 345,
+        "w": 420,
+        "h": 203,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#86efac",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo06_orders_l",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 80,
+        "y": 370,
+        "w": 160,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "支付订单",
+        "fontSize": 20,
+        "fontColor": "#bbf7d0",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo06_orders_n",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 70,
+        "y": 425,
+        "w": 270,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 62480,
+        "from": 0,
+        "dur": 2,
+        "precision": 0,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#86efac",
+        "prefixText": "",
+        "prefixColor": "#86efac",
+        "suffixText": "单",
+        "suffixColor": "#86efac"
+      }
+    },
+    {
+      "id": "demo06_orders_d",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 330,
+        "y": 435,
+        "w": 100,
+        "h": 32,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "+11.2%",
+        "fontSize": 20,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo06_pie_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 50,
+        "y": 590,
+        "w": 540,
+        "h": 390,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#38bdf8",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo06_pie_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 72,
+        "y": 604,
+        "w": 496,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "品类销售占比",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo06_pie",
+      "isGroup": false,
+      "key": "PieCommon",
+      "chartConfig": {
+        "key": "PieCommon",
+        "chartKey": "VPieCommon",
+        "conKey": "VCPieCommon",
+        "title": "品类销售占比",
+        "category": "Pies",
+        "categoryName": "饼图",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "pie.png"
+      },
+      "attr": {
+        "x": 80,
+        "y": 650,
+        "w": 480,
+        "h": 280,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#f472b6",
+          "#fbbf24",
+          "#38bdf8",
+          "#34d399"
+        ],
+        "isCarousel": false,
+        "type": "ring",
+        "tooltip": {
+          "show": true,
+          "trigger": "item"
+        },
+        "legend": {
+          "show": true,
+          "type": "scroll",
+          "x": "center",
+          "y": "top",
+          "icon": "circle",
+          "orient": "horizontal",
+          "textStyle": {
+            "color": "#b9c7e6",
+            "fontSize": 13
+          },
+          "itemHeight": 10,
+          "itemWidth": 10,
+          "pageTextStyle": {
+            "color": "#b9c7e6"
+          }
+        },
+        "dataset": {
+          "dimensions": [
+            "product",
+            "data1"
+          ],
+          "source": [
+            {
+              "product": "美妆",
+              "data1": 31
+            },
+            {
+              "product": "个护",
+              "data1": 24
+            },
+            {
+              "product": "母婴",
+              "data1": 18
+            },
+            {
+              "product": "食品",
+              "data1": 16
+            },
+            {
+              "product": "家清",
+              "data1": 11
+            }
+          ]
+        },
+        "series": [
+          {
+            "type": "pie",
+            "radius": [
+              "42%",
+              "66%"
+            ],
+            "center": [
+              "50%",
+              "58%"
+            ],
+            "roseType": false,
+            "avoidLabelOverlap": true,
+            "itemStyle": {
+              "show": true,
+              "borderRadius": 6,
+              "borderColor": "#07111f",
+              "borderWidth": 2
+            },
+            "label": {
+              "show": true,
+              "color": "#dbeafe",
+              "fontSize": 12
+            },
+            "labelLine": {
+              "show": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo06_funnel_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 630,
+        "y": 590,
+        "w": 410,
+        "h": 390,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#34d399",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo06_funnel_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 652,
+        "y": 604,
+        "w": 366,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "会员转化漏斗",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo06_funnel",
+      "isGroup": false,
+      "key": "Funnel",
+      "chartConfig": {
+        "key": "Funnel",
+        "chartKey": "VFunnel",
+        "conKey": "VCFunnel",
+        "title": "会员转化漏斗",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "funnel.png"
+      },
+      "attr": {
+        "x": 660,
+        "y": 650,
+        "w": 350,
+        "h": 280,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#34d399",
+          "#facc15",
+          "#38bdf8",
+          "#a78bfa"
+        ],
+        "tooltip": {},
+        "legend": {
+          "show": false
+        },
+        "dataset": {
+          "dimensions": [
+            "product",
+            "dataOne"
+          ],
+          "source": [
+            {
+              "product": "访问",
+              "dataOne": 100
+            },
+            {
+              "product": "入会",
+              "dataOne": 68
+            },
+            {
+              "product": "首单",
+              "dataOne": 42
+            },
+            {
+              "product": "复购",
+              "dataOne": 25
+            },
+            {
+              "product": "高价值",
+              "dataOne": 9
+            }
+          ]
+        },
+        "series": [
+          {
+            "name": "Funnel",
+            "type": "funnel",
+            "top": 46,
+            "left": "8%",
+            "width": "86%",
+            "min": 0,
+            "minSize": "0%",
+            "maxSize": "100%",
+            "sort": "descending",
+            "gap": 4,
+            "label": {
+              "show": true,
+              "position": "inside",
+              "fontSize": 13,
+              "color": "#ffffff"
+            },
+            "itemStyle": {
+              "borderColor": "#07111f",
+              "borderWidth": 1
+            },
+            "emphasis": {
+              "label": {
+                "fontSize": 18
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo06_store_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1080,
+        "y": 590,
+        "w": 360,
+        "h": 390,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#22d3ee",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo06_store_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1102,
+        "y": 604,
+        "w": 316,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "门店销售排行",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo06_store",
+      "isGroup": false,
+      "key": "TableList",
+      "chartConfig": {
+        "key": "TableList",
+        "chartKey": "VTableList",
+        "conKey": "VCTableList",
+        "title": "门店销售排行",
+        "category": "Tables",
+        "categoryName": "表格",
+        "package": "Tables",
+        "chartFrame": "common",
+        "image": "tables_list.png"
+      },
+      "attr": {
+        "x": 1105,
+        "y": 650,
+        "w": 310,
+        "h": 280,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": [
+          {
+            "name": "南京东路店",
+            "value": 386
+          },
+          {
+            "name": "万象城店",
+            "value": 341
+          },
+          {
+            "name": "天河城店",
+            "value": 318
+          },
+          {
+            "name": "湖滨银泰店",
+            "value": 291
+          },
+          {
+            "name": "春熙路店",
+            "value": 264
+          }
+        ],
+        "rowNum": 6,
+        "waitTime": 2,
+        "unit": "万",
+        "sort": true,
+        "color": "#22d3ee",
+        "textColor": "#dbeafe",
+        "borderColor": "#2563eb80",
+        "carousel": "single",
+        "indexFontSize": 12,
+        "leftFontSize": 13,
+        "rightFontSize": 13
+      }
+    },
+    {
+      "id": "demo06_circle_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1480,
+        "y": 590,
+        "w": 390,
+        "h": 390,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#f472b6",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo06_circle_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1502,
+        "y": 604,
+        "w": 346,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "复购率达成",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo06_circle",
+      "isGroup": false,
+      "key": "PieCircle",
+      "chartConfig": {
+        "key": "PieCircle",
+        "chartKey": "VPieCircle",
+        "conKey": "VCPieCircle",
+        "title": "复购率达成",
+        "category": "Pies",
+        "categoryName": "饼图",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "pie-circle.png"
+      },
+      "attr": {
+        "x": 1565,
+        "y": 690,
+        "w": 220,
+        "h": 190,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "tooltip": {
+          "show": true,
+          "trigger": "item"
+        },
+        "legend": {
+          "show": false
+        },
+        "dataset": 0.82,
+        "title": {
+          "text": "82%",
+          "x": "center",
+          "y": "center",
+          "textStyle": {
+            "color": "#f472b6",
+            "fontSize": 30
+          }
+        },
+        "series": [
+          {
+            "type": "pie",
+            "radius": [
+              "74%",
+              "82%"
+            ],
+            "center": [
+              "50%",
+              "50%"
+            ],
+            "hoverAnimation": true,
+            "color": [
+              "#f472b666",
+              "transparent"
+            ],
+            "label": {
+              "show": false
+            },
+            "data": [
+              {
+                "value": 82,
+                "itemStyle": {
+                  "color": "#f472b6",
+                  "shadowBlur": 10,
+                  "shadowColor": "#f472b6"
+                }
+              },
+              {
+                "value": 18,
+                "itemStyle": {
+                  "color": "#f472b633",
+                  "shadowBlur": 0,
+                  "shadowColor": "#f472b633"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

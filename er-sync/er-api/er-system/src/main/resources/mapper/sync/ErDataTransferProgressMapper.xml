@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.easyreport.sync.mapper.ErDataTransferProgressMapper">
+
+    <resultMap id="ProgressResult" type="ErDataTransferProgress">
+        <id property="id" column="id" />
+        <result property="transferId" column="transfer_id" />
+        <result property="sourceTable" column="source_table" />
+        <result property="lastSyncValue" column="last_sync_value" />
+        <result property="createTime" column="create_time" />
+        <result property="updateTime" column="update_time" />
+    </resultMap>
+
+    <select id="selectByTransferId" parameterType="long" resultMap="ProgressResult">
+        SELECT id, transfer_id, source_table, last_sync_value, create_time, update_time
+        FROM er_data_transfer_progress
+        WHERE transfer_id = #{transferId}
+    </select>
+
+    <insert id="upsert" parameterType="ErDataTransferProgress">
+        INSERT INTO er_data_transfer_progress
+        (transfer_id, source_table, last_sync_value, create_time, update_time)
+        VALUES (#{transferId}, #{sourceTable}, #{lastSyncValue}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE last_sync_value = VALUES(last_sync_value), update_time = NOW()
+    </insert>
+</mapper>

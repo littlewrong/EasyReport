@@ -1,0 +1,234 @@
+[
+  {
+    "title": "简单表格报表",
+    "slug": "simple-table",
+    "dataUrl": "http://localhost/reportdata/simple-table.html",
+    "reportFile": "simple-table.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:simple-table.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:simple-table.easyreport.xml"
+  },
+  {
+    "title": "双层表头报表",
+    "slug": "double-header",
+    "dataUrl": "http://localhost/reportdata/double-header.html",
+    "reportFile": "double-header.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:double-header.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:double-header.easyreport.xml"
+  },
+  {
+    "title": "锁定列报表",
+    "slug": "fixed-column",
+    "dataUrl": "http://localhost/reportdata/fixed-column.html",
+    "reportFile": "fixed-column.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:fixed-column.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:fixed-column.easyreport.xml"
+  },
+  {
+    "title": "多栏报表",
+    "slug": "multi-column",
+    "dataUrl": "http://localhost/reportdata/multi-column.html",
+    "reportFile": "multi-column.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:multi-column.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:multi-column.easyreport.xml"
+  },
+  {
+    "title": "交替色明细报表",
+    "slug": "zebra-detail",
+    "dataUrl": "http://localhost/reportdata/zebra-detail.html",
+    "reportFile": "zebra-detail.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:zebra-detail.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:zebra-detail.easyreport.xml"
+  },
+  {
+    "title": "邮件标签报表",
+    "slug": "mail-label",
+    "dataUrl": "http://localhost/reportdata/mail-label.html",
+    "reportFile": "mail-label.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:mail-label.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:mail-label.easyreport.xml"
+  },
+  {
+    "title": "收款票据",
+    "slug": "payment-receipt",
+    "dataUrl": "http://localhost/reportdata/payment-receipt.html",
+    "reportFile": "payment-receipt.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:payment-receipt.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:payment-receipt.easyreport.xml"
+  },
+  {
+    "title": "简单分组报表",
+    "slug": "simple-group",
+    "dataUrl": "http://localhost/reportdata/simple-group.html",
+    "reportFile": "simple-group.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:simple-group.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:simple-group.easyreport.xml"
+  },
+  {
+    "title": "多层分组报表",
+    "slug": "multi-level-group",
+    "dataUrl": "http://localhost/reportdata/multi-level-group.html",
+    "reportFile": "multi-level-group.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:multi-level-group.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:multi-level-group.easyreport.xml"
+  },
+  {
+    "title": "分组统计报表",
+    "slug": "group-summary",
+    "dataUrl": "http://localhost/reportdata/group-summary.html",
+    "reportFile": "group-summary.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:group-summary.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:group-summary.easyreport.xml"
+  },
+  {
+    "title": "交叉表报表",
+    "slug": "crosstab",
+    "dataUrl": "http://localhost/reportdata/crosstab.html",
+    "reportFile": "crosstab.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:crosstab.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:crosstab.easyreport.xml"
+  },
+  {
+    "title": "动态列报表",
+    "slug": "dynamic-columns",
+    "dataUrl": "http://localhost/reportdata/dynamic-columns.html",
+    "reportFile": "dynamic-columns.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:dynamic-columns.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:dynamic-columns.easyreport.xml"
+  },
+  {
+    "title": "切分纸张报表",
+    "slug": "split-paper",
+    "dataUrl": "http://localhost/reportdata/split-paper.html",
+    "reportFile": "split-paper.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:split-paper.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:split-paper.easyreport.xml"
+  },
+  {
+    "title": "柱状图报表",
+    "slug": "chart-bar",
+    "dataUrl": "http://localhost/reportdata/chart-bar.html",
+    "reportFile": "chart-bar.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:chart-bar.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:chart-bar.easyreport.xml"
+  },
+  {
+    "title": "折线图报表",
+    "slug": "chart-line",
+    "dataUrl": "http://localhost/reportdata/chart-line.html",
+    "reportFile": "chart-line.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:chart-line.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:chart-line.easyreport.xml"
+  },
+  {
+    "title": "饼图报表",
+    "slug": "chart-pie",
+    "dataUrl": "http://localhost/reportdata/chart-pie.html",
+    "reportFile": "chart-pie.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:chart-pie.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:chart-pie.easyreport.xml"
+  },
+  {
+    "title": "雷达图报表",
+    "slug": "chart-radar",
+    "dataUrl": "http://localhost/reportdata/chart-radar.html",
+    "reportFile": "chart-radar.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:chart-radar.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:chart-radar.easyreport.xml"
+  },
+  {
+    "title": "JDBC 数据库报表",
+    "slug": "jdbc-database",
+    "dataUrl": "http://localhost/reportdata/jdbc-database.html",
+    "reportFile": "jdbc-database.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:jdbc-database.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:jdbc-database.easyreport.xml"
+  },
+  {
+    "title": "HTTP API 数据源报表",
+    "slug": "http-api",
+    "dataUrl": "http://localhost/reportdata/http-api.html",
+    "reportFile": "http-api.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:http-api.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:http-api.easyreport.xml"
+  },
+  {
+    "title": "Excel 导出报表",
+    "slug": "excel-export",
+    "dataUrl": "http://localhost/reportdata/excel-export.html",
+    "reportFile": "excel-export.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:excel-export.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:excel-export.easyreport.xml"
+  },
+  {
+    "title": "PDF 导出报表",
+    "slug": "pdf-export",
+    "dataUrl": "http://localhost/reportdata/pdf-export.html",
+    "reportFile": "pdf-export.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:pdf-export.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:pdf-export.easyreport.xml"
+  },
+  {
+    "title": "SSE 实时进度导出",
+    "slug": "sse-export-progress",
+    "dataUrl": "http://localhost/reportdata/sse-export-progress.html",
+    "reportFile": "sse-export-progress.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:sse-export-progress.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:sse-export-progress.easyreport.xml"
+  },
+  {
+    "title": "HTML 在线预览报表",
+    "slug": "html-preview",
+    "dataUrl": "http://localhost/reportdata/html-preview.html",
+    "reportFile": "html-preview.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:html-preview.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:html-preview.easyreport.xml"
+  },
+  {
+    "title": "动态列按序号绑定",
+    "slug": "dynamic-index-binding",
+    "dataUrl": "http://localhost/reportdata/dynamic-index-binding.html",
+    "reportFile": "dynamic-index-binding.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:dynamic-index-binding.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:dynamic-index-binding.easyreport.xml"
+  },
+  {
+    "title": "HTTP/REST API 数据源",
+    "slug": "http-rest-api",
+    "dataUrl": "http://localhost/reportdata/http-rest-api.html",
+    "reportFile": "http-rest-api.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:http-rest-api.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:http-rest-api.easyreport.xml"
+  },
+  {
+    "title": "分页导出配置",
+    "slug": "api-paging-export",
+    "dataUrl": "http://localhost/reportdata/api-paging-export.html",
+    "reportFile": "api-paging-export.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:api-paging-export.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:api-paging-export.easyreport.xml"
+  },
+  {
+    "title": "多导出模式",
+    "slug": "multi-export-mode",
+    "dataUrl": "http://localhost/reportdata/multi-export-mode.html",
+    "reportFile": "multi-export-mode.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:multi-export-mode.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:multi-export-mode.easyreport.xml"
+  },
+  {
+    "title": "隐藏列宽度修正",
+    "slug": "hidden-column-width",
+    "dataUrl": "http://localhost/reportdata/hidden-column-width.html",
+    "reportFile": "hidden-column-width.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:hidden-column-width.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:hidden-column-width.easyreport.xml"
+  },
+  {
+    "title": "参数表格优化",
+    "slug": "param-text-wrap",
+    "dataUrl": "http://localhost/reportdata/param-text-wrap.html",
+    "reportFile": "param-text-wrap.easyreport.xml",
+    "previewUrl": "https://www.easyreport.cn/easyreport/preview?_u=file:param-text-wrap.easyreport.xml",
+    "designerUrl": "https://www.easyreport.cn/easyreport/designer?_u=file:param-text-wrap.easyreport.xml"
+  }
+]

@@ -1,0 +1,1861 @@
+{
+  "editCanvasConfig": {
+    "projectName": "能源碳排监测中心",
+    "width": 1920,
+    "height": 1080,
+    "filterShow": false,
+    "hueRotate": 0,
+    "saturate": 1,
+    "contrast": 1,
+    "brightness": 1,
+    "opacity": 1,
+    "rotateZ": 0,
+    "rotateX": 0,
+    "rotateY": 0,
+    "skewX": 0,
+    "skewY": 0,
+    "blendMode": "normal",
+    "background": "#06181b",
+    "backgroundImage": null,
+    "selectColor": true,
+    "chartThemeColor": "dark",
+    "chartCustomThemeColorInfo": null,
+    "chartThemeSetting": {},
+    "vChartThemeName": "vScreenVolcanoBlue",
+    "previewScaleType": "fit"
+  },
+  "requestGlobalConfig": {
+    "requestDataPond": [],
+    "requestOriginUrl": "",
+    "requestInterval": 30,
+    "requestIntervalUnit": "second",
+    "requestParams": {
+      "Body": {
+        "form-data": {},
+        "x-www-form-urlencoded": {},
+        "json": "",
+        "xml": ""
+      },
+      "Header": {},
+      "Params": {}
+    }
+  },
+  "componentList": [
+    {
+      "id": "demo03_title",
+      "isGroup": false,
+      "key": "TextGradient",
+      "chartConfig": {
+        "key": "TextGradient",
+        "chartKey": "VTextGradient",
+        "conKey": "VCTextGradient",
+        "title": "大屏标题",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "naiveUI",
+        "image": "text_gradient.png"
+      },
+      "attr": {
+        "x": 460,
+        "y": 22,
+        "w": 1000,
+        "h": 72,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": "能源碳排监测中心",
+        "size": 44,
+        "gradient": {
+          "from": "#7dd3fc",
+          "to": "#f8fafc",
+          "deg": 90
+        }
+      }
+    },
+    {
+      "id": "demo03_subtitle",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 520,
+        "y": 82,
+        "w": 880,
+        "h": 32,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "园区能耗、碳排、光伏发电和设备效率监控",
+        "fontSize": 18,
+        "fontColor": "#8fb6d8",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "center",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_time",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1515,
+        "y": 34,
+        "w": 330,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "数据更新时间 2026-07-07 10:30",
+        "fontSize": 17,
+        "fontColor": "#8fb6d8",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_kpi_b_0",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 70,
+        "y": 118,
+        "w": 360,
+        "h": 126,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#facc15",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo03_kpi_l_0",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 92,
+        "y": 132,
+        "w": 180,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "今日用电",
+        "fontSize": 18,
+        "fontColor": "#b9c7e6",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_kpi_n_0",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 84,
+        "y": 166,
+        "w": 240,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 186420,
+        "from": 0,
+        "dur": 2,
+        "precision": 0,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#facc15",
+        "prefixText": "",
+        "prefixColor": "#facc15",
+        "suffixText": "kWh",
+        "suffixColor": "#facc15"
+      }
+    },
+    {
+      "id": "demo03_kpi_d_0",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 315,
+        "y": 176,
+        "w": 90,
+        "h": 36,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "-4.1%",
+        "fontSize": 18,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_kpi_b_1",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 500,
+        "y": 118,
+        "w": 360,
+        "h": 126,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#86efac",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo03_kpi_l_1",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 522,
+        "y": 132,
+        "w": 180,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "碳排放",
+        "fontSize": 18,
+        "fontColor": "#b9c7e6",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_kpi_n_1",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 514,
+        "y": 166,
+        "w": 240,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 72.8,
+        "from": 0,
+        "dur": 2,
+        "precision": 1,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#86efac",
+        "prefixText": "",
+        "prefixColor": "#86efac",
+        "suffixText": "t",
+        "suffixColor": "#86efac"
+      }
+    },
+    {
+      "id": "demo03_kpi_d_1",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 745,
+        "y": 176,
+        "w": 90,
+        "h": 36,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "-6.8%",
+        "fontSize": 18,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_kpi_b_2",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 930,
+        "y": 118,
+        "w": 360,
+        "h": 126,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#67e8f9",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo03_kpi_l_2",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 952,
+        "y": 132,
+        "w": 180,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "光伏发电",
+        "fontSize": 18,
+        "fontColor": "#b9c7e6",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_kpi_n_2",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 944,
+        "y": 166,
+        "w": 240,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 38560,
+        "from": 0,
+        "dur": 2,
+        "precision": 0,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#67e8f9",
+        "prefixText": "",
+        "prefixColor": "#67e8f9",
+        "suffixText": "kWh",
+        "suffixColor": "#67e8f9"
+      }
+    },
+    {
+      "id": "demo03_kpi_d_2",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1175,
+        "y": 176,
+        "w": 90,
+        "h": 36,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "+15.2%",
+        "fontSize": 18,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_kpi_b_3",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1360,
+        "y": 118,
+        "w": 360,
+        "h": 126,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#c4b5fd",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo03_kpi_l_3",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1382,
+        "y": 132,
+        "w": 180,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "储能利用率",
+        "fontSize": 18,
+        "fontColor": "#b9c7e6",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "normal",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_kpi_n_3",
+      "isGroup": false,
+      "key": "Number",
+      "chartConfig": {
+        "key": "Number",
+        "chartKey": "VNumber",
+        "conKey": "VCNumber",
+        "title": "指标数字",
+        "category": "Mores",
+        "categoryName": "更多",
+        "package": "Decorates",
+        "chartFrame": "common",
+        "image": "number.png"
+      },
+      "attr": {
+        "x": 1374,
+        "y": 166,
+        "w": 240,
+        "h": 58,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": 81.6,
+        "from": 0,
+        "dur": 2,
+        "precision": 1,
+        "showSeparator": true,
+        "numberSize": 34,
+        "numberColor": "#c4b5fd",
+        "prefixText": "",
+        "prefixColor": "#c4b5fd",
+        "suffixText": "%",
+        "suffixColor": "#c4b5fd"
+      }
+    },
+    {
+      "id": "demo03_kpi_d_3",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1605,
+        "y": 176,
+        "w": 90,
+        "h": 36,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "+3.6%",
+        "fontSize": 18,
+        "fontColor": "#86efac",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "right",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_trend_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 60,
+        "y": 282,
+        "w": 1180,
+        "h": 360,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#facc15",
+          "#0e7490"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo03_trend_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 82,
+        "y": 296,
+        "w": 1136,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "分时能耗与发电趋势",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_trend",
+      "isGroup": false,
+      "key": "LineCommon",
+      "chartConfig": {
+        "key": "LineCommon",
+        "chartKey": "VLineCommon",
+        "conKey": "VCLineCommon",
+        "title": "分时能耗与发电趋势",
+        "category": "Lines",
+        "categoryName": "折线图",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "line.png"
+      },
+      "attr": {
+        "x": 92,
+        "y": 340,
+        "w": 1115,
+        "h": 270,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#34d399",
+          "#facc15",
+          "#38bdf8",
+          "#a78bfa"
+        ],
+        "tooltip": {
+          "show": true,
+          "trigger": "axis",
+          "axisPointer": {
+            "type": "line"
+          }
+        },
+        "legend": {
+          "show": true,
+          "type": "scroll",
+          "x": "center",
+          "y": "top",
+          "icon": "circle",
+          "orient": "horizontal",
+          "textStyle": {
+            "color": "#b9c7e6",
+            "fontSize": 13
+          },
+          "itemHeight": 10,
+          "itemWidth": 10,
+          "pageTextStyle": {
+            "color": "#b9c7e6"
+          }
+        },
+        "grid": {
+          "show": false,
+          "left": "8%",
+          "right": "6%",
+          "top": 52,
+          "bottom": 38,
+          "containLabel": true
+        },
+        "xAxis": {
+          "show": true,
+          "type": "category",
+          "axisLabel": {
+            "show": true,
+            "fontSize": 12,
+            "color": "#b9c7e6",
+            "rotate": 0
+          },
+          "axisLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#35527a",
+              "width": 1
+            },
+            "onZero": true
+          },
+          "axisTick": {
+            "show": false
+          },
+          "splitLine": {
+            "show": false
+          }
+        },
+        "yAxis": {
+          "show": true,
+          "type": "value",
+          "axisLabel": {
+            "show": true,
+            "fontSize": 12,
+            "color": "#b9c7e6"
+          },
+          "axisLine": {
+            "show": false
+          },
+          "axisTick": {
+            "show": false
+          },
+          "splitLine": {
+            "show": true,
+            "lineStyle": {
+              "color": "#203651",
+              "width": 1,
+              "type": "dashed"
+            }
+          }
+        },
+        "dataset": {
+          "dimensions": [
+            "hour",
+            "用电",
+            "光伏",
+            "储能"
+          ],
+          "source": [
+            {
+              "hour": "00",
+              "用电": 120,
+              "光伏": 0,
+              "储能": 48
+            },
+            {
+              "hour": "04",
+              "用电": 98,
+              "光伏": 0,
+              "储能": 36
+            },
+            {
+              "hour": "08",
+              "用电": 186,
+              "光伏": 62,
+              "储能": 22
+            },
+            {
+              "hour": "12",
+              "用电": 238,
+              "光伏": 168,
+              "储能": 12
+            },
+            {
+              "hour": "16",
+              "用电": 260,
+              "光伏": 190,
+              "储能": 8
+            },
+            {
+              "hour": "20",
+              "用电": 214,
+              "光伏": 82,
+              "储能": 52
+            },
+            {
+              "hour": "24",
+              "用电": 150,
+              "光伏": 0,
+              "储能": 70
+            }
+          ]
+        },
+        "series": [
+          {
+            "name": "用电",
+            "type": "line",
+            "smooth": true,
+            "symbolSize": 5,
+            "label": {
+              "show": false
+            },
+            "lineStyle": {
+              "type": "solid",
+              "width": 3,
+              "color": "#34d399"
+            },
+            "itemStyle": {
+              "color": "#34d399"
+            },
+            "areaStyle": {
+              "opacity": 0.16
+            }
+          },
+          {
+            "name": "光伏",
+            "type": "line",
+            "smooth": true,
+            "symbolSize": 5,
+            "label": {
+              "show": false
+            },
+            "lineStyle": {
+              "type": "solid",
+              "width": 3,
+              "color": "#facc15"
+            },
+            "itemStyle": {
+              "color": "#facc15"
+            }
+          },
+          {
+            "name": "储能",
+            "type": "line",
+            "smooth": true,
+            "symbolSize": 5,
+            "label": {
+              "show": false
+            },
+            "lineStyle": {
+              "type": "solid",
+              "width": 3,
+              "color": "#38bdf8"
+            },
+            "itemStyle": {
+              "color": "#38bdf8"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo03_circle_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1280,
+        "y": 282,
+        "w": 270,
+        "h": 360,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#34d399",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo03_circle_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1302,
+        "y": 296,
+        "w": 226,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "碳中和进度",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_circle",
+      "isGroup": false,
+      "key": "PieCircle",
+      "chartConfig": {
+        "key": "PieCircle",
+        "chartKey": "VPieCircle",
+        "conKey": "VCPieCircle",
+        "title": "碳中和进度",
+        "category": "Pies",
+        "categoryName": "饼图",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "pie-circle.png"
+      },
+      "attr": {
+        "x": 1315,
+        "y": 360,
+        "w": 200,
+        "h": 180,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "tooltip": {
+          "show": true,
+          "trigger": "item"
+        },
+        "legend": {
+          "show": false
+        },
+        "dataset": 0.68,
+        "title": {
+          "text": "68%",
+          "x": "center",
+          "y": "center",
+          "textStyle": {
+            "color": "#34d399",
+            "fontSize": 30
+          }
+        },
+        "series": [
+          {
+            "type": "pie",
+            "radius": [
+              "74%",
+              "82%"
+            ],
+            "center": [
+              "50%",
+              "50%"
+            ],
+            "hoverAnimation": true,
+            "color": [
+              "#34d39966",
+              "transparent"
+            ],
+            "label": {
+              "show": false
+            },
+            "data": [
+              {
+                "value": 68,
+                "itemStyle": {
+                  "color": "#34d399",
+                  "shadowBlur": 10,
+                  "shadowColor": "#34d399"
+                }
+              },
+              {
+                "value": 32,
+                "itemStyle": {
+                  "color": "#34d39933",
+                  "shadowBlur": 0,
+                  "shadowColor": "#34d39933"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo03_rank_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1585,
+        "y": 282,
+        "w": 285,
+        "h": 360,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#22d3ee",
+          "#0e7490"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo03_rank_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1607,
+        "y": 296,
+        "w": 241,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "设备效率",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_rank",
+      "isGroup": false,
+      "key": "TableList",
+      "chartConfig": {
+        "key": "TableList",
+        "chartKey": "VTableList",
+        "conKey": "VCTableList",
+        "title": "设备效率",
+        "category": "Tables",
+        "categoryName": "表格",
+        "package": "Tables",
+        "chartFrame": "common",
+        "image": "tables_list.png"
+      },
+      "attr": {
+        "x": 1605,
+        "y": 340,
+        "w": 245,
+        "h": 265,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": [
+          {
+            "name": "冷站",
+            "value": 92
+          },
+          {
+            "name": "空压站",
+            "value": 87
+          },
+          {
+            "name": "锅炉",
+            "value": 82
+          },
+          {
+            "name": "照明",
+            "value": 76
+          },
+          {
+            "name": "水泵",
+            "value": 69
+          }
+        ],
+        "rowNum": 6,
+        "waitTime": 2,
+        "unit": "分",
+        "sort": true,
+        "color": "#22d3ee",
+        "textColor": "#dbeafe",
+        "borderColor": "#2563eb80",
+        "carousel": "single",
+        "indexFontSize": 12,
+        "leftFontSize": 13,
+        "rightFontSize": 13
+      }
+    },
+    {
+      "id": "demo03_pie_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 60,
+        "y": 690,
+        "w": 520,
+        "h": 300,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#34d399",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo03_pie_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 82,
+        "y": 704,
+        "w": 476,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "碳排结构",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_pie",
+      "isGroup": false,
+      "key": "PieCommon",
+      "chartConfig": {
+        "key": "PieCommon",
+        "chartKey": "VPieCommon",
+        "conKey": "VCPieCommon",
+        "title": "碳排结构",
+        "category": "Pies",
+        "categoryName": "饼图",
+        "package": "Charts",
+        "chartFrame": "echarts",
+        "image": "pie.png"
+      },
+      "attr": {
+        "x": 90,
+        "y": 742,
+        "w": 460,
+        "h": 215,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "backgroundColor": "rgba(0,0,0,0)",
+        "color": [
+          "#34d399",
+          "#facc15",
+          "#38bdf8",
+          "#a78bfa"
+        ],
+        "isCarousel": false,
+        "type": "ring",
+        "tooltip": {
+          "show": true,
+          "trigger": "item"
+        },
+        "legend": {
+          "show": true,
+          "type": "scroll",
+          "x": "center",
+          "y": "top",
+          "icon": "circle",
+          "orient": "horizontal",
+          "textStyle": {
+            "color": "#b9c7e6",
+            "fontSize": 13
+          },
+          "itemHeight": 10,
+          "itemWidth": 10,
+          "pageTextStyle": {
+            "color": "#b9c7e6"
+          }
+        },
+        "dataset": {
+          "dimensions": [
+            "product",
+            "data1"
+          ],
+          "source": [
+            {
+              "product": "生产用电",
+              "data1": 44
+            },
+            {
+              "product": "空调用电",
+              "data1": 21
+            },
+            {
+              "product": "运输",
+              "data1": 17
+            },
+            {
+              "product": "办公",
+              "data1": 11
+            },
+            {
+              "product": "其他",
+              "data1": 7
+            }
+          ]
+        },
+        "series": [
+          {
+            "type": "pie",
+            "radius": [
+              "42%",
+              "66%"
+            ],
+            "center": [
+              "50%",
+              "58%"
+            ],
+            "roseType": false,
+            "avoidLabelOverlap": true,
+            "itemStyle": {
+              "show": true,
+              "borderRadius": 6,
+              "borderColor": "#07111f",
+              "borderWidth": 2
+            },
+            "label": {
+              "show": true,
+              "color": "#dbeafe",
+              "fontSize": 12
+            },
+            "labelLine": {
+              "show": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "demo03_capsule_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 620,
+        "y": 690,
+        "w": 520,
+        "h": 300,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#22d3ee",
+          "#0e7490"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo03_capsule_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 642,
+        "y": 704,
+        "w": 476,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "区域能效排行",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_capsule",
+      "isGroup": false,
+      "key": "CapsuleChart",
+      "chartConfig": {
+        "key": "CapsuleChart",
+        "chartKey": "VCapsuleChart",
+        "conKey": "VCCapsuleChart",
+        "title": "区域能效排行",
+        "category": "Bars",
+        "categoryName": "柱状图",
+        "package": "Charts",
+        "chartFrame": "common",
+        "image": "capsule.png"
+      },
+      "attr": {
+        "x": 650,
+        "y": 745,
+        "w": 460,
+        "h": 210,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dataset": {
+          "dimensions": [
+            "name",
+            "value"
+          ],
+          "source": [
+            {
+              "name": "A区",
+              "value": 93
+            },
+            {
+              "name": "B区",
+              "value": 88
+            },
+            {
+              "name": "C区",
+              "value": 81
+            },
+            {
+              "name": "D区",
+              "value": 77
+            },
+            {
+              "name": "E区",
+              "value": 69
+            }
+          ]
+        },
+        "colors": [
+          "#22d3ee",
+          "#38bdf8",
+          "#818cf8",
+          "#34d399",
+          "#fbbf24"
+        ],
+        "unit": "分",
+        "itemHeight": 12,
+        "valueFontSize": 14,
+        "paddingRight": 42,
+        "paddingLeft": 74,
+        "showValue": true
+      }
+    },
+    {
+      "id": "demo03_board_b",
+      "isGroup": false,
+      "key": "Border01",
+      "chartConfig": {
+        "key": "Border01",
+        "chartKey": "VBorder01",
+        "conKey": "VCBorder01",
+        "title": "面板边框",
+        "category": "Borders",
+        "categoryName": "边框",
+        "package": "Decorates",
+        "chartFrame": "static",
+        "image": "border01.png"
+      },
+      "attr": {
+        "x": 1180,
+        "y": 690,
+        "w": 690,
+        "h": 300,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "dur": 0.8,
+        "colors": [
+          "#38bdf8",
+          "#2563eb"
+        ],
+        "backgroundColor": "rgba(5, 21, 38, 0.68)"
+      }
+    },
+    {
+      "id": "demo03_board_title",
+      "isGroup": false,
+      "key": "TextCommon",
+      "chartConfig": {
+        "key": "TextCommon",
+        "chartKey": "VTextCommon",
+        "conKey": "VCTextCommon",
+        "title": "文本",
+        "category": "Texts",
+        "categoryName": "文本",
+        "package": "Informations",
+        "chartFrame": "common",
+        "image": "text_static.png"
+      },
+      "attr": {
+        "x": 1202,
+        "y": 704,
+        "w": 646,
+        "h": 34,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "link": "",
+        "linkHead": "http://",
+        "dataset": "节能动作与收益",
+        "fontSize": 20,
+        "fontColor": "#e0f2fe",
+        "paddingX": 8,
+        "paddingY": 6,
+        "textAlign": "left",
+        "fontWeight": "bold",
+        "borderWidth": 0,
+        "borderColor": "#ffffff",
+        "borderRadius": 4,
+        "letterSpacing": 1,
+        "writingMode": "horizontal-tb",
+        "backgroundColor": "#00000000"
+      }
+    },
+    {
+      "id": "demo03_board",
+      "isGroup": false,
+      "key": "TableScrollBoard",
+      "chartConfig": {
+        "key": "TableScrollBoard",
+        "chartKey": "VTableScrollBoard",
+        "conKey": "VCTableScrollBoard",
+        "title": "节能动作与收益",
+        "category": "Tables",
+        "categoryName": "表格",
+        "package": "Tables",
+        "chartFrame": "common",
+        "image": "table_scrollboard.png"
+      },
+      "attr": {
+        "x": 1210,
+        "y": 746,
+        "w": 630,
+        "h": 210,
+        "zIndex": 0,
+        "offsetX": 0,
+        "offsetY": 0
+      },
+      "option": {
+        "header": [
+          "动作",
+          "收益",
+          "状态"
+        ],
+        "dataset": [
+          [
+            "冷站调优",
+            "1,860kWh",
+            "完成"
+          ],
+          [
+            "峰谷切换",
+            "3,210kWh",
+            "执行中"
+          ],
+          [
+            "照明策略",
+            "680kWh",
+            "完成"
+          ],
+          [
+            "空压检漏",
+            "920kWh",
+            "待确认"
+          ],
+          [
+            "储能放电",
+            "2,450kWh",
+            "执行中"
+          ]
+        ],
+        "index": true,
+        "indexHeader": "#",
+        "columnWidth": [
+          42,
+          150,
+          110,
+          110
+        ],
+        "align": [
+          "center",
+          "left",
+          "right",
+          "right"
+        ],
+        "rowNum": 6,
+        "waitTime": 2,
+        "headerHeight": 34,
+        "carousel": "single",
+        "hoverPause": true,
+        "headerBGC": "#0e7490",
+        "oddRowBGC": "rgba(8, 47, 73, 0.72)",
+        "evenRowBGC": "rgba(15, 23, 42, 0.72)"
+      }
+    }
+  ]
+}

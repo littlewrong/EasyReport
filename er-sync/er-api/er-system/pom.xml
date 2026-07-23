@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>EasyReport</artifactId>
+        <groupId>cn.easyreport</groupId>
+        <version>3.9.1</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>er-system</artifactId>
+
+    <description>
+        system系统模块
+    </description>
+
+    <dependencies>
+
+        <!-- 通用工具-->
+        <dependency>
+            <groupId>cn.easyreport</groupId>
+            <artifactId>er-common</artifactId>
+        </dependency>
+
+        <!-- 定时任务(用于同步Quartz任务) -->
+        <dependency>
+            <groupId>cn.easyreport</groupId>
+            <artifactId>er-quartz</artifactId>
+        </dependency>
+
+    </dependencies>
+
+</project>

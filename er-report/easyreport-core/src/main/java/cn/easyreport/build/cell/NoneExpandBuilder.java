@@ -1,0 +1,69 @@
+/*******************************************************************************
+ * Copyright 2017 Bstek
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License.  You may obtain a copy
+ * of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ ******************************************************************************/
+package cn.easyreport.build.cell;
+
+import java.util.List;
+
+import cn.easyreport.build.BindData;
+import cn.easyreport.build.Context;
+import cn.easyreport.definition.ConditionPropertyItem;
+import cn.easyreport.model.Cell;
+
+/**
+ * @author Jacky.gao
+ * @since 2016年11月1日
+ */
+public class NoneExpandBuilder implements CellBuilder {
+
+	@Override
+	public Cell buildCell(List<BindData> dataList, Cell cell, Context context) {
+		if(dataList.size()==1){
+			BindData bindData=dataList.get(0);
+			cell.setData(bindData.getValue());
+			cell.setFormatData(bindData.getLabel());
+			cell.setBindData(bindData.getDataList());
+		}else{
+			Object obj=null;
+			List<Object> bindData=null;
+			for(BindData data:dataList){
+				if(obj==null){
+					if(data.getLabel()==null){
+						obj=data.getValue();					
+					}else{
+						obj=data.getLabel();										
+					}
+				}else{
+					if(data.getLabel()==null){
+						obj=obj+","+data.getValue();					
+					}else{
+						obj=obj+","+data.getLabel();					
+					}
+				}
+				bindData=data.getDataList();
+			}
+			cell.setData(obj);
+			cell.setBindData(bindData);
+		}
+		List<ConditionPropertyItem> conditionPropertyItems=cell.getConditionPropertyItems();
+		if(conditionPropertyItems!=null && conditionPropertyItems.size()>0){
+			context.getReport().getLazyComputeCells().add(cell);
+		}else{
+			cell.doFormat();
+			cell.doDataWrapCompute(context);
+		}
+		return cell;
+	}
+}

@@ -1,0 +1,7 @@
+fastapi>=0.115
+uvicorn[standard]>=0.32
+sqlalchemy>=2.0
+pymysql>=1.1
+psycopg[binary]>=3.1
+pymssql>=2.3
+pyjwt>=2.9

@@ -1,0 +1,44 @@
+.handsontable tr{
+    background: transparent;
+}
+.handsontable td, .handsontable th{
+    background: transparent;
+}
+/* 列头(A/B/C/D)文字垂直居中：handsontable 默认 th 为 vertical-align:top，列头行偏高时文字会贴顶、下方留白 */
+.handsontable thead th{
+    vertical-align: middle;
+}
+.handsontable table.htCore{
+    border-collapse:collapse
+}
+.ud-toolbar{
+    width: 100%;
+    background: #f8f8f8;
+}
+/* 顶部工具栏上下留白对齐：补上与底部一致的 4px 内边距 */
+.top-toolbar{
+    padding-top: 4px;
+}
+.ud-property-panel{
+    width: 400px;
+    border: solid 1px #999;
+    border-radius: 5px;
+    top: 35px;
+    left: 710px;
+    z-index: 105;
+    position: absolute;
+    background: #ffffff;
+    box-shadow: 5px 5px 5px #888888;
+}
+.ud-select-color{
+    background: #000000;
+    width: 14px;
+    height: 4px;
+    display: block;
+}
+.ud-select-bgcolor{
+    background: #fff;
+    width: 14px;
+    height: 4px;
+    display: block;
+}

@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.easyreport.combinesync.mapper.ErCombineSyncMapper">
+
+    <resultMap type="ErCombineSync" id="ErCombineSyncResult">
+        <result property="combineId"              column="combine_id"              />
+        <result property="combineName"            column="combine_name"            />
+        <result property="combineCode"            column="combine_code"            />
+        <result property="sourceDatasourceId"     column="source_datasource_id"   />
+        <result property="sourceDatasourceName"   column="source_datasource_name" />
+        <result property="sourceSchemaPattern"    column="source_schema_pattern"  />
+        <result property="sourceTable"            column="source_table"           />
+        <result property="targetDatasourceId"     column="target_datasource_id"   />
+        <result property="targetDatasourceName"   column="target_datasource_name" />
+        <result property="targetTable"            column="target_table"           />
+        <result property="sourceColumn"           column="source_column"          />
+        <result property="syncMode"               column="sync_mode"              />
+        <result property="timestampField"         column="timestamp_field"        />
+        <result property="syncInsert"             column="sync_insert"            />
+        <result property="syncUpdate"             column="sync_update"            />
+        <result property="syncDelete"             column="sync_delete"            />
+        <result property="batchSize"              column="batch_size"             />
+        <result property="isClear"                column="is_clear"               />
+        <result property="syncStatus"             column="sync_status"            />
+        <result property="syncProgress"           column="sync_progress"          />
+        <result property="lastSyncTime"           column="last_sync_time"         />
+        <result property="lastSyncValue"          column="last_sync_value"        />
+        <result property="lastSyncResult"         column="last_sync_result"       />
+        <result property="cronExpression"         column="cron_expression"        />
+        <result property="jobId"                  column="job_id"                 />
+        <result property="status"                 column="status"                 />
+        <result property="createBy"               column="create_by"              />
+        <result property="createTime"             column="create_time"            />
+        <result property="updateBy"               column="update_by"              />
+        <result property="updateTime"             column="update_time"            />
+        <result property="remark"                 column="remark"                 />
+    </resultMap>
+
+    <sql id="selectErCombineSyncVo">
+        SELECT t.combine_id, t.combine_name, t.combine_code, t.source_datasource_id,
+               s.datasource_name AS source_datasource_name, t.source_schema_pattern, t.source_table,
+               t.target_datasource_id, d.datasource_name AS target_datasource_name,
+               t.target_table, t.source_column, t.sync_mode, t.timestamp_field,
+               t.sync_insert, t.sync_update, t.sync_delete, t.batch_size, t.is_clear, t.sync_status, t.sync_progress,
+               t.last_sync_time, t.last_sync_value, t.last_sync_result,
+               t.cron_expression, t.job_id, t.status,
+               t.create_by, t.create_time, t.update_by, t.update_time, t.remark
+        FROM er_combine_sync t
+        LEFT JOIN er_datasource s ON t.source_datasource_id = s.datasource_id
+        LEFT JOIN er_datasource d ON t.target_datasource_id = d.datasource_id
+    </sql>
+
+    <select id="selectErCombineSyncList" parameterType="ErCombineSync" resultMap="ErCombineSyncResult">
+        <include refid="selectErCombineSyncVo"/>
+        <where>
+            <if test="combineName != null and combineName != ''">
+                AND t.combine_name LIKE CONCAT('%', #{combineName}, '%')
+            </if>
+            <if test="combineCode != null and combineCode != ''">
+                AND t.combine_code = #{combineCode}
+            </if>
+            <if test="sourceDatasourceId != null">
+                AND t.source_datasource_id = #{sourceDatasourceId}
+            </if>
+            <if test="targetDatasourceId != null">
+                AND t.target_datasource_id = #{targetDatasourceId}
+            </if>
+            <if test="syncMode != null and syncMode != ''">
+                AND t.sync_mode = #{syncMode}
+            </if>
+            <if test="syncStatus != null and syncStatus != ''">
+                AND t.sync_status = #{syncStatus}
+            </if>
+            <if test="status != null and status != ''">
+                AND t.status = #{status}
+            </if>
+        </where>
+        ORDER BY t.create_time DESC
+    </select>
+
+    <select id="selectErCombineSyncByCombineId" parameterType="Long" resultMap="ErCombineSyncResult">
+        <include refid="selectErCombineSyncVo"/>
+        WHERE t.combine_id = #{combineId}
+    </select>
+
+    <select id="checkCombineNameUnique" parameterType="String" resultMap="ErCombineSyncResult">
+        SELECT combine_id, combine_name FROM er_combine_sync WHERE combine_name = #{combineName} LIMIT 1
+    </select>
+
+    <insert id="insertErCombineSync" parameterType="ErCombineSync" useGeneratedKeys="true" keyProperty="combineId">
+        INSERT INTO er_combine_sync
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="combineName != null and combineName != ''">combine_name,</if>
+            <if test="combineCode != null">combine_code,</if>
+            <if test="sourceDatasourceId != null">source_datasource_id,</if>
+            <if test="sourceSchemaPattern != null and sourceSchemaPattern != ''">source_schema_pattern,</if>
+            <if test="sourceTable != null and sourceTable != ''">source_table,</if>
+            <if test="targetDatasourceId != null">target_datasource_id,</if>
+            <if test="targetTable != null and targetTable != ''">target_table,</if>
+            <if test="sourceColumn != null">source_column,</if>
+            <if test="syncMode != null">sync_mode,</if>
+            <if test="timestampField != null">timestamp_field,</if>
+            <if test="syncInsert != null">sync_insert,</if>
+            <if test="syncUpdate != null">sync_update,</if>
+            <if test="syncDelete != null">sync_delete,</if>
+            <if test="batchSize != null">batch_size,</if>
+            <if test="isClear != null">is_clear,</if>
+            <if test="syncStatus != null">sync_status,</if>
+            <if test="lastSyncTime != null">last_sync_time,</if>
+            <if test="lastSyncValue != null">last_sync_value,</if>
+            <if test="lastSyncResult != null">last_sync_result,</if>
+            <if test="cronExpression != null">cron_expression,</if>
+            <if test="jobId != null">job_id,</if>
+            <if test="status != null">status,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="remark != null">remark,</if>
+            create_time
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="combineName != null and combineName != ''">#{combineName},</if>
+            <if test="combineCode != null">#{combineCode},</if>
+            <if test="sourceDatasourceId != null">#{sourceDatasourceId},</if>
+            <if test="sourceSchemaPattern != null and sourceSchemaPattern != ''">#{sourceSchemaPattern},</if>
+            <if test="sourceTable != null and sourceTable != ''">#{sourceTable},</if>
+            <if test="targetDatasourceId != null">#{targetDatasourceId},</if>
+            <if test="targetTable != null and targetTable != ''">#{targetTable},</if>
+            <if test="sourceColumn != null">#{sourceColumn},</if>
+            <if test="syncMode != null">#{syncMode},</if>
+            <if test="timestampField != null">#{timestampField},</if>
+            <if test="syncInsert != null">#{syncInsert},</if>
+            <if test="syncUpdate != null">#{syncUpdate},</if>
+            <if test="syncDelete != null">#{syncDelete},</if>
+            <if test="batchSize != null">#{batchSize},</if>
+            <if test="isClear != null">#{isClear},</if>
+            <if test="syncStatus != null">#{syncStatus},</if>
+            <if test="lastSyncTime != null">#{lastSyncTime},</if>
+            <if test="lastSyncValue != null">#{lastSyncValue},</if>
+            <if test="lastSyncResult != null">#{lastSyncResult},</if>
+            <if test="cronExpression != null">#{cronExpression},</if>
+            <if test="jobId != null">#{jobId},</if>
+            <if test="status != null">#{status},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="remark != null">#{remark},</if>
+            SYSDATE()
+        </trim>
+    </insert>
+
+    <update id="updateErCombineSync" parameterType="ErCombineSync">
+        UPDATE er_combine_sync
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="combineName != null and combineName != ''">combine_name = #{combineName},</if>
+            <if test="combineCode != null">combine_code = #{combineCode},</if>
+            <if test="sourceDatasourceId != null">source_datasource_id = #{sourceDatasourceId},</if>
+            <if test="sourceSchemaPattern != null">source_schema_pattern = #{sourceSchemaPattern},</if>
+            <if test="sourceTable != null and sourceTable != ''">source_table = #{sourceTable},</if>
+            <if test="targetDatasourceId != null">target_datasource_id = #{targetDatasourceId},</if>
+            <if test="targetTable != null">target_table = #{targetTable},</if>
+            <if test="sourceColumn != null">source_column = #{sourceColumn},</if>
+            <if test="syncMode != null">sync_mode = #{syncMode},</if>
+            <if test="timestampField != null">timestamp_field = #{timestampField},</if>
+            <if test="syncInsert != null">sync_insert = #{syncInsert},</if>
+            <if test="syncUpdate != null">sync_update = #{syncUpdate},</if>
+            <if test="syncDelete != null">sync_delete = #{syncDelete},</if>
+            <if test="batchSize != null">batch_size = #{batchSize},</if>
+            <if test="isClear != null">is_clear = #{isClear},</if>
+            <if test="syncStatus != null">sync_status = #{syncStatus},</if>
+            <if test="syncProgress != null">sync_progress = #{syncProgress},</if>
+            <if test="lastSyncTime != null">last_sync_time = #{lastSyncTime},</if>
+            <if test="lastSyncValue != null">last_sync_value = #{lastSyncValue},</if>
+            <if test="lastSyncResult != null">last_sync_result = #{lastSyncResult},</if>
+            <if test="cronExpression != null">cron_expression = #{cronExpression},</if>
+            <if test="jobId != null">job_id = #{jobId},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = SYSDATE()
+        </trim>
+        WHERE combine_id = #{combineId}
+    </update>
+
+    <delete id="deleteErCombineSyncByCombineId" parameterType="Long">
+        DELETE FROM er_combine_sync WHERE combine_id = #{combineId}
+    </delete>
+
+    <delete id="deleteErCombineSyncByCombineIds" parameterType="String">
+        DELETE FROM er_combine_sync WHERE combine_id IN
+        <foreach item="combineId" collection="array" open="(" separator="," close=")">
+            #{combineId}
+        </foreach>
+    </delete>
+
+</mapper>
