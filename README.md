@@ -63,6 +63,7 @@ EasyReport
 │   └── easyreport-web/        # 报表设计器独立启动模块（默认端口 8083）
 ├── er-bi/                     # BI 大屏项目
 │   ├── api/                   # FastAPI 后端（默认端口 5320）
+│   ├── datasource_api/        # BI 数据源 API（默认端口 5321）
 │   ├── ui/                    # Vben 管理端（默认端口 5777）
 │   └── bi_designer/           # GoView 大屏设计器（默认端口 3020）
 ├── website/                   # 官网与在线文档
@@ -125,7 +126,7 @@ java -jar easyreport-web/target/easyreport-web-*.jar
 
 ### 启动 ER-BI BI 大屏
 
-1. 启动 API：
+1. 启动主 API：
 
 ```bash
 cd er-bi/api
@@ -155,7 +156,22 @@ cd er-bi/api
 python -m scripts.add_bi_designer_menus
 ```
 
-2. 启动 Vben 管理端：
+2. 启动数据源 API：
+
+```bash
+cd er-bi/datasource_api
+pip install -r requirements.txt
+python run.py
+```
+
+数据源 API 默认访问：
+
+```text
+API 状态: http://localhost:5321/api/status
+Swagger:  http://localhost:5321/api/docs
+```
+
+3. 启动 Vben 管理端：
 
 ```bash
 cd er-bi/ui
@@ -165,7 +181,7 @@ pnpm dev
 
 管理端默认访问：`http://localhost:5777`
 
-3. 启动 GoView 大屏设计器：
+4. 启动 GoView 大屏设计器：
 
 ```bash
 cd er-bi/bi_designer
@@ -200,6 +216,7 @@ pnpm dev
 - 官网首页：`website/index.html`
 - 在线文档：`website/doc.html`
 - ER-BI API 说明：`er-bi/api/README.md`
+- ER-BI 数据源 API 说明：`er-bi/datasource_api/README.md`
 - 报表功能说明：`er-report/说明文档/`
 - 数据同步说明：`doc/`
 
