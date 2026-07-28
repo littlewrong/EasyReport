@@ -3,6 +3,7 @@
  */
 import UndoManager from 'undo-manager';
 import {alert} from './MsgBox.js';
+import {getMergeCells} from './table/MergeCellUtils.js';
 
 export function showLoading(){
     const url=window._server+'/res/easyreport-asserts/icons/loading.gif';
@@ -67,6 +68,7 @@ export function buildNewCellDef(rowNumber,columnNumber){
 export function tableToXml(context){
     const hot=context.hot;
     const countRows=hot.countRows(),countCols=hot.countCols();
+    const mergeCells=getMergeCells(hot);
     let xml=`<?xml version="1.0" encoding="UTF-8"?><easyreport>`;
     let rowsXml='',columnXml='';
     const rowHeaders=context.rowHeaders;
@@ -122,7 +124,7 @@ export function tableToXml(context){
                 }
             }
 
-            const span=getSpan(hot,i,j);
+            const span=getSpan(mergeCells,i,j);
             let rowSpan=span.rowspan,colSpan=span.colspan;
             let startRow=i,endRow=i+rowSpan-1,startCol=j,endCol=j+colSpan-1;
             for(let r=startRow;r<=endRow;r++){
@@ -618,8 +620,7 @@ export function tableToXml(context){
     return xml;
 };
 
-function getSpan(hot,row,col){
-    const mergeCells=hot.getSettings().mergeCells || [];
+function getSpan(mergeCells,row,col){
     for(let item of mergeCells){
         if(item.row===row && item.col===col){
             return item;

@@ -1,5 +1,6 @@
 import {undoManager,setDirty,buildNewCellDef} from '../Utils.js';
 import {alert} from '../MsgBox.js';
+import {cloneMergeCells,getMergeCells} from '../table/MergeCellUtils.js';
 
 /**
  * Created by Jacky.Gao on 2017-01-25.
@@ -13,8 +14,6 @@ export default class MergeTool extends Tool{
             alert(`${window.i18n.selectTargetCellFirst}`);
             return;
         }
-        let mergeCells=table.getSettings().mergeCells || [];
-        let oldMergeCells=mergeCells.concat([]);
         let startRow=selected[0],startCol=selected[1],endRow=selected[2],endCol=selected[3];
         let tmp=endRow;
         if(startRow>endRow){
@@ -26,17 +25,19 @@ export default class MergeTool extends Tool{
             endCol=startCol;
             startCol=tmp;
         }
-        const _this=this;
-        doMergeCells(startRow,startCol,endRow,endCol,table,this.context);
+        const oldMergeCells=getMergeCells(table);
+        const changed=doMergeCells(startRow,startCol,endRow,endCol,table,this.context);
+        if(!changed){
+            return;
+        }
+        const newMergeCells=getMergeCells(table);
         undoManager.add({
             redo:function(){
-                mergeCells=table.getSettings().mergeCells || [];
-                oldMergeCells=mergeCells.concat([]);
-                doMergeCells(startRow,startCol,endRow,endCol,table,_this.context);
+                table.updateSettings({mergeCells:cloneMergeCells(newMergeCells)});
                 setDirty();
             },
             undo:function(){
-                table.updateSettings({mergeCells:oldMergeCells});
+                table.updateSettings({mergeCells:cloneMergeCells(oldMergeCells)});
                 setDirty();
             }
         });
@@ -50,72 +51,58 @@ export default class MergeTool extends Tool{
     }
 }
 function doMergeCells(startRow,startCol,endRow,endCol,table,context){
-    let doMerge=true,doSplit=false;
-    const selectCell=context.getCell(startRow,startCol);
-    const mergeCells=table.getSettings().mergeCells || [];
-    for(let i=startRow;i<=endRow;i++){
-        for(let j=startCol;j<=endCol;j++){
-            let td=table.getCell(i,j);
-            if(!td){
-                continue;
-            }
-            let $td=$(td);
-            let colSpan=$td.prop("colspan") || "1",rowSpan=$td.prop("rowspan") || "1";
-            colSpan=parseInt(colSpan),rowSpan=parseInt(rowSpan);
-            if(colSpan>1 || rowSpan>1){
-                let index=0;
-                doSplit=true;
-                doMerge=false;
-                while(index<mergeCells.length){
-                    let mergeItem=mergeCells[index];
-                    let row=mergeItem.row,col=mergeItem.col;
-                    if(row===i && col===j){
-                        mergeCells.splice(index,1);
-                        break;
-                    }
-                    index++;
+    const mergeCells=getMergeCells(table);
+    const splitMergeCells=[];
+    const remainingMergeCells=[];
+    for(let mergeItem of mergeCells){
+        if(intersects(mergeItem,startRow,startCol,endRow,endCol)){
+            splitMergeCells.push(mergeItem);
+        }else{
+            remainingMergeCells.push(mergeItem);
+        }
+    }
+
+    if(splitMergeCells.length>0){
+        for(let mergeItem of splitMergeCells){
+            const mergeEndRow=mergeItem.row+mergeItem.rowspan-1;
+            const mergeEndCol=mergeItem.col+mergeItem.colspan-1;
+            for(let row=mergeItem.row;row<=mergeEndRow;row++){
+                for(let col=mergeItem.col;col<=mergeEndCol;col++){
+                    ensureCellDef(context,row,col);
                 }
             }
         }
+        table.updateSettings({mergeCells:remainingMergeCells});
+        return true;
     }
-    if(doMerge){
-        if(endRow<startRow){
-            let tmp=startRow;
-            startRow=endRow;
-            endRow=tmp;
-        }
-        if(endCol<startCol){
-            let tmp=startCol;
-            startCol=endCol;
-            endCol=tmp;
-        }
-        let rowSpan=endRow-startRow,colSpan=endCol-startCol;
-        if(rowSpan===0){
-            rowSpan=1;
-        }else{
-            rowSpan++;
-        }
-        if(colSpan===0){
-            colSpan=1;
-        }else{
-            colSpan++;
-        }
-        const newMergeItem={row:startRow,col:startCol,rowspan:rowSpan,colspan:colSpan};
-        mergeCells.push(newMergeItem);
-    }else{
-        if(doSplit){
-            for(let i=startRow;i<=endRow;i++) {
-                for (let j = startCol; j <= endCol; j++) {
-                    let cellDef=context.getCell(i,j);
-                    if(!cellDef){
-                        cellDef=buildNewCellDef(i+1,j+1);
-                        context.addCell(cellDef);
-                    }
-                }
-            }
-        }else{
-            alert(`${window.i18n.selectMultiTargetCellFirst}`);
-        }
+
+    if(startRow===endRow && startCol===endCol){
+        alert(`${window.i18n.selectMultiTargetCellFirst}`);
+        return false;
     }
+
+    ensureCellDef(context,startRow,startCol);
+    mergeCells.push({
+        row:startRow,
+        col:startCol,
+        rowspan:endRow-startRow+1,
+        colspan:endCol-startCol+1
+    });
     table.updateSettings({mergeCells});
+    return true;
+};
+
+function intersects(mergeItem,startRow,startCol,endRow,endCol){
+    const mergeEndRow=mergeItem.row+mergeItem.rowspan-1;
+    const mergeEndCol=mergeItem.col+mergeItem.colspan-1;
+    return mergeItem.row<=endRow && mergeEndRow>=startRow &&
+        mergeItem.col<=endCol && mergeEndCol>=startCol;
+};
+
+function ensureCellDef(context,row,col){
+    let cellDef=context.getCell(row,col);
+    if(!cellDef){
+        cellDef=buildNewCellDef(row+1,col+1);
+        context.addCell(cellDef);
+    }
 };
