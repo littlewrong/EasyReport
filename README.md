@@ -66,8 +66,6 @@ EasyReport
 │   ├── datasource_api/        # BI 数据源 API（默认端口 5321）
 │   ├── ui/                    # Vben 管理端（默认端口 5777）
 │   └── bi_designer/           # GoView 大屏设计器（默认端口 3020）
-├── website/                   # 官网与在线文档
-└── doc/                       # 项目资料与扩展说明
 ```
 
 ## 环境要求
