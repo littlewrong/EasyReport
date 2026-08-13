@@ -15,9 +15,11 @@
  ******************************************************************************/
 package cn.easyreport.export.pdf;
 
+import java.net.URL;
 import java.util.List;
 
 import org.apache.commons.lang.StringUtils;
+import org.springframework.util.Base64Utils;
 
 import cn.easyreport.build.paging.HeaderFooter;
 import cn.easyreport.build.paging.Page;
@@ -32,6 +34,7 @@ import com.itextpdf.text.Element;
 import com.itextpdf.text.Font;
 import com.itextpdf.text.Paragraph;
 import com.itextpdf.text.Rectangle;
+import com.itextpdf.text.pdf.PdfContentByte;
 import com.itextpdf.text.pdf.PdfPCell;
 import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfPageEventHelper;
@@ -43,11 +46,18 @@ import com.itextpdf.text.pdf.PdfWriter;
  */
 public class PageHeaderFooterEvent extends PdfPageEventHelper {
 	private Report report;
+	private com.itextpdf.text.Image bgImage;
+	private float bgLeft;
+	private float bgBottom;
+	private float bgWidth;
+	private float bgHeight;
 	public PageHeaderFooterEvent(Report report) {
 		this.report=report;
+		this.bgImage=buildBackgroundImage(report);
 	}
 	@Override
 	public void onEndPage(PdfWriter writer, Document document) {
+		drawBackgroundImage(writer);
 		List<Page> pages=report.getPages();
 		int pageNumber=writer.getPageNumber();
 		if(pageNumber>pages.size()){
@@ -57,10 +67,59 @@ public class PageHeaderFooterEvent extends PdfPageEventHelper {
 		HeaderFooter header=page.getHeader();
 		HeaderFooter footer=page.getFooter();
 		if(header!=null){
-			buildTable(writer,header,true,report);			
+			buildTable(writer,header,true,report);
 		}
 		if(footer!=null){
-			buildTable(writer,footer,false,report);						
+			buildTable(writer,footer,false,report);
+		}
+	}
+	private com.itextpdf.text.Image buildBackgroundImage(Report report){
+		Paper paper=report.getPaper();
+		String bgImageUrl=paper.getBgImage();
+		if(StringUtils.isBlank(bgImageUrl)){
+			return null;
+		}
+		// Draw the overlay (套打) background into the content area so it matches the HTML preview,
+		// where the background is painted on the report <table> within the page margins.
+		int pageWidth=paper.getWidth();
+		int pageHeight=paper.getHeight();
+		if(paper.getOrientation().equals(Orientation.landscape)){
+			pageWidth=paper.getHeight();
+			pageHeight=paper.getWidth();
+		}
+		bgLeft=paper.getLeftMargin();
+		bgBottom=paper.getBottomMargin();
+		bgWidth=pageWidth-paper.getLeftMargin()-paper.getRightMargin();
+		bgHeight=pageHeight-paper.getTopMargin()-paper.getBottomMargin();
+		try{
+			if(bgImageUrl.startsWith("data:")){
+				int idx=bgImageUrl.indexOf("base64,");
+				if(idx<0){
+					return null;
+				}
+				String base64=bgImageUrl.substring(idx+"base64,".length());
+				byte[] bytes=Base64Utils.decodeFromString(base64);
+				return com.itextpdf.text.Image.getInstance(bytes);
+			}
+			return com.itextpdf.text.Image.getInstance(new URL(bgImageUrl));
+		}catch(Exception ex){
+			// The background image is optional; if it cannot be loaded (bad URL, unreachable host, etc.)
+			// skip drawing it rather than aborting the whole PDF export.
+			ex.printStackTrace();
+			return null;
+		}
+	}
+	private void drawBackgroundImage(PdfWriter writer){
+		if(bgImage==null || bgWidth<=0 || bgHeight<=0){
+			return;
+		}
+		try{
+			bgImage.scaleAbsolute(bgWidth,bgHeight);
+			bgImage.setAbsolutePosition(bgLeft,bgBottom);
+			PdfContentByte under=writer.getDirectContentUnder();
+			under.addImage(bgImage);
+		}catch(DocumentException ex){
+			throw new ReportComputeException(ex);
 		}
 	}
 	private void buildTable(PdfWriter writer,HeaderFooter hf,boolean header,Report report) {
