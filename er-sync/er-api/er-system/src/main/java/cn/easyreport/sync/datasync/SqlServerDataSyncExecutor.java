@@ -182,28 +182,9 @@ public class SqlServerDataSyncExecutor extends DataSyncExecutor {
     }
 
     @Override
-    protected String buildAlignDeleteSelectSqlAfter(String targetTable, String pk, String tsField) {
-        // SQL Server: keyset 分页，TOP 语法参数在最前
-        return "SELECT TOP (?) " + quoteTargetIdentifier(pk) + ", " + quoteTargetIdentifier(tsField) +
-               " FROM " + targetTable +
-               " WHERE (" + quoteTargetIdentifier(tsField) + " > ?" +
-               " OR (" + quoteTargetIdentifier(tsField) + " = ? AND " + quoteTargetIdentifier(pk) + " > ?))" +
-               " ORDER BY " + quoteTargetIdentifier(tsField) + ", " + quoteTargetIdentifier(pk);
-    }
-
-    @Override
     protected void setAlignDeleteQueryParams(java.sql.PreparedStatement ps, java.sql.Timestamp cursor, int batchSize) throws Exception {
         // SQL Server TOP 语法：参数顺序是 batchSize, timestamp（与基类相反）
         ps.setInt(1, batchSize);
         ps.setTimestamp(2, cursor);
-    }
-
-    @Override
-    protected void setAlignDeleteQueryParamsAfter(java.sql.PreparedStatement ps, java.sql.Timestamp lastTs, Object lastPk, int batchSize) throws Exception {
-        // SQL Server TOP 语法：参数顺序是 batchSize, ts, ts, pk（与基类相反）
-        ps.setInt(1, batchSize);
-        ps.setTimestamp(2, lastTs);
-        ps.setTimestamp(3, lastTs);
-        ps.setObject(4, lastPk);
     }
 }

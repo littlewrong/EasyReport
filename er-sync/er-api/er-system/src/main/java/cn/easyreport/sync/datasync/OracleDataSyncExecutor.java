@@ -210,19 +210,6 @@ public class OracleDataSyncExecutor extends DataSyncExecutor {
                ", " + quoteTargetIdentifier(pk) + " FETCH FIRST ? ROWS ONLY";
     }
 
-    /**
-     * Oracle keyset 分页，FETCH FIRST 参数在末尾（参数顺序与基类一致：ts, ts, pk, batchSize）
-     */
-    @Override
-    protected String buildAlignDeleteSelectSqlAfter(String targetTable, String pk, String tsField) {
-        return "SELECT " + quoteTargetIdentifier(pk) + ", " + quoteTargetIdentifier(tsField) +
-               " FROM " + targetTable +
-               " WHERE (" + quoteTargetIdentifier(tsField) + " > ?" +
-               " OR (" + quoteTargetIdentifier(tsField) + " = ? AND " + quoteTargetIdentifier(pk) + " > ?))" +
-               " ORDER BY " + quoteTargetIdentifier(tsField) + ", " + quoteTargetIdentifier(pk) +
-               " FETCH FIRST ? ROWS ONLY";
-    }
-
     @Override
     protected String qualify(String schema, String table) {
         if (schema == null || schema.isEmpty()) {
