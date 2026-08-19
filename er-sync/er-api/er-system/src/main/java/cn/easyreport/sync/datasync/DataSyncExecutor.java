@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import com.alibaba.fastjson2.JSON;
@@ -863,7 +864,12 @@ public abstract class DataSyncExecutor {
             } catch (Exception e) {
                 System.err.println("[DataSyncExecutor.syncIncremental] 删除对齐失败: " + e.getMessage());
                 e.printStackTrace();
-                // 删除对齐失败不影响整体同步结果，只记录错误
+                // 删除对齐失败不影响整体同步结果，但把原因写入同步日志，避免静默漏删无法排查
+                String errMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getName();
+                String existing = tr.log.getErrorMessage();
+                tr.log.setErrorMessage(existing == null || existing.isEmpty()
+                        ? "删除对齐失败: " + errMsg
+                        : existing + "; 删除对齐失败: " + errMsg);
             }
         }
 
@@ -880,7 +886,7 @@ public abstract class DataSyncExecutor {
     }
 
     /**
-     * 构建删除对齐的分页查询 SQL
+     * 构建删除对齐首批分页查询 SQL（时间戳 >= 窗口起点）
      * 子类可以重写此方法以支持数据库特定的分页语法
      *
      * @param targetTable 目标表名（已经是完全限定名，如 `schema`.`table` 或 [db].[schema].[table]）
@@ -898,7 +904,22 @@ public abstract class DataSyncExecutor {
     }
 
     /**
-     * 设置删除对齐查询的参数
+     * 构建删除对齐后续批次查询 SQL（keyset 分页：严格大于上一批最后一行的 (ts, pk)）。
+     * 仅按时间戳游标分页时，同一时间戳的行数超过批次大小会导致游标无法前进、扫描提前中断（漏删），
+     * 因此后续批次必须以 (ts, pk) 复合游标推进。
+     *
+     * @return 分页查询 SQL（参数顺序：ts, ts, pk, batchSize）
+     */
+    protected String buildAlignDeleteSelectSqlAfter(String targetTable, String pk, String tsField) {
+        return "SELECT " + quoteTargetIdentifier(pk) + ", " + quoteTargetIdentifier(tsField) +
+               " FROM " + targetTable +
+               " WHERE (" + quoteTargetIdentifier(tsField) + " > ?" +
+               " OR (" + quoteTargetIdentifier(tsField) + " = ? AND " + quoteTargetIdentifier(pk) + " > ?))" +
+               " ORDER BY " + quoteTargetIdentifier(tsField) + ", " + quoteTargetIdentifier(pk) + " LIMIT ?";
+    }
+
+    /**
+     * 设置删除对齐首批查询的参数
      * 子类可以重写此方法以适应不同的 SQL 语法（如 SQL Server 的 TOP）
      *
      * @param ps PreparedStatement
@@ -911,33 +932,57 @@ public abstract class DataSyncExecutor {
         ps.setInt(2, batchSize);
     }
 
+    /**
+     * 设置删除对齐后续批次查询的参数（与 buildAlignDeleteSelectSqlAfter 对应）。
+     *
+     * @param ps PreparedStatement
+     * @param lastTs 上一批最后一行的时间戳
+     * @param lastPk 上一批最后一行的主键值
+     * @param batchSize 批量大小
+     */
+    protected void setAlignDeleteQueryParamsAfter(PreparedStatement ps, Timestamp lastTs, Object lastPk, int batchSize) throws Exception {
+        ps.setTimestamp(1, lastTs);
+        ps.setTimestamp(2, lastTs);
+        ps.setObject(3, lastPk);
+        ps.setInt(4, batchSize);
+    }
+
     private int alignDelete(ErDataTransfer task, String schema, String sourceTable, String targetTable, String pk, String tsField, DataSyncExtractor extractor,
                              DataSyncLoader loader, Connection sourceConn, Connection targetConn, int batchSize, Timestamp windowStart) throws Exception {
         System.out.println("[DataSyncExecutor.alignDelete] 开始删除对齐，窗口起始: " + windowStart);
         // 查询目标表：使用目标数据库的标识符引用
-        String selectTarget = buildAlignDeleteSelectSql(targetTable, pk, tsField);
-        boolean hasMore = true;
-        Timestamp cursor = windowStart;
+        String selectFirst = buildAlignDeleteSelectSql(targetTable, pk, tsField);
+        String selectAfter = buildAlignDeleteSelectSqlAfter(targetTable, pk, tsField);
         int batchCount = 0;
         int totalDeleted = 0;
 
-        while (hasMore) {
+        // keyset 游标：上一批最后一行的 (ts, pk)，下一批严格大于该值，保证同一时间戳的行也能完整翻页
+        Timestamp lastTs = windowStart;
+        Object lastPk = null;
+
+        while (true) {
             batchCount++;
             List<Object> ids = new ArrayList<>();
-            Timestamp maxTs = cursor;
-            try (PreparedStatement ps = targetConn.prepareStatement(selectTarget)) {
-                setAlignDeleteQueryParams(ps, cursor, batchSize);
+            Timestamp batchLastTs = lastTs;
+            Object batchLastPk = lastPk;
+            try (PreparedStatement ps = targetConn.prepareStatement(lastPk == null ? selectFirst : selectAfter)) {
+                if (lastPk == null) {
+                    setAlignDeleteQueryParams(ps, lastTs, batchSize);
+                } else {
+                    setAlignDeleteQueryParamsAfter(ps, lastTs, lastPk, batchSize);
+                }
                 ResultSet rs = ps.executeQuery();
                 while (rs.next()) {
-                    ids.add(rs.getObject(pk));
+                    Object id = rs.getObject(pk);
+                    ids.add(id);
                     Timestamp ts = rs.getTimestamp(tsField);
-                    if (ts != null && (maxTs == null || ts.after(maxTs))) {
-                        maxTs = ts;
+                    if (ts != null) {
+                        batchLastTs = ts;
+                        batchLastPk = id;
                     }
                 }
             }
-            hasMore = ids.size() == batchSize;
-            System.out.println("[DataSyncExecutor.alignDelete] 批次 " + batchCount + ": 读取 " + ids.size() + " 条记录, hasMore=" + hasMore);
+            System.out.println("[DataSyncExecutor.alignDelete] 批次 " + batchCount + ": 读取 " + ids.size() + " 条记录");
             if (ids.isEmpty()) break;
 
             // check source side - 查询源表：使用源数据库的标识符引用
@@ -971,12 +1016,15 @@ public abstract class DataSyncExecutor {
             totalDeleted += deleted;
             System.out.println("[DataSyncExecutor.alignDelete] 批次 " + batchCount + ": 删除 " + deleted + " 条记录");
 
-            // 防止无限循环：如果 maxTs 没有变化，强制退出
-            if (maxTs != null && maxTs.equals(cursor)) {
-                System.out.println("[DataSyncExecutor.alignDelete] 警告: 时间戳未前进，退出循环避免死循环");
+            // 防止无限循环：游标未前进时强制退出
+            if (batchLastTs.equals(lastTs) && Objects.equals(batchLastPk, lastPk)) {
+                System.out.println("[DataSyncExecutor.alignDelete] 警告: 游标未前进，退出循环避免死循环");
                 break;
             }
-            cursor = maxTs;
+            lastTs = batchLastTs;
+            lastPk = batchLastPk;
+            // 不足一批说明已到末页
+            if (ids.size() < batchSize) break;
         }
         System.out.println("[DataSyncExecutor.alignDelete] 删除对齐完成，共处理 " + batchCount + " 批次，删除 " + totalDeleted + " 条记录");
         return totalDeleted;

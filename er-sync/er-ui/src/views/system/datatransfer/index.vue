@@ -327,7 +327,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="批次大小" prop="batchSize">
-              <el-input-number v-model="form.batchSize" :min="10" :max="10000" :step="10" />
+              <el-input-number v-model="form.batchSize" :min="10" :max="100000" :step="10" />
             </el-form-item>
           </el-col>
         </el-row>
