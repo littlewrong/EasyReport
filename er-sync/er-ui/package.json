@@ -1,7 +1,7 @@
 {
   "name": "ruoyi",
   "version": "3.9.1",
-  "description": "易报表同步系统",
+  "description": "EasyReport-Sync",
   "author": "易报表",
   "license": "MIT",
   "scripts": {
