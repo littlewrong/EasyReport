@@ -10,7 +10,7 @@
 
     <name>easyreport</name>
     <url>http://www.easyreport.cn</url>
-    <description>易报表管理系统</description>
+    <description>EasyReport-Sync</description>
     
     <properties>
         <ruoyi.version>3.9.1</ruoyi.version>
