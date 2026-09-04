@@ -1,0 +1,160 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>冻结预览回归检查</title>
+<link rel="stylesheet" href="../css/preview-freeze.css">
+<style>
+body{font:14px Arial,sans-serif;margin:12px} button{margin-right:8px;padding:6px 12px}
+table{border-collapse:collapse;width:1960px;table-layout:fixed;margin:auto}
+td{border:1px solid #b8c2d0;height:28px;padding:4px;background:#fff}
+tr:nth-child(-n+2) td{background:#e5edf9;font-weight:bold}
+.mono td{border:1px solid #222;background:#fff!important;color:#173f70;font-weight:normal}
+#results{white-space:pre-wrap;max-height:150px;overflow:auto} #controls{margin-bottom:10px}
+</style>
+<h2>冻结预览回归检查</h2>
+<div id="controls"><button id="run">运行自动检查</button><button id="reset">恢复双向冻结</button><button id="mono">黑白合并表头</button><button id="plain">查看未冻结样式</button></div>
+<pre id="results" role="status">准备就绪</pre>
+<div id="_easyreport_table" style="float:left"></div>
+<script type="module">
+import PreviewFreeze from '../src/PreviewFreeze.js';
+const container = document.getElementById('_easyreport_table');
+const output = document.getElementById('results');
+function report(rows=60, columns=14) {
+    return '<table data-easyreport-table="true" data-freeze-rows="2" data-freeze-columns="2">' +
+        Array.from({length:rows}, (_,r) => '<tr>' + Array.from({length:columns}, (_,c) =>
+            '<td>' + (r < 2 ? '表头' : '明细') + ' ' + (r+1) + ' / ' + (c+1) + '</td>').join('') + '</tr>').join('') + '</table>';
+}
+container.innerHTML = report();
+const freeze = new PreviewFreeze(container);
+const tick = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+function reset() { container.innerHTML=report(); container.scrollTop=0; container.scrollLeft=0; freeze.refresh(); }
+document.getElementById('reset').onclick=reset;
+function monochrome() {
+    reset();
+    const table=container.querySelector('table'), grid=Array.from(table.rows,row=>Array.from(row.cells));
+    table.classList.add('mono'); table.setAttribute('data-freeze-columns','0');
+    for(let c=0;c<3;c++) { grid[0][c].rowSpan=2; grid[1][c].remove(); }
+    grid[0][3].colSpan=11; for(let c=4;c<14;c++) grid[0][c].remove();
+    freeze.refresh();
+}
+document.getElementById('mono').onclick=monochrome;
+document.getElementById('plain').onclick=()=>{const table=container.querySelector('table');table.setAttribute('data-freeze-rows','0');table.setAttribute('data-freeze-columns','0');freeze.refresh();};
+document.getElementById('run').onclick=async function() {
+    this.disabled=true;
+    const checks=[];
+    const check=(name, passed)=>checks.push((passed ? 'PASS ' : 'FAIL ') + name);
+    try {
+        reset(); await tick();
+        let table=container.querySelector('table');
+        const corner=table.rows[0].cells[0], top=table.rows[0].cells[4], left=table.rows[6].cells[0], body=table.rows[6].cells[4];
+        const before=[corner,top,left,body].map(cell=>cell.getBoundingClientRect());
+        container.scrollTop=180; container.scrollLeft=240; await tick();
+        const after=[corner,top,left,body].map(cell=>cell.getBoundingClientRect());
+        check('双向滚动时左上交叉单元格保持位置', Math.abs(before[0].top-after[0].top)<2 && Math.abs(before[0].left-after[0].left)<2);
+        check('顶部冻结行仍可横向滚动', Math.abs(before[1].top-after[1].top)<2 && before[1].left-after[1].left>200);
+        check('左侧冻结列仍可纵向滚动', Math.abs(before[2].left-after[2].left)<2 && before[2].top-after[2].top>150);
+        check('正文正常双向滚动', before[3].top-after[3].top>150 && before[3].left-after[3].left>200);
+        freeze.refresh(); await tick();
+        check('重新测量保持滚动位置和冻结偏移', container.scrollTop===180 && container.scrollLeft===240 && Math.abs(corner.getBoundingClientRect().top-after[0].top)<2);
+        table.setAttribute('data-freeze-rows','0'); freeze.refresh();
+        check('单独取消冻结行保留冻结列', !table.querySelector('.easyreport-frozen-row') && !!table.querySelector('.easyreport-frozen-column'));
+        table.setAttribute('data-freeze-columns','0'); freeze.refresh();
+        check('全部取消后清除冻结样式和滚动容器', !table.querySelector('.easyreport-frozen-cell') && !container.classList.contains('easyreport-freeze-viewport') && !container.hasAttribute('tabindex'));
+        reset(); table=container.querySelector('table');
+        table.rows[0].cells[5].colSpan=2; table.rows[0].deleteCell(6); freeze.refresh();
+        check('冻结行支持横向合并，冻结列范围外的合并不影响列冻结', !!table.querySelector('.easyreport-frozen-row') && !!table.querySelector('.easyreport-frozen-column'));
+        reset(); table=container.querySelector('table');
+        const title=table.rows[0].cells[0]; title.colSpan=14;
+        while(table.rows[0].cells.length>1) table.rows[0].deleteCell(1);
+        freeze.refresh(); await tick();
+        const titleBefore=title.getBoundingClientRect();
+        container.scrollTop=180; container.scrollLeft=240; await tick();
+        check('整行合并标题可冻结行，合并延伸到全部列时拒绝列冻结', title.classList.contains('easyreport-frozen-row') && !table.querySelector('.easyreport-frozen-column'));
+        check('合并标题纵向固定且横向正常滚动', Math.abs(title.getBoundingClientRect().top-titleBefore.top)<2 && titleBefore.left-title.getBoundingClientRect().left>200);
+        reset(); table=container.querySelector('table');
+        const vertical=table.rows[0].cells[0]; vertical.rowSpan=2; table.rows[1].deleteCell(0);
+        freeze.refresh(); await tick();
+        const verticalBefore=vertical.getBoundingClientRect();
+        container.scrollTop=180; await tick();
+        check('完整纵向合并同时支持行列冻结', vertical.classList.contains('easyreport-frozen-row') && vertical.classList.contains('easyreport-frozen-column'));
+        check('纵向合并单元格滚动后保持位置和高度', Math.abs(vertical.getBoundingClientRect().top-verticalBefore.top)<2 && Math.abs(vertical.getBoundingClientRect().height-verticalBefore.height)<2);
+        reset(); table=container.querySelector('table');
+        const grid=Array.from(table.rows, row=>Array.from(row.cells));
+        grid[1][5].rowSpan=3; grid[2][5].remove(); grid[3][5].remove();
+        grid[3][6].rowSpan=2; grid[4][6].remove();
+        freeze.refresh(); await tick();
+        check('跨边界的纵向合并按连锁关系延伸至完整表头', grid[4][0].classList.contains('easyreport-frozen-row') && !grid[5][0].classList.contains('easyreport-frozen-row'));
+        const chainedBefore=grid[3][6].getBoundingClientRect();
+        container.scrollTop=240; await tick();
+        check('延伸后的多层表头滚动无重叠或错位', Math.abs(grid[3][6].getBoundingClientRect().top-chainedBefore.top)<2 && grid[3][6].getBoundingClientRect().top>=grid[1][5].getBoundingClientRect().top);
+        reset(); table=container.querySelector('table');
+        table.rows[0].cells[5].rowSpan=60;
+        for(let r=1;r<60;r++) table.rows[r].deleteCell(5);
+        freeze.refresh();
+        check('合并边界延伸到整个表格时拒绝行冻结', !table.querySelector('.easyreport-frozen-row') && !!table.querySelector('.easyreport-frozen-column'));
+        reset(); table=container.querySelector('table');
+        table.rows[8].cells[0].rowSpan=2; table.rows[9].deleteCell(0); freeze.refresh();
+        check('冻结列支持正文纵向合并，下一行按逻辑列冻结', table.rows[8].cells[0].classList.contains('easyreport-frozen-column') && table.rows[9].cells[0].classList.contains('easyreport-frozen-column') && !table.rows[9].cells[1].classList.contains('easyreport-frozen-column'));
+        reset(); table=container.querySelector('table');
+        let mergedGrid=Array.from(table.rows,row=>Array.from(row.cells));
+        const mergedCorner=mergedGrid[0][0]; mergedCorner.colSpan=2; mergedCorner.rowSpan=2;
+        mergedGrid[0][1].remove(); mergedGrid[1][0].remove(); mergedGrid[1][1].remove();
+        freeze.refresh(); await tick();
+        const mergedCornerBefore=mergedCorner.getBoundingClientRect(), nextColumnBefore=mergedGrid[1][2].getBoundingClientRect();
+        container.scrollTop=180; container.scrollLeft=240; await tick();
+        check('跨行跨列合并的左上角整体双向冻结', mergedCorner.classList.contains('easyreport-frozen-row') && mergedCorner.classList.contains('easyreport-frozen-column') && Math.abs(mergedCorner.getBoundingClientRect().top-mergedCornerBefore.top)<2 && Math.abs(mergedCorner.getBoundingClientRect().left-mergedCornerBefore.left)<2);
+        check('被rowspan占位后首个td仍属于可滚动正文列', !mergedGrid[1][2].classList.contains('easyreport-frozen-column') && nextColumnBefore.left-mergedGrid[1][2].getBoundingClientRect().left>200);
+        freeze.refresh(); await tick();
+        check('合并列重新测量保持左偏移及滚动位置', container.scrollLeft===240 && Math.abs(mergedCorner.getBoundingClientRect().left-mergedCornerBefore.left)<2);
+        reset(); table=container.querySelector('table');
+        mergedGrid=Array.from(table.rows,row=>Array.from(row.cells));
+        mergedGrid[8][1].colSpan=3; mergedGrid[8][2].remove(); mergedGrid[8][3].remove();
+        mergedGrid[9][3].colSpan=2; mergedGrid[9][4].remove();
+        freeze.refresh(); await tick();
+        check('横向合并按连锁关系从B列补齐到E列', mergedGrid[7][4].classList.contains('easyreport-frozen-column') && mergedGrid[9][3].classList.contains('easyreport-frozen-column') && !mergedGrid[8][5].classList.contains('easyreport-frozen-column'));
+        const mergedColumnBefore=mergedGrid[8][1].getBoundingClientRect(), chainedColumnBefore=mergedGrid[9][3].getBoundingClientRect();
+        container.scrollLeft=800; await tick();
+        check('不同起点和宽度的合并列滚动后不重叠错位', Math.abs(mergedGrid[8][1].getBoundingClientRect().left-mergedColumnBefore.left)<2 && Math.abs(mergedGrid[9][3].getBoundingClientRect().left-chainedColumnBefore.left)<2);
+        table.setAttribute('data-freeze-columns','0'); freeze.refresh();
+        check('合并列取消冻结后保留行冻结和合并结构', !table.querySelector('.easyreport-frozen-column') && !!table.querySelector('.easyreport-frozen-row') && mergedGrid[8][1].colSpan===3);
+        reset(); table=container.querySelector('table');
+        mergedGrid=Array.from(table.rows,row=>Array.from(row.cells));
+        mergedGrid[8][0].rowSpan=2; mergedGrid[8][0].colSpan=2; mergedGrid[8][1].remove();
+        mergedGrid[8][2].rowSpan=2; mergedGrid[8][2].colSpan=12;
+        for(let c=3;c<14;c++) mergedGrid[8][c].remove();
+        for(let c=0;c<14;c++) mergedGrid[9][c].remove();
+        freeze.refresh();
+        check('整行被上方合并覆盖且没有td时冻结列仍正确', mergedGrid[8][0].classList.contains('easyreport-frozen-column') && !mergedGrid[8][2].classList.contains('easyreport-frozen-column') && table.rows[9].cells.length===0);
+        reset(); table=container.querySelector('table');
+        table.rows[8].cells[5].colSpan=2; table.rows[8].deleteCell(6); freeze.refresh();
+        check('冻结范围外的合并不影响冻结', !!table.querySelector('.easyreport-frozen-row') && !!table.querySelector('.easyreport-frozen-column'));
+        reset(); table=container.querySelector('table');
+        table.rows[8].cells[2].rowSpan=2; table.rows[8].cells[2].colSpan=12;
+        while(table.rows[8].cells.length>3) table.rows[8].deleteCell(3);
+        while(table.rows[9].cells.length>2) table.rows[9].deleteCell(2);
+        freeze.refresh();
+        check('正文跨行合并使某行仅剩冻结单元格时仍正确冻结', !!table.querySelector('.easyreport-frozen-column') && table.rows[9].cells[1].classList.contains('easyreport-frozen-column'));
+        container.innerHTML=report(40); freeze.refresh(); await tick();
+        check('查询替换整个表格后重新应用冻结', container.querySelectorAll('.easyreport-frozen-column').length===80);
+        table=container.querySelector('table'); table.removeAttribute('data-easyreport-table'); freeze.refresh();
+        check('旧模板或分页表格不应用冻结', !container.querySelector('.easyreport-frozen-cell') && !container.classList.contains('easyreport-freeze-viewport'));
+        reset(); table=container.querySelector('table'); table.setAttribute('data-freeze-rows','60'); table.setAttribute('data-freeze-columns','14'); freeze.refresh();
+        check('拒绝冻结全部行列', !container.querySelector('.easyreport-frozen-cell'));
+        reset(); table=container.querySelector('table'); table.setAttribute('data-freeze-rows','-1'); table.setAttribute('data-freeze-columns','broken'); freeze.refresh();
+        check('非法冻结配置安全降级', !container.querySelector('.easyreport-frozen-cell'));
+        monochrome(); table=container.querySelector('table'); await tick();
+        const monoCell=table.rows[0].cells[0], monoBounds=table.getBoundingClientRect();
+        const monoHeight=table.rows[1].getBoundingClientRect().bottom-table.rows[0].getBoundingClientRect().top;
+        check('冻结边框不叠加阴影且保持模板原有一像素线宽', getComputedStyle(monoCell).boxShadow==='none' && getComputedStyle(monoCell,'::before').borderTopWidth==='1px' && getComputedStyle(monoCell,'::before').borderTopColor==='rgb(34, 34, 34)');
+        container.scrollTop=43; await tick();
+        const viewportTop=container.getBoundingClientRect().top, mergeSeam=table.rows[1].cells[0].getBoundingClientRect();
+        const coveredPoints=[[30,viewportTop+0.2],[30,viewportTop+monoHeight-0.2],[mergeSeam.left,mergeSeam.top]];
+        check('小幅滚动时表头从视口顶部完整覆盖，接缝不会命中隐藏正文', Math.abs(monoCell.getBoundingClientRect().top-viewportTop)<0.1 && coveredPoints.every(([x,y])=>{const hit=document.elementFromPoint(x,y),cell=hit&&hit.closest('td');return !cell||cell.classList.contains('easyreport-frozen-row');}));
+        check('连续底板覆盖完整合并表头且不改变表格尺寸', Math.abs(parseFloat(getComputedStyle(container,'::before').height)-monoHeight)<0.1 && Math.abs(table.getBoundingClientRect().height-monoBounds.height)<0.1);
+        table.setAttribute('data-freeze-rows','0'); freeze.refresh();
+        check('取消冻结恢复原边框且移除表头底板', getComputedStyle(monoCell).borderTopColor==='rgb(34, 34, 34)' && getComputedStyle(monoCell,'::before').content==='none' && getComputedStyle(container,'::before').content==='none' && Math.abs(table.getBoundingClientRect().height-monoBounds.height)<0.1);
+        output.textContent=checks.join('\n')+'\n'+checks.filter(x=>x.startsWith('PASS')).length+'/'+checks.length+' passed';
+        reset();
+    } catch(error) { output.textContent=checks.join('\n')+'\nERROR '+error.stack; }
+    finally { this.disabled=false; }
+};
+</script>

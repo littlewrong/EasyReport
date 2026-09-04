@@ -41,6 +41,8 @@ import cn.easyreport.model.Row;
 public class ReportDefinition implements Serializable{
 	private static final long serialVersionUID = 5934291400824773809L;
 	private String reportFullName;
+	private int freezeRows;
+	private int freezeColumns;
 	private Paper paper;
 	private CellDefinition rootCell;
 	private HeaderFooterDefinition header;
@@ -57,6 +59,8 @@ public class ReportDefinition implements Serializable{
 	public Report newReport() {
 		Report report = new Report();
 		report.setReportFullName(reportFullName);
+		report.setFreezeRows(validFreezeCount(true));
+		report.setFreezeColumns(validFreezeCount(false));
 		report.setPaper(paper);
 		report.setHeader(header);
 		report.setFooter(footer);
@@ -143,6 +147,53 @@ public class ReportDefinition implements Serializable{
 			}
 		}
 		return report;
+	}
+
+	private int validFreezeCount(boolean rowAxis) {
+		int count=rowAxis ? freezeRows : freezeColumns;
+		int size=rowAxis ? rows.size() : columns.size();
+		if(count<=0 || count>=size){
+			return 0;
+		}
+		// Include complete merged cells, even when extending reaches another merge.
+		int previous;
+		do{
+			previous=count;
+			for(CellDefinition cell:cells){
+				int position=rowAxis ? cell.getRowNumber() : cell.getColumnNumber();
+				int span=rowAxis ? cell.getRowSpan() : cell.getColSpan();
+				if(position<=count){
+					long end=(long)position+Math.max(1,span)-1;
+					if(end>=size){
+						return 0;
+					}
+					count=Math.max(count,(int)end);
+				}
+			}
+		}while(count!=previous);
+		for(CellDefinition cell:cells){
+			int position=rowAxis ? cell.getRowNumber() : cell.getColumnNumber();
+			if(position<=count && cell.getExpand()==(rowAxis ? Expand.Down : Expand.Right)){
+				return 0;
+			}
+		}
+		return count;
+	}
+
+	public int getFreezeRows() {
+		return freezeRows;
+	}
+
+	public void setFreezeRows(int freezeRows) {
+		this.freezeRows=Math.max(0,freezeRows);
+	}
+
+	public int getFreezeColumns() {
+		return freezeColumns;
+	}
+
+	public void setFreezeColumns(int freezeColumns) {
+		this.freezeColumns=Math.max(0,freezeColumns);
 	}
 	
 	public String getStyle() {

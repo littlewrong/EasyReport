@@ -29,15 +29,15 @@ $(document).ready(function(){
                 "top":top+"px",
                 "z-index":5
             });
-            $('.ht_clone_top').css({
-                "top":'44px'
+            $('.ht_clone_top, .ht_clone_top_left_corner').css({
+                "top":(toolbar.outerHeight() || 44)+'px'
             });
         }else{
             toolbar.css({
                 position:"relative",
                 top:"auto"
             });
-            $('.ht_clone_top').css({
+            $('.ht_clone_top, .ht_clone_top_left_corner').css({
                 "top":0
             });
         }

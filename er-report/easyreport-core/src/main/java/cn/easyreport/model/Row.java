@@ -26,6 +26,7 @@ import cn.easyreport.definition.Band;
  */
 public class Row extends Line{
 	private int height;
+	private int templateRowNumber;
 	private int realHeight=-1;
 	private String rowKey;
 	/**
@@ -47,6 +48,7 @@ public class Row extends Line{
 	public Row newRow(){
 		Row row=new Row(rows);
 		row.setHeight(height);
+		row.setTemplateRowNumber(templateRowNumber);
 		row.setRealHeight(realHeight);
 		row.setBand(band);
 		row.setPageBreak(pageBreak);
@@ -65,6 +67,12 @@ public class Row extends Line{
 
 	public int getRowNumber() {
 		return rows.indexOf(this)+1;
+	}
+	public int getTemplateRowNumber() {
+		return templateRowNumber;
+	}
+	public void setTemplateRowNumber(int templateRowNumber) {
+		this.templateRowNumber=templateRowNumber;
 	}
 	public int getHeight() {
 		return height;

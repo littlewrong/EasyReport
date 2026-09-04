@@ -5,6 +5,8 @@ import './form/external/bootstrap-datetimepicker.css';
 import {pointToMM,showLoading,hideLoading} from './Utils.js';
 import {alert} from './MsgBox.js';
 import PDFPrintDialog from './dialog/PDFPrintDialog.js';
+import PreviewFreeze from './PreviewFreeze.js';
+import '../css/preview-freeze.css';
 // 使用轮询方案（更稳定，适合Istio多节点环境）
 // 如需切换回SSE，改为: import StreamingExportProgress from './export-progress.js';
 import StreamingExportProgress from './export-progress-polling.js';
@@ -23,7 +25,14 @@ import en18nJsonData from './i18n/preview_en.json';
     };
 }(jQuery));
 
+let previewFreeze;
+function refreshFreeze() {
+    if (previewFreeze) previewFreeze.refresh();
+}
+
 $(document).ready(function(){
+    const reportContainer = document.getElementById('_easyreport_table');
+    if (reportContainer) previewFreeze = new PreviewFreeze(reportContainer);
     let language=window.navigator.language || window.navigator.browserLanguage;
     if(!language){
         language='zh-cn';
@@ -557,6 +566,7 @@ function _refreshData(second){
             tableContainer.empty();
             window._totalPage=report.totalPageWithCol;
             tableContainer.append(report.content);
+            refreshFreeze();
             _buildChartDatas(report.chartDatas);
             buildPaging(window._currentPageIndex,window._totalPage);
             if(window._currentPageIndex){
@@ -574,6 +584,7 @@ function _refreshData(second){
             }else{
                 tableContainer.append("<h3 style='color: #d30e00;'>加载数据失败</h3>");
             }
+            refreshFreeze();
             setTimeout(function(){
                 _refreshData(second);
             },second);
@@ -653,6 +664,7 @@ window.submitSearchForm=function(file,customParameters){
             const tableContainer=$(`#_easyreport_table`);
             tableContainer.empty();
             tableContainer.append(report.content);
+            refreshFreeze();
             _buildChartDatas(report.chartDatas);
             const totalPage=report.totalPage;
             window._totalPage=totalPage;

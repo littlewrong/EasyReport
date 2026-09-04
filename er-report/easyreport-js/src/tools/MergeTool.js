@@ -1,6 +1,7 @@
 import {undoManager,setDirty,buildNewCellDef} from '../Utils.js';
 import {alert} from '../MsgBox.js';
 import {cloneMergeCells,getMergeCells} from '../table/MergeCellUtils.js';
+import {canMerge,canUnmerge} from '../table/FreezeUtils.js';
 
 /**
  * Created by Jacky.Gao on 2017-01-25.
@@ -63,6 +64,9 @@ function doMergeCells(startRow,startCol,endRow,endCol,table,context){
     }
 
     if(splitMergeCells.length>0){
+        if(!canUnmerge(table,remainingMergeCells)){
+            return false;
+        }
         for(let mergeItem of splitMergeCells){
             const mergeEndRow=mergeItem.row+mergeItem.rowspan-1;
             const mergeEndCol=mergeItem.col+mergeItem.colspan-1;
@@ -78,6 +82,10 @@ function doMergeCells(startRow,startCol,endRow,endCol,table,context){
 
     if(startRow===endRow && startCol===endCol){
         alert(`${window.i18n.selectMultiTargetCellFirst}`);
+        return false;
+    }
+
+    if(!canMerge(table,startRow,startCol,endRow,endCol)){
         return false;
     }
 

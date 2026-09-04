@@ -6,6 +6,7 @@ import {alert,confirm} from '../../MsgBox.js';
 import uuid from 'node-uuid';
 import {setDirty} from '../../Utils.js';
 import BaseValueEditor from './BaseValueEditor.js';
+import {canExpand} from '../../table/FreezeUtils.js';
 import CustomGroupDialog from '../../dialog/CustomGroupDialog.js';
 import MappingDialog from '../../dialog/MappingDialog.js';
 
@@ -347,6 +348,10 @@ export default class DatasetValueEditor extends BaseValueEditor{
             return;
         }
         const hot=this.context.hot;
+        if(!canExpand(hot,expand,this.rowIndex,this.colIndex,this.row2Index,this.col2Index)){
+            this._refreshExpand();
+            return;
+        }
         for(let i=this.rowIndex;i<=this.row2Index;i++){
             for(let j=this.colIndex;j<=this.col2Index;j++){
                 const cellDef=hot.context.getCell(i,j);
@@ -361,6 +366,13 @@ export default class DatasetValueEditor extends BaseValueEditor{
         }
         hot.render();
         setDirty();
+    }
+
+    _refreshExpand(){
+        const expand=this.cellDef.expand || 'None';
+        this.noneExpandRadio.children('input').prop('checked',expand==='None');
+        this.downExpandRadio.children('input').prop('checked',expand==='Down');
+        this.rightExpandRadio.children('input').prop('checked',expand==='Right');
     }
 
     _buildConditionTable(container){
@@ -670,14 +682,7 @@ export default class DatasetValueEditor extends BaseValueEditor{
             this.disableFillRadio.trigger("click");
             this.multipleGroup.hide();
         }
-        const expand=cellDef.expand;
-        if(expand==='None'){
-            this.noneExpandRadio.trigger('click');
-        }else if(expand==='Down'){
-            this.downExpandRadio.trigger('click');
-        }else if(expand==='Right'){
-            this.rightExpandRadio.trigger('click');
-        }
+        this._refreshExpand();
         const value=cellDef.value;
         this.datasetSelect.val(value.datasetName);
         this.datasetSelect.trigger('change');

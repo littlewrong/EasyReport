@@ -9,12 +9,22 @@ import {doDeleteCol} from './operation/DeleteColOperation.js';
 import {renderRowHeader} from './HeaderUtils.js';
 import RowColWidthHeightDialog from '../dialog/RowColWidthHeightDialog.js';
 import Handsontable from 'handsontable';
+import {getFreeze,setFreeze,freezeSelection,freezeText} from './FreezeUtils.js';
+import {getMergeCells} from './MergeCellUtils.js';
+import {expandFreezeRows,expandFreezeColumns} from './FreezeRules.js';
 
 export default function buildMenuConfigure(){
     return {
         callback: function (key, options) {
             const _this=this;
-            if (key === 'insert_row_above') {
+            if(key==='freeze_rows' || key==='freeze_columns'){
+                freezeSelection(this,key==='freeze_rows' ? 'rows' : 'columns');
+            }else if(key==='unfreeze_rows' || key==='unfreeze_columns' || key==='unfreeze_all'){
+                const state=getFreeze(this);
+                if(key!=='unfreeze_columns') state.freezeRows=0;
+                if(key!=='unfreeze_rows') state.freezeColumns=0;
+                setFreeze(this,state);
+            }else if (key === 'insert_row_above') {
                 doInsertRow.call(this,true);
             }else if(key === 'insert_row_below'){
                 doInsertRow.call(this);
@@ -172,6 +182,37 @@ export default function buildMenuConfigure(){
             }
         },
         items: {
+            "freeze_rows": {
+                name:function(){
+                    const selected=this.getSelected();
+                    const row=selected ? Math.max(selected[0],selected[2])+1 : 1;
+                    const endRow=expandFreezeRows(row,getMergeCells(this));
+                    return freezeText(endRow>row ? 'rowsToMerged' : 'rowsTo').replace('{n}',endRow);
+                },
+                disabled:function(){ return !this.getSelected(); }
+            },
+            "freeze_columns": {
+                name:function(){
+                    const selected=this.getSelected();
+                    const col=selected ? Math.max(selected[1],selected[3]) : 0;
+                    const endCol=expandFreezeColumns(col+1,getMergeCells(this))-1;
+                    return freezeText(endCol>col ? 'columnsToMerged' : 'columnsTo').replace('{column}',this.context.LETTERS[endCol]);
+                },
+                disabled:function(){ return !this.getSelected(); }
+            },
+            "unfreeze_rows": {
+                name:function(){ return freezeText('cancelRows'); },
+                disabled:function(){ return !getFreeze(this).freezeRows; }
+            },
+            "unfreeze_columns": {
+                name:function(){ return freezeText('cancelColumns'); },
+                disabled:function(){ return !getFreeze(this).freezeColumns; }
+            },
+            "unfreeze_all": {
+                name:function(){ return freezeText('cancelAll'); },
+                disabled:function(){ const state=getFreeze(this);return !state.freezeRows && !state.freezeColumns; }
+            },
+            "freeze_separator": "---------",
             "insert_row_above": {
                 name: `<i class="easyreport easyreport-insertrow" style="color: #3344d3;font-size: 13px"></i> ${window.i18n.table.contextMenu.insertRowUp}`
             },

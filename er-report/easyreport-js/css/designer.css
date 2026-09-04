@@ -4,6 +4,24 @@
 .handsontable td, .handsontable th{
     background: transparent;
 }
+/* Frozen clones need an opaque backing while retaining each cell's own fill. */
+.easyreport-freeze-rows .ht_clone_top table.htCore,
+.easyreport-freeze-columns .ht_clone_left table.htCore,
+.easyreport-freeze-rows .ht_clone_top_left_corner table.htCore,
+.easyreport-freeze-columns .ht_clone_top_left_corner table.htCore{
+    background: #fff;
+}
+.easyreport-freeze-rows .ht_clone_top table.htCore,
+.easyreport-freeze-rows .ht_clone_top_left_corner table.htCore{
+    box-shadow: 0 2px 0 #638eb5;
+}
+.easyreport-freeze-columns .ht_clone_left table.htCore,
+.easyreport-freeze-columns .ht_clone_top_left_corner table.htCore{
+    box-shadow: 2px 0 0 #638eb5;
+}
+.easyreport-freeze-rows.easyreport-freeze-columns .ht_clone_top_left_corner table.htCore{
+    box-shadow: 2px 2px 0 #638eb5;
+}
 /* 列头(A/B/C/D)文字垂直居中：handsontable 默认 th 为 vertical-align:top，列头行偏高时文字会贴顶、下方留白 */
 .handsontable thead th{
     vertical-align: middle;

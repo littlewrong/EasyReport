@@ -24,6 +24,7 @@ import java.util.List;
  */
 public class Column extends Line{
 	private int width;
+	private int templateColumnNumber;
 	private boolean hide;
 	/**
 	 * 一个用来临时存放当前列号的属性，只在构建报表时创建新列时使用
@@ -38,11 +39,18 @@ public class Column extends Line{
 	public Column newColumn(){
 		Column col=new Column(columns);
 		col.setWidth(width);
+		col.setTemplateColumnNumber(templateColumnNumber);
 		return col;
 	}
 	
 	public int getColumnNumber() {
 		return this.columns.indexOf(this)+1;
+	}
+	public int getTemplateColumnNumber() {
+		return templateColumnNumber;
+	}
+	public void setTemplateColumnNumber(int templateColumnNumber) {
+		this.templateColumnNumber=templateColumnNumber;
 	}
 
 	public int getWidth() {

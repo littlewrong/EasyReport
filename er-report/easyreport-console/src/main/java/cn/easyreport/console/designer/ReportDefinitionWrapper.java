@@ -33,6 +33,8 @@ import cn.easyreport.definition.searchform.SearchForm;
  * @since 2017年1月29日
  */
 public class ReportDefinitionWrapper {
+	private int freezeRows;
+	private int freezeColumns;
 	private Paper paper;
 	private HeaderFooterDefinition header;
 	private HeaderFooterDefinition footer;
@@ -43,6 +45,8 @@ public class ReportDefinitionWrapper {
 	private List<DatasourceDefinition> datasources;
 	private Map<String,CellDefinition> cellsMap=new HashMap<String,CellDefinition>();
 	public ReportDefinitionWrapper(ReportDefinition report) {
+		this.freezeRows=report.getFreezeRows();
+		this.freezeColumns=report.getFreezeColumns();
 		this.paper=report.getPaper();
 		this.header=report.getHeader();
 		this.footer=report.getFooter();
@@ -57,6 +61,12 @@ public class ReportDefinitionWrapper {
 	}
 	public List<ColumnDefinition> getColumns() {
 		return columns;
+	}
+	public int getFreezeRows() {
+		return freezeRows;
+	}
+	public int getFreezeColumns() {
+		return freezeColumns;
 	}
 	public List<DatasourceDefinition> getDatasources() {
 		return datasources;

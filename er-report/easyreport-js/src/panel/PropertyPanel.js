@@ -20,6 +20,7 @@ import RadarChartValueEditor from './property/chart/RadarChartValueEditor.js';
 import ScatterChartValueEditor from './property/chart/ScatterChartValueEditor.js';
 import CrossTabWidget from '../widget/CrossTabWidget.js';
 import {setDirty} from '../Utils.js';
+import {canExpand} from '../table/FreezeUtils.js';
 import {alert} from '../MsgBox.js'
 
 export default class PropertyPanel{
@@ -122,11 +123,16 @@ export default class PropertyPanel{
         this.typeGruop.hide();
         const _this=this;
         this.typeSelect.change(function(){
+            let cellDef=_this.cellDef;
+            let value=$(this).val();
+            const rowIndex=cellDef.rowNumber-1,colIndex=cellDef.columnNumber-1;
+            if(value==='dataset' && !canExpand(_this.context.hot,'Down',rowIndex,colIndex,rowIndex,colIndex)){
+                $(this).val(cellDef.value.type==='zxing' ? cellDef.value.category : cellDef.value.type);
+                return;
+            }
             for(let editor of _this.editorMap.values()){
                 editor.hide();
             }
-            let cellDef=_this.cellDef;
-            let value=$(this).val();
             if(value==='simple'){
                 if(cellDef.value.type!=='simple'){
                     cellDef.value={type:'simple'};

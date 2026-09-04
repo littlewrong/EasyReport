@@ -2,6 +2,8 @@
  * Created by Jacky.Gao on 2017-02-17.
  */
 import {setDirty,resetTableData,buildNewCellDef,undoManager} from '../../Utils.js';
+import {getFreeze,applyFreeze} from '../FreezeUtils.js';
+import {shiftFreeze} from '../FreezeRules.js';
 
 export function doInsertCol(left){
     const selected=this.getSelected();
@@ -24,6 +26,7 @@ export function doInsertCol(left){
             position=endCol+1;
         }
     }
+    const previousFreeze=getFreeze(this);
     let colWidths=this.getSettings().colWidths;
     let newColWidths=colWidths.concat([]);
     newColWidths.splice(position,0,98);
@@ -52,6 +55,7 @@ export function doInsertCol(left){
         manualColumnResize:newColWidths
     });
     resetTableData(this);
+    const nextFreeze=applyFreeze(this,shiftFreeze(previousFreeze,'columns',position,1,true));
     setDirty();
 
     const _this=this,removeCells=[];
@@ -84,6 +88,7 @@ export function doInsertCol(left){
                 manualColumnResize:newColWidths
             });
             resetTableData(_this);
+            applyFreeze(_this,nextFreeze);
             setDirty();
         },
         undo:function(){
@@ -121,6 +126,7 @@ export function doInsertCol(left){
             }
 
             resetTableData(_this);
+            applyFreeze(_this,previousFreeze);
             setDirty();
         }
     });

@@ -5,6 +5,7 @@ import * as utils from '../Utils.js';
 import {afterRenderer} from './CellRenderer.js';
 import buildMenuConfigure from './ContextMenu.js';
 import Handsontable from 'handsontable';
+import {applyFreeze,guardNativeMerge} from './FreezeUtils.js';
 
 export default class ReportTable{
     constructor(container,callback){
@@ -108,7 +109,11 @@ export default class ReportTable{
             data:{file},
             success:function(reportDef){
                 _this.reportDef=reportDef;
+                if(_this.hot.context){
+                    _this.hot.context.reportDef=reportDef;
+                }
                 _this._buildReportData(reportDef);
+                utils.undoManager.clear();
                 if(callback){
                     callback.call(_this,reportDef);
                 }
@@ -135,6 +140,8 @@ export default class ReportTable{
     }
 
     _buildReportData(data){
+        // Reset the previous file's overlays before replacing dimensions/data.
+        this.hot.updateSettings({fixedRowsTop:0,fixedColumnsLeft:0,mergeCells:[]});
         this.cellsMap.clear();
         const rows=data.rows;
         const rowHeights=[];
@@ -182,6 +189,8 @@ export default class ReportTable{
             mergeCells,
             readOnly:true
         });
+        guardNativeMerge(this.hot);
+        applyFreeze(this.hot,data,data,Array.from(this.cellsMap.values()));
     }
 
     buildMenu(){

@@ -4,6 +4,7 @@
 import {alert} from '../MsgBox.js';
 import {setDirty,undoManager} from '../Utils.js';
 import Handsontable from 'handsontable';
+import {canExpand} from '../table/FreezeUtils.js';
 export default class BaseTree{
     _buildClickEvent(dataset,field,context){
         let hot=context.hot,cellsMap=context.cellsMap;
@@ -14,6 +15,9 @@ export default class BaseTree{
         }
         let rowIndex=selected[0],colIndex=selected[1];
         let cellDef=context.getCell(rowIndex,colIndex);
+        if(!canExpand(hot,'Down',cellDef.rowNumber-1,cellDef.columnNumber-1,cellDef.rowNumber-1,cellDef.columnNumber-1)){
+            return;
+        }
 
         let oldCellDef=Object.assign({},cellDef);
 
@@ -45,6 +49,9 @@ export default class BaseTree{
         undoManager.add({
             redo:function(){
                 cellDef=context.getCell(rowIndex,colIndex);
+                if(!canExpand(hot,'Down',cellDef.rowNumber-1,cellDef.columnNumber-1,cellDef.rowNumber-1,cellDef.columnNumber-1)){
+                    return;
+                }
                 oldCellDef=Object.assign({},cellDef);
                 if(cellDef.value.type!=='dataset'){
                     context.removeCell(cellDef);

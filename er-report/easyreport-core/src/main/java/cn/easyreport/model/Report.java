@@ -33,6 +33,22 @@ import cn.easyreport.definition.Paper;
  * @since 2016年11月1日
  */
 public class Report {
+	private int freezeRows;
+	private int freezeColumns;
+
+	public int getFreezeRows() {
+		return freezeRows;
+	}
+	public void setFreezeRows(int freezeRows) {
+		this.freezeRows=Math.max(0,freezeRows);
+	}
+	public int getFreezeColumns() {
+		return freezeColumns;
+	}
+	public void setFreezeColumns(int freezeColumns) {
+		this.freezeColumns=Math.max(0,freezeColumns);
+	}
+
 	private Paper paper;
 	private HeaderFooterDefinition header;
 	private HeaderFooterDefinition footer;

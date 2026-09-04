@@ -1,0 +1,62 @@
+/* Scoped to ordinary HTML preview; exported/printed tables retain their layout. */
+@media screen {
+    #_easyreport_table.easyreport-freeze-viewport {
+        width: 100%;
+        max-width: 100%;
+        max-height: var(--easyreport-freeze-height);
+        overflow: auto;
+        position: relative;
+        isolation: isolate;
+        box-sizing: border-box;
+    }
+    .easyreport-freeze-viewport .easyreport-frozen-cell {
+        position: sticky;
+        background-color: var(--easyreport-freeze-background) !important;
+        border-color: transparent !important;
+    }
+    /* A continuous backing masks scrolling text even at merged-cell seams.
+       Negative margin preserves the table's position and scrollable height. */
+    #_easyreport_table.easyreport-freeze-viewport::before {
+        content: '';
+        display: block;
+        position: sticky;
+        top: 0;
+        left: 0;
+        height: var(--easyreport-freeze-header-height, 0px);
+        margin-bottom: calc(-1 * var(--easyreport-freeze-header-height, 0px));
+        background: #fff;
+        z-index: 2;
+    }
+    /* Repaint each border at its collapsed center line, instead of stacking
+       full-width inset shadows on both sides of every shared border. */
+    .easyreport-freeze-viewport .easyreport-frozen-cell::before {
+        content: '';
+        position: absolute;
+        pointer-events: none;
+        z-index: -1;
+        box-sizing: border-box;
+        top: calc(-1 * var(--easyreport-freeze-top-outset));
+        right: calc(-1 * var(--easyreport-freeze-border-right-width));
+        bottom: calc(-1 * var(--easyreport-freeze-border-bottom-width));
+        left: calc(-1 * var(--easyreport-freeze-left-outset));
+        border-top: var(--easyreport-freeze-border-top-width) var(--easyreport-freeze-border-top-style) var(--easyreport-freeze-border-top-color);
+        border-right: var(--easyreport-freeze-border-right-width) var(--easyreport-freeze-border-right-style) var(--easyreport-freeze-border-right-color);
+        border-bottom: var(--easyreport-freeze-border-bottom-width) var(--easyreport-freeze-border-bottom-style) var(--easyreport-freeze-border-bottom-color);
+        border-left: var(--easyreport-freeze-border-left-width) var(--easyreport-freeze-border-left-style) var(--easyreport-freeze-border-left-color);
+    }
+    .easyreport-freeze-viewport > table[data-easyreport-table="true"] {
+        margin-left: var(--easyreport-freeze-margin-left) !important;
+        margin-right: var(--easyreport-freeze-margin-right) !important;
+    }
+    .easyreport-freeze-viewport .easyreport-frozen-row {
+        top: var(--easyreport-freeze-top);
+        z-index: 3;
+    }
+    .easyreport-freeze-viewport .easyreport-frozen-column {
+        left: var(--easyreport-freeze-left);
+        z-index: 1;
+    }
+    .easyreport-freeze-viewport .easyreport-frozen-row.easyreport-frozen-column {
+        z-index: 4;
+    }
+}

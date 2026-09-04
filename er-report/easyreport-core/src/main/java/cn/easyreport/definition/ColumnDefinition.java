@@ -31,6 +31,7 @@ public class ColumnDefinition implements Comparable<ColumnDefinition>{
 	protected Column newColumn(List<Column> columns){
 		Column col=new Column(columns);
 		col.setWidth(width);
+		col.setTemplateColumnNumber(columnNumber);
 		return col;
 	}
 

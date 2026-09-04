@@ -4,6 +4,8 @@
 import {setDirty,resetTableData,buildNewCellDef,undoManager} from '../../Utils.js';
 import {renderRowHeader} from '../HeaderUtils.js';
 import {alert} from '../../MsgBox.js';
+import {getFreeze,applyFreeze} from '../FreezeUtils.js';
+import {shiftFreeze} from '../FreezeRules.js';
 
 export function doDeleteRow(){
     const selected=this.getSelected(),context=this.context;
@@ -17,6 +19,7 @@ export function doDeleteRow(){
         startRow=endRow;
         endRow=tempStartRow;
     }
+    const previousFreeze=getFreeze(this);
     let rowHeights=this.getSettings().rowHeights,mergeCells=this.getSettings().mergeCells;
     let oldMergeCells=[];
     let newMergeCells=mergeCells.concat([]);
@@ -87,6 +90,7 @@ export function doDeleteRow(){
     }
     this.updateSettings({rowHeights:newRowHeights,mergeCells:newMergeCells});
     resetTableData(this);
+    const nextFreeze=applyFreeze(this,shiftFreeze(previousFreeze,'rows',startRow,dif,false));
     setDirty();
 
     const _this=this;
@@ -162,6 +166,7 @@ export function doDeleteRow(){
             }
             _this.updateSettings({rowHeights:newRowHeights,mergeCells:newMergeCells});
             resetTableData(_this);
+            applyFreeze(_this,nextFreeze);
             setDirty();
         },
         undo:function(){
@@ -189,6 +194,7 @@ export function doDeleteRow(){
             }
             _this.updateSettings({rowHeights:oldRowHeights,mergeCells:oldMergeCells});
             resetTableData(_this);
+            applyFreeze(_this,previousFreeze);
             setDirty();
         }
     })

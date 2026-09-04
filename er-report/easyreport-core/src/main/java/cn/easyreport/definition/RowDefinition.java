@@ -33,6 +33,7 @@ public class RowDefinition implements Comparable<RowDefinition>,Serializable{
 	protected Row newRow(List<Row> rows){
 		Row row=new Row(rows);
 		row.setHeight(height);
+		row.setTemplateRowNumber(rowNumber);
 		row.setBand(band);
 		row.setPageBreak(pageBreak);
 		row.setRowKey("r"+rowNumber);

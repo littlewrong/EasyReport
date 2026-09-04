@@ -4,6 +4,8 @@
 import {setDirty,resetTableData,buildNewCellDef,undoManager} from '../../Utils.js';
 import {renderRowHeader} from '../HeaderUtils.js';
 import {alert} from '../../MsgBox.js';
+import {getFreeze,applyFreeze} from '../FreezeUtils.js';
+import {shiftFreeze} from '../FreezeRules.js';
 
 export function doInsertRow(above){
     const selected=this.getSelected();
@@ -26,6 +28,7 @@ export function doInsertRow(above){
             position=endRow+1;
         }
     }
+    const previousFreeze=getFreeze(this);
     let rowHeights=this.getSettings().rowHeights;
     let newRowHeights=rowHeights.concat([]);
     newRowHeights.splice(position,0,25);
@@ -39,6 +42,7 @@ export function doInsertRow(above){
         manualRowResize:newRowHeights
     });
     resetTableData(this);
+    const nextFreeze=applyFreeze(this,shiftFreeze(previousFreeze,'rows',position,1,true));
     setDirty();
 
     const _this=this,context=this.context,cellsMap=this.context.cellsMap,removeCells=[];
@@ -73,6 +77,7 @@ export function doInsertRow(above){
                 manualRowResize:newRowHeights
             });
             resetTableData(_this);
+            applyFreeze(_this,nextFreeze);
             setDirty();
         },
         undo:function(){
@@ -111,6 +116,7 @@ export function doInsertRow(above){
                 context.addCell(cell);
             }
             resetTableData(_this);
+            applyFreeze(_this,previousFreeze);
             setDirty();
         }
     });

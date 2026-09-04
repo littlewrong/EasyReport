@@ -694,6 +694,25 @@
     "titleContent":"标题内容："
   },
   "table":{
+    "freeze":{
+      "rowsTo":"冻结至第 {n} 行",
+      "rowsToMerged":"冻结至第 {n} 行（包含完整合并区域）",
+      "columnsTo":"冻结 A–{column} 列",
+      "columnsToMerged":"冻结 A–{column} 列（包含完整合并区域）",
+      "cancelRows":"取消冻结行",
+      "cancelColumns":"取消冻结列",
+      "cancelAll":"取消全部冻结",
+      "remainingRows":"冻结行会包含完整的合并区域；冻结后至少需要保留一行可以滚动，请选择更靠上的行。",
+      "remainingColumns":"冻结列会包含完整的合并区域；冻结后至少需要保留一列可以滚动，请选择更靠左的列。",
+      "expandingRows":"包含完整合并区域后的冻结行范围内有向下扩展的单元格，不能冻结。请选择数据扩展区域之前的行。",
+      "expandingColumns":"包含完整合并区域后的冻结列范围内有向右扩展的单元格，不能冻结。请选择数据扩展区域之前的列。",
+      "expandRows":"冻结行内不能设置向下扩展，请先取消冻结行。",
+      "expandColumns":"冻结列内不能设置向右扩展，请先取消冻结列。",
+      "mergeColumnsBoundary":"不能跨越冻结列边界合并单元格，请先调整冻结列范围或取消冻结列。",
+      "unmergeExpandingRows":"拆分后会在冻结行内恢复向下扩展的单元格，请先取消冻结行。",
+      "unmergeExpandingColumns":"拆分后会在冻结列内恢复向右扩展的单元格，请先取消冻结列。",
+      "mergeRowsBoundary":"不能跨越冻结行边界合并单元格，请先调整冻结行范围或取消冻结行。"
+    },
     "render":{
       "image":"图片：",
       "slash":"斜线表头",

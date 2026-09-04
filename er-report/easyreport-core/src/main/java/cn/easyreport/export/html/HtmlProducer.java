@@ -102,10 +102,16 @@ public class HtmlProducer{
 			bgStyle=";background:url("+bgImage+") no-repeat";
 		}
 		if(breakPage){
-			sb.append("<table class='page-break' border='0' style='margin:auto;border-collapse:collapse;width:"+tableWidth+"pt"+bgStyle+"'>");						
+			sb.append("<table class='page-break'");
 		}else{
-			sb.append("<table border='0' style='margin:auto;border-collapse:collapse;width:"+tableWidth+"pt"+bgStyle+"'>");						
+			sb.append("<table");
 		}
+		if(!forPage){
+			int[] freeze=FreezeArea.resolve(context.getReport());
+			sb.append(" data-easyreport-table='true' data-freeze-rows='").append(freeze[0])
+					.append("' data-freeze-columns='").append(freeze[1]).append("'");
+		}
+		sb.append(" border='0' style='margin:auto;border-collapse:collapse;width:"+tableWidth+"pt"+bgStyle+"'>");
 		int colSize=columns.size();
 		int rowSize=rows.size();
 		for(int i=0;i<rowSize;i++){

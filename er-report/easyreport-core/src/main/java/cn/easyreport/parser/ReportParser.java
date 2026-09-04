@@ -72,6 +72,8 @@ public class ReportParser {
 				throw new ReportParseException("Unknow report file.");
 			}
 			List<RowDefinition> rows=new ArrayList<RowDefinition>();
+			report.setFreezeRows(parseFreezeCount(element.attributeValue("freeze-rows")));
+			report.setFreezeColumns(parseFreezeCount(element.attributeValue("freeze-columns")));
 			List<ColumnDefinition> columns=new ArrayList<ColumnDefinition>();
 			List<CellDefinition> cells=new ArrayList<CellDefinition>();
 			List<DatasourceDefinition> datasources=new ArrayList<DatasourceDefinition>();
@@ -122,6 +124,18 @@ public class ReportParser {
 		rebuild(report);
 		return report;
 	}
+
+	private int parseFreezeCount(String value) {
+		if(StringUtils.isBlank(value)){
+			return 0;
+		}
+		try{
+			return Math.max(0,Integer.parseInt(value.trim()));
+		}catch(NumberFormatException ex){
+			return 0;
+		}
+	}
+
 	private void rebuild(ReportDefinition report) {
 		List<CellDefinition> cells=report.getCells();
 		Map<String,CellDefinition> cellsMap=new HashMap<String,CellDefinition>();

@@ -4,6 +4,7 @@
 import UndoManager from 'undo-manager';
 import {alert} from './MsgBox.js';
 import {getMergeCells} from './table/MergeCellUtils.js';
+import {normalizeFreeze} from './table/FreezeRules.js';
 
 export function showLoading(){
     const url=window._server+'/res/easyreport-asserts/icons/loading.gif';
@@ -69,7 +70,10 @@ export function tableToXml(context){
     const hot=context.hot;
     const countRows=hot.countRows(),countCols=hot.countCols();
     const mergeCells=getMergeCells(hot);
-    let xml=`<?xml version="1.0" encoding="UTF-8"?><easyreport>`;
+    const settings=hot.getSettings();
+    const freeze=normalizeFreeze({freezeRows:settings.fixedRowsTop,freezeColumns:settings.fixedColumnsLeft},
+        countRows,countCols,mergeCells,Array.from(context.cellsMap.values()));
+    let xml=`<?xml version="1.0" encoding="UTF-8"?><easyreport freeze-rows="${freeze.freezeRows}" freeze-columns="${freeze.freezeColumns}">`;
     let rowsXml='',columnXml='';
     const rowHeaders=context.rowHeaders;
     for(let i=0;i<countRows;i++){

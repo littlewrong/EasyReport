@@ -691,6 +691,25 @@
     "titleContent":"Title Content:"
   },
   "table":{
+    "freeze":{
+      "rowsTo":"Freeze through row {n}",
+      "rowsToMerged":"Freeze through row {n} (including complete merged areas)",
+      "columnsTo":"Freeze columns A–{column}",
+      "columnsToMerged":"Freeze columns A–{column} (including complete merged areas)",
+      "cancelRows":"Unfreeze rows",
+      "cancelColumns":"Unfreeze columns",
+      "cancelAll":"Unfreeze all",
+      "remainingRows":"Frozen rows include complete merged areas. Leave at least one scrollable row by choosing an earlier row.",
+      "remainingColumns":"Frozen columns include complete merged areas. Leave at least one scrollable column by choosing an earlier column.",
+      "expandingRows":"After including complete merged areas, the frozen rows would contain cells that expand down. Choose a row before the expanding data area.",
+      "expandingColumns":"After including complete merged areas, the frozen columns would contain cells that expand right. Choose a column before the expanding data area.",
+      "expandRows":"Cells in frozen rows cannot expand down. Unfreeze the rows first.",
+      "expandColumns":"Cells in frozen columns cannot expand right. Unfreeze the columns first.",
+      "mergeColumnsBoundary":"Cells cannot be merged across the frozen column boundary. Adjust or unfreeze the columns first.",
+      "unmergeExpandingRows":"Unmerging would restore cells that expand down inside frozen rows. Unfreeze the rows first.",
+      "unmergeExpandingColumns":"Unmerging would restore cells that expand right inside frozen columns. Unfreeze the columns first.",
+      "mergeRowsBoundary":"Cells cannot be merged across the frozen row boundary. Adjust or unfreeze the rows first."
+    },
     "render":{
       "image":"Image:",
       "slash":"Slash",

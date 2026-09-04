@@ -3,6 +3,8 @@
  */
 import {setDirty,resetTableData,buildNewCellDef,undoManager} from '../../Utils.js';
 import {alert} from '../../MsgBox.js';
+import {getFreeze,applyFreeze} from '../FreezeUtils.js';
+import {shiftFreeze} from '../FreezeRules.js';
 export function doDeleteCol(){
     const selected=this.getSelected(),context=this.context;
     if(!selected){
@@ -15,6 +17,7 @@ export function doDeleteCol(){
         startCol=endCol;
         endCol=tempStartCol;
     }
+    const previousFreeze=getFreeze(this);
     let colWidths=this.getSettings().colWidths,mergeCells=this.getSettings().mergeCells;
     let oldMergeCells=[];
     let newMergeCells=mergeCells.concat([]);
@@ -83,6 +86,7 @@ export function doDeleteCol(){
     }
     this.updateSettings({colWidths:newColWidths,mergeCells:newMergeCells});
     resetTableData(this);
+    const nextFreeze=applyFreeze(this,shiftFreeze(previousFreeze,'columns',startCol,dif,false));
     setDirty();
 
     const _this=this;
@@ -157,6 +161,7 @@ export function doDeleteCol(){
             }
             _this.updateSettings({colWidths:newColWidths,mergeCells:newMergeCells});
             resetTableData(_this);
+            applyFreeze(_this,nextFreeze);
             setDirty();
         },
         undo:function(){
@@ -182,6 +187,7 @@ export function doDeleteCol(){
             }
             _this.updateSettings({colWidths:oldColWidths,mergeCells:oldMergeCells});
             resetTableData(_this);
+            applyFreeze(_this,previousFreeze);
             setDirty();
         }
     })

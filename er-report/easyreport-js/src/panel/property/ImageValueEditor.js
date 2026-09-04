@@ -6,6 +6,7 @@ import '../../../node_modules/codemirror/addon/hint/show-hint.js';
 import '../../../node_modules/codemirror/addon/lint/lint.js';
 import {setDirty} from '../../Utils.js';
 import BaseValueEditor from './BaseValueEditor.js';
+import {canExpand} from '../../table/FreezeUtils.js';
 
 export default class ImageValueEditor extends BaseValueEditor{
     constructor(parentContainer,context){
@@ -129,6 +130,10 @@ export default class ImageValueEditor extends BaseValueEditor{
 
     _setExpand(expand){
         const hot=this.context.hot;
+        if(!canExpand(hot,expand,this.rowIndex,this.colIndex,this.row2Index,this.col2Index)){
+            this._refreshExpand();
+            return;
+        }
         for(let i=this.rowIndex;i<=this.row2Index;i++){
             for(let j=this.colIndex;j<=this.col2Index;j++){
                 const cellDef=hot.context.getCell(i,j);
@@ -143,6 +148,13 @@ export default class ImageValueEditor extends BaseValueEditor{
         }
         hot.render();
         setDirty();
+    }
+
+    _refreshExpand(){
+        const expand=this.cellDef.expand || 'None';
+        this.noneExpandRadio.children('input').prop('checked',expand==='None');
+        this.downExpandRadio.children('input').prop('checked',expand==='Down');
+        this.rightExpandRadio.children('input').prop('checked',expand==='Right');
     }
 
     show(cellDef,rowIndex,colIndex,row2Index,col2Index){
@@ -168,14 +180,7 @@ export default class ImageValueEditor extends BaseValueEditor{
             this.pathEditorGroup.hide();
             this.codeMirror.setValue(cellDef.value.value || '');
         }
-        const expand=cellDef.expand;
-        if(expand==='None'){
-            this.noneExpandRadio.trigger('click');
-        }else if(expand==='Down'){
-            this.downExpandRadio.trigger('click');
-        }else if(expand==='Right'){
-            this.rightExpandRadio.trigger('click');
-        }
+        this._refreshExpand();
         this.initialize=false;
     }
     hide(){
