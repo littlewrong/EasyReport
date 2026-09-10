@@ -7,8 +7,10 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 
 import org.junit.Test;
 
@@ -314,6 +316,24 @@ public class FreezeAreaTest {
 		String paged=producer.produce(report.getContext(),new Page(report.getRows(),report.getColumns()),true);
 		assertFalse(paged.contains("data-freeze-"));
 		assertFalse(paged.contains("data-easyreport-table"));
+	}
+
+	@Test
+	public void interactivePagedPreviewFreezesOnlyPagesContainingTheTemplatePrefix() {
+		Report report=report(1,1);
+		HtmlProducer producer=new HtmlProducer();
+		Page firstPage=new Page(report.getRows(),report.getColumns());
+		String first=producer.produceForPagedPreview(report.getContext(),firstPage,false);
+		assertTrue(first.contains("data-easyreport-table='true'"));
+		assertTrue(first.contains("data-freeze-rows='1' data-freeze-columns='1'"));
+
+		List<Row> laterRows=new ArrayList<Row>(report.getRows().subList(1,report.getRows().size()));
+		Page laterPage=new Page(laterRows,report.getColumns());
+		String later=producer.produceForPagedPreview(report.getContext(),laterPage,false);
+		assertTrue(later.contains("data-freeze-rows='0' data-freeze-columns='1'"));
+
+		String print=producer.produce(report.getContext(),firstPage,false);
+		assertFalse(print.contains("data-easyreport-table"));
 	}
 
 	@Test

@@ -81,7 +81,7 @@ public class ExportManagerImpl implements ExportManager {
 		List<Page> pages=pageData.getPages();
 		String content=null;
 		if(pages.size()==1){
-			content=htmlProducer.produce(report.getContext(),pages.get(0),false);
+			content=htmlProducer.produceForPagedPreview(report.getContext(),pages.get(0),false);
 		}else{
 			content=htmlProducer.produce(report.getContext(),pages,pageData.getColumnMargin(),false);			
 		}
@@ -142,7 +142,7 @@ public class ExportManagerImpl implements ExportManager {
 		List<Page> pages=pageData.getPages();
 		String content=null;
 		if(pages.size()==1){
-			content=htmlProducer.produce(report.getContext(),pages.get(0),false);
+			content=htmlProducer.produceForPagedPreview(report.getContext(),pages.get(0),false);
 		}else{
 			content=htmlProducer.produce(report.getContext(),pages,pageData.getColumnMargin(),false);			
 		}

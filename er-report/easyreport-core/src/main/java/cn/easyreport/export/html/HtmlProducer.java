@@ -50,7 +50,7 @@ public class HtmlProducer{
 		List<Column> columns=report.getColumns();
 		// System.out.println("行数: "+rows.size()+", 列数: "+columns.size());
 		Map<Row, Map<Column, Cell>> cellMap=report.getRowColCellMap();
-		StringBuilder sb = buildTable(report.getContext(),rows, columns, cellMap,false,false);
+		StringBuilder sb = buildTable(report.getContext(),rows, columns, cellMap,false,false,true);
 		return sb.toString();
 	}
 	
@@ -89,11 +89,23 @@ public class HtmlProducer{
 		List<Row> rows=page.getRows();
 		List<Column> columns=page.getColumns();
 		Map<Row, Map<Column, Cell>> cellMap=context.getReport().getRowColCellMap();
-		StringBuilder sb = buildTable(context,rows, columns, cellMap,breakPage,true);
+		StringBuilder sb = buildTable(context,rows, columns, cellMap,breakPage,true,false);
+		return sb.toString();
+	}
+
+	/**
+	 * Produces one physical page for the interactive HTML preview. The regular
+	 * page producer remains marker-free because it is also used by printing.
+	 */
+	public String produceForPagedPreview(Context context,Page page,boolean breakPage) {
+		List<Row> rows=page.getRows();
+		List<Column> columns=page.getColumns();
+		Map<Row, Map<Column, Cell>> cellMap=context.getReport().getRowColCellMap();
+		StringBuilder sb = buildTable(context,rows, columns, cellMap,breakPage,true,true);
 		return sb.toString();
 	}
 	
-	private StringBuilder buildTable(Context context,List<Row> rows, List<Column> columns,Map<Row, Map<Column, Cell>> cellMap,boolean breakPage,boolean forPage) {
+	private StringBuilder buildTable(Context context,List<Row> rows, List<Column> columns,Map<Row, Map<Column, Cell>> cellMap,boolean breakPage,boolean forPage,boolean freezeEnabled) {
 		StringBuilder sb=new StringBuilder();
 		int tableWidth=buildTableWidth(columns);
 		String bgStyle="";
@@ -106,8 +118,8 @@ public class HtmlProducer{
 		}else{
 			sb.append("<table");
 		}
-		if(!forPage){
-			int[] freeze=FreezeArea.resolve(context.getReport());
+		if(freezeEnabled){
+			int[] freeze=forPage ? FreezeArea.resolvePage(context.getReport(),rows,columns) : FreezeArea.resolve(context.getReport());
 			sb.append(" data-easyreport-table='true' data-freeze-rows='").append(freeze[0])
 					.append("' data-freeze-columns='").append(freeze[1]).append("'");
 		}

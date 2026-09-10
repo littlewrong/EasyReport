@@ -54,25 +54,71 @@ final class FreezeArea {
 		return new int[]{frozenRows,frozenColumns};
 	}
 
+	/**
+	 * Resolves the frozen prefix against a single physical page. A later page
+	 * freezes rows or columns only when that page actually starts with the
+	 * corresponding template prefix (for example, repeated report headers).
+	 */
+	static int[] resolvePage(Report report,List<Row> rows,List<Column> columns) {
+		int frozenRows=resolvePageRows(report.getFreezeRows(),rows);
+		int frozenColumns=resolvePageColumns(report.getFreezeColumns(),columns);
+		if(frozenColumns>0 && !hasSafeColumnPrefix(report,rows,columns,frozenColumns,true)){
+			frozenColumns=0;
+		}
+		if(frozenRows==0 && frozenColumns==0){
+			return new int[]{0,0};
+		}
+		Map<Row,Map<Column,Cell>> cells=report.getRowColCellMap();
+		int visibleRowIndex=0;
+		for(Row row:rows){
+			if(!isVisibleOnPage(row)){
+				continue;
+			}
+			if(visibleRowIndex>=frozenRows){
+				break;
+			}
+			Map<Column,Cell> rowCells=cells.get(row);
+			for(Column column:columns){
+				Cell cell=rowCells==null ? null : rowCells.get(column);
+				if(cell==null){
+					continue;
+				}
+				int rowSpan=Math.max(1,cell.getPageRowSpan());
+				if(cell.getExpand()==Expand.Down || (long)visibleRowIndex+rowSpan>frozenRows){
+					frozenRows=0;
+				}
+			}
+			visibleRowIndex++;
+			if(frozenRows==0 && frozenColumns==0){
+				break;
+			}
+		}
+		return new int[]{frozenRows,frozenColumns};
+	}
+
 	private static boolean hasSafeColumnPrefix(Report report,int frozenColumns) {
+		return hasSafeColumnPrefix(report,report.getRows(),report.getColumns(),frozenColumns,false);
+	}
+
+	private static boolean hasSafeColumnPrefix(Report report,List<Row> rows,List<Column> columns,int frozenColumns,boolean forPage) {
 		// Track logical grid slots rather than td indexes: a merged cell may occupy
 		// multiple columns and rowspans carry those slots into subsequent HTML rows.
 		int[] occupiedRows=new int[frozenColumns];
 		boolean hasVisibleRows=false;
-		for(Row row:report.getRows()){
-			if(!isVisible(row)){
+		for(Row row:rows){
+			if(forPage ? !isVisibleOnPage(row) : !isVisible(row)){
 				continue;
 			}
 			hasVisibleRows=true;
 			Map<Column,Cell> rowCells=report.getRowColCellMap().get(row);
 			int visibleColumn=-1,domColumn=0;
-			for(Column column:report.getColumns()){
+			for(Column column:columns){
 				boolean visible=isVisible(column);
 				if(visible){
 					visibleColumn++;
 				}
 				Cell cell=rowCells==null ? null : rowCells.get(column);
-				if(cell==null || cell.isForPaging()){
+				if(cell==null || (!forPage && cell.isForPaging())){
 					continue;
 				}
 				while(domColumn<frozenColumns && occupiedRows[domColumn]>0){
@@ -95,7 +141,7 @@ final class FreezeArea {
 					if(occupiedRows[slot]>0){
 						return false;
 					}
-					occupiedRows[slot]=Math.max(1,cell.getRowSpan());
+					occupiedRows[slot]=Math.max(1,forPage ? cell.getPageRowSpan() : cell.getRowSpan());
 				}
 				domColumn+=span;
 			}
@@ -107,6 +153,62 @@ final class FreezeArea {
 			}
 		}
 		return hasVisibleRows;
+	}
+
+	private static int resolvePageRows(int requested,List<Row> rows) {
+		if(requested<=0 || rows.isEmpty()){
+			return 0;
+		}
+		int next=1,visibleFrozen=0,visibleBody=0;
+		boolean pastPrefix=false;
+		for(Row row:rows){
+			int number=row.getTemplateRowNumber();
+			if(number<=0){
+				return 0;
+			}
+			if(number<=requested){
+				if(pastPrefix || number!=next++){
+					return 0;
+				}
+				if(isVisibleOnPage(row)){
+					visibleFrozen++;
+				}
+			}else{
+				pastPrefix=true;
+				if(isVisibleOnPage(row)){
+					visibleBody++;
+				}
+			}
+		}
+		return next==requested+1 && visibleFrozen>0 && visibleBody>0 ? visibleFrozen : 0;
+	}
+
+	private static int resolvePageColumns(int requested,List<Column> columns) {
+		if(requested<=0 || columns.isEmpty()){
+			return 0;
+		}
+		int next=1,visibleFrozen=0,visibleBody=0;
+		boolean pastPrefix=false;
+		for(Column column:columns){
+			int number=column.getTemplateColumnNumber();
+			if(number<=0){
+				return 0;
+			}
+			if(number<=requested){
+				if(pastPrefix || number!=next++){
+					return 0;
+				}
+				if(isVisible(column)){
+					visibleFrozen++;
+				}
+			}else{
+				pastPrefix=true;
+				if(isVisible(column)){
+					visibleBody++;
+				}
+			}
+		}
+		return next==requested+1 && visibleFrozen>0 && visibleBody>0 ? visibleFrozen : 0;
 	}
 
 	private static int resolveRows(Report report) {
@@ -175,6 +277,10 @@ final class FreezeArea {
 
 	private static boolean isVisible(Row row) {
 		return !row.isForPaging() && row.getRealHeight()>0;
+	}
+
+	private static boolean isVisibleOnPage(Row row) {
+		return row.getRealHeight()>0;
 	}
 
 	private static boolean isVisible(Column column) {

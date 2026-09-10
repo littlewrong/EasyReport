@@ -1,4 +1,4 @@
-/* Scoped to ordinary HTML preview; exported/printed tables retain their layout. */
+/* Scoped to interactive HTML preview; exported/printed tables retain their layout. */
 @media screen {
     #_easyreport_table.easyreport-freeze-viewport {
         width: 100%;

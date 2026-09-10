@@ -1,4 +1,4 @@
-// Only ordinary preview tables carry this marker. Print/paged tables never opt in.
+// Interactive preview tables carry this marker. Printed/exported tables do not.
 export default class PreviewFreeze {
     constructor(container) {
         this.container = container;

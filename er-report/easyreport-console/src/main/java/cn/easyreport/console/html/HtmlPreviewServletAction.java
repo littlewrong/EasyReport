@@ -381,7 +381,7 @@ public class HtmlPreviewServletAction extends RenderPageServletAction {
 				List<Page> pages=pageData.getPages();
 				if(pages.size()==1){
 					Page page=pages.get(0);
-					html=htmlProducer.produce(context,page,false);					
+					html=htmlProducer.produceForPagedPreview(context,page,false);
 				}else{
 					html=htmlProducer.produce(context,pages,pageData.getColumnMargin(),false);					
 				}
