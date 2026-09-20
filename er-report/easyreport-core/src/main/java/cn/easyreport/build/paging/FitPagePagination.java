@@ -50,11 +50,10 @@ public class FitPagePagination extends BasePagination implements Pagination {
 		List<Row> pageRepeatFooters=new ArrayList<Row>();
 		pageRepeatHeaders.addAll(headerRows);
 		pageRepeatFooters.addAll(footerRows);
-		int i=0;
 		int rowSize=rows.size();
-		Row row=rows.get(i);
 		int pageIndex=1;
-		while(row!=null){
+		for(int i=0;i<rowSize;i++){
+			Row row=rows.get(i);
 			int rowRealHeight=row.getRealHeight();
 			if(rowRealHeight==0){
 				continue;
@@ -105,12 +104,6 @@ public class FitPagePagination extends BasePagination implements Pagination {
 				pages.add(newPage);
 				rowHeight=repeatHeaderRowHeight+repeatFooterRowHeight;
 				pageRows=new ArrayList<Row>();
-			}
-			i++;
-			if(i<rowSize){
-				row=rows.get(i);
-			}else{
-				row=null;
 			}
 		}
 		if(pageRows.size()>0){

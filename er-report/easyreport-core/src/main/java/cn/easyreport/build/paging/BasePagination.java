@@ -15,11 +15,13 @@
  ******************************************************************************/
 package cn.easyreport.build.paging;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import cn.easyreport.build.Context;
+import cn.easyreport.definition.Band;
 import cn.easyreport.definition.HeaderFooterDefinition;
 import cn.easyreport.model.Cell;
 import cn.easyreport.model.Column;
@@ -50,6 +52,7 @@ public abstract class BasePagination {
 		context.setCurrentPageRows(pageIndex,rows);
 		Map<Row, Map<Column, Cell>> rowColCellsMap=report.getRowColCellMap();
 		List<Row> reportRows=report.getRows();
+		footerRows=resolveFooterRows(footerRows, reportRows, lastRowNumber, lastRow.getTemplateRowNumber());
 		for(int i=0;i<rows.size();i++){
 			Row row=rows.get(i);
 			Map<Column,Cell> colMap=rowColCellsMap.get(row);
@@ -160,6 +163,41 @@ public abstract class BasePagination {
 		return page;
 	}
 	
+	private List<Row> resolveFooterRows(List<Row> footerRows,List<Row> reportRows,int lastRowNumber,int templateRowNumber){
+		if(footerRows.isEmpty()){
+			return footerRows;
+		}
+		List<Row> pageFooterRows=new ArrayList<Row>(footerRows);
+		Map<String,Integer> pendingRows=new HashMap<String,Integer>();
+		for(int i=0;i<footerRows.size();i++){
+			Row footerRow=footerRows.get(i);
+			// Footers defined above this body row have already taken effect.
+			if(templateRowNumber>0 && footerRow.getTemplateRowNumber()>0 && footerRow.getTemplateRowNumber()<=templateRowNumber){
+				continue;
+			}
+			pendingRows.put(footerRow.getRowKey(), i);
+		}
+		// A page can end before its group's footer rows are visited, including
+		// on continuation pages. Use the upcoming instances, not the previous
+		// group's cached values, without changing the pagination loop's cache.
+		for(int i=lastRowNumber;i<reportRows.size() && !pendingRows.isEmpty();i++){
+			Row row=reportRows.get(i);
+			Band band=row.getBand();
+			// Even a hidden header marks the next group: never borrow its footer.
+			if(Band.headerrepeat.equals(band)){
+				break;
+			}
+			if(!Band.footerrepeat.equals(band)){
+				continue;
+			}
+			Integer index=pendingRows.remove(row.getRowKey());
+			if(index!=null){
+				pageFooterRows.set(index, row);
+			}
+		}
+		return pageFooterRows;
+	}
+
 	private Row fetchNextRow(List<Row> reportRows,int rowNumber){
 		Row row=null;
 		do{
