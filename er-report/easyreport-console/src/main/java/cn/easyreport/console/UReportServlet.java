@@ -80,6 +80,9 @@ public class UReportServlet extends HttpServlet {
 		try{
 			targetHandler.execute(req, resp);
 		}catch(Exception ex){
+			if(ReportFileResponses.writeIfFileError(resp, ex)){
+				return;
+			}
 			if(!resp.isCommitted()){
 				try{
 					resp.setCharacterEncoding("UTF-8");

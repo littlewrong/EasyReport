@@ -40,12 +40,12 @@ import org.springframework.context.ApplicationContext;
 import cn.easyreport.cache.CacheUtils;
 import cn.easyreport.console.RenderPageServletAction;
 import cn.easyreport.console.cache.TempObjectCache;
-import cn.easyreport.console.exception.ReportDesignException;
 import cn.easyreport.definition.ReportDefinition;
 import cn.easyreport.dsl.ReportParserLexer;
 import cn.easyreport.dsl.ReportParserParser;
 import cn.easyreport.dsl.ReportParserParser.DatasetContext;
 import cn.easyreport.export.ReportRender;
+import cn.easyreport.exception.ReportFileException;
 import cn.easyreport.expression.ErrorInfo;
 import cn.easyreport.expression.ScriptErrorListener;
 import cn.easyreport.parser.ReportParser;
@@ -130,9 +130,6 @@ public class DesignerServletAction extends RenderPageServletAction {
 	
 	public void loadReport(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
 		String file=req.getParameter("file");
-		if(file==null){
-			throw new ReportDesignException("Report file can not be null.");
-		}
 		file=ReportUtils.decodeFileName(file);
 		Object obj=TempObjectCache.getObject(file);
 		if(obj!=null && obj instanceof ReportDefinition){
@@ -147,8 +144,9 @@ public class DesignerServletAction extends RenderPageServletAction {
 	
 	public void deleteReportFile(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
 		String file=req.getParameter("file");
-		if(file==null){
-			throw new ReportDesignException("Report file can not be null.");
+		// Delete callers send the raw report name, unlike load/save callers.
+		if(file==null || file.trim().isEmpty()){
+			throw new ReportFileException(400, "Invalid report file name.");
 		}
 		ReportProvider targetReportProvider=null;
 		for(ReportProvider provider:reportProviders){
@@ -158,16 +156,13 @@ public class DesignerServletAction extends RenderPageServletAction {
 			}
 		}
 		if(targetReportProvider==null){
-			throw new ReportDesignException("File ["+file+"] not found available report provider.");
+			throw new ReportFileException(400, "Invalid report provider.");
 		}
 		targetReportProvider.deleteReport(file);
 	}
 	
 	public void loadReportFile(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
 		String file=req.getParameter("file");
-		if(file==null){
-			throw new ReportDesignException("Report file can not be null.");
-		}
 		file=ReportUtils.decodeFileName(file);
 		ReportProvider targetReportProvider=null;
 		for(ReportProvider provider:reportProviders){
@@ -177,11 +172,11 @@ public class DesignerServletAction extends RenderPageServletAction {
 			}
 		}
 		if(targetReportProvider==null){
-			throw new ReportDesignException("File ["+file+"] not found available report provider.");
+			throw new ReportFileException(400, "Invalid report provider.");
 		}
 		InputStream inputStream=targetReportProvider.loadReport(file);
 		if(inputStream==null){
-			throw new ReportDesignException("File ["+file+"] not found.");
+			throw new ReportFileException(404, "Report file not found.");
 		}
 		try{
 			String content=IOUtils.toString(inputStream, "utf-8");
@@ -197,9 +192,6 @@ public class DesignerServletAction extends RenderPageServletAction {
 
 	public void downloadReportFile(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
 		String file=req.getParameter("file");
-		if(file==null){
-			throw new ReportDesignException("Report file can not be null.");
-		}
 		file=ReportUtils.decodeFileName(file);
 		ReportProvider targetReportProvider=null;
 		for(ReportProvider provider:reportProviders){
@@ -209,28 +201,32 @@ public class DesignerServletAction extends RenderPageServletAction {
 			}
 		}
 		if(targetReportProvider==null){
-			throw new ReportDesignException("File ["+file+"] not found available report provider.");
+			throw new ReportFileException(400, "Invalid report provider.");
 		}
 		InputStream inputStream=targetReportProvider.loadReport(file);
 		if(inputStream==null){
-			throw new ReportDesignException("File ["+file+"] not found.");
+			throw new ReportFileException(404, "Report file not found.");
 		}
-		String fileName=file;
-		if(fileName.startsWith(targetReportProvider.getPrefix())){
-			fileName=fileName.substring(targetReportProvider.getPrefix().length());
+		try{
+			String fileName=file;
+			if(fileName.startsWith(targetReportProvider.getPrefix())){
+				fileName=fileName.substring(targetReportProvider.getPrefix().length());
+			}
+			int slashIndex=fileName.lastIndexOf("/");
+			if(slashIndex>-1 && slashIndex<fileName.length()-1){
+				fileName=fileName.substring(slashIndex+1);
+			}
+			fileName=fileName.replace("\\", "/");
+			slashIndex=fileName.lastIndexOf("/");
+			if(slashIndex>-1 && slashIndex<fileName.length()-1){
+				fileName=fileName.substring(slashIndex+1);
+			}
+			resp.setContentType("application/octet-stream");
+			resp.setHeader("Content-Disposition","attachment;filename=\""+URLEncoder.encode(fileName,"UTF-8")+"\"");
+			IOUtils.copy(inputStream, resp.getOutputStream());
+		}finally{
+			IOUtils.closeQuietly(inputStream);
 		}
-		int slashIndex=fileName.lastIndexOf("/");
-		if(slashIndex>-1 && slashIndex<fileName.length()-1){
-			fileName=fileName.substring(slashIndex+1);
-		}
-		fileName=fileName.replace("\\", "/");
-		slashIndex=fileName.lastIndexOf("/");
-		if(slashIndex>-1 && slashIndex<fileName.length()-1){
-			fileName=fileName.substring(slashIndex+1);
-		}
-		resp.setContentType("application/octet-stream");
-		resp.setHeader("Content-Disposition","attachment;filename=\""+URLEncoder.encode(fileName,"UTF-8")+"\"");
-		IOUtils.copy(inputStream, resp.getOutputStream());
 	}
 	
 	
@@ -247,7 +243,7 @@ public class DesignerServletAction extends RenderPageServletAction {
 			}
 		}
 		if(targetReportProvider==null){
-			throw new ReportDesignException("File ["+file+"] not found available report provider.");
+			throw new ReportFileException(400, "Invalid report provider.");
 		}
 		targetReportProvider.saveReport(file, content);
 		InputStream inputStream=IOUtils.toInputStream(content,"utf-8");

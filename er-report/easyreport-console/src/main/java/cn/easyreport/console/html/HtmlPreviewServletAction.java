@@ -41,6 +41,7 @@ import cn.easyreport.cache.CacheUtils;
 import cn.easyreport.chart.ChartData;
 import cn.easyreport.console.MobileUtils;
 import cn.easyreport.console.RenderPageServletAction;
+import cn.easyreport.console.ReportFileResponses;
 import cn.easyreport.console.cache.TempObjectCache;
 import cn.easyreport.console.exception.ReportDesignException;
 import cn.easyreport.definition.Paper;
@@ -78,6 +79,9 @@ public class HtmlPreviewServletAction extends RenderPageServletAction {
 			try{
 				htmlReport=loadReport(req);
 			}catch(Exception ex){
+				if(ReportFileResponses.writeIfFileError(resp, ex)){
+					return;
+				}
 				if(!(ex instanceof ReportDesignException)){
 					ex.printStackTrace();					
 				}
