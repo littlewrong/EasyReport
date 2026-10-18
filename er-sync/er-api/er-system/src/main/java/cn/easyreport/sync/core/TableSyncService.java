@@ -174,7 +174,7 @@ public class TableSyncService {
             ddl.substring(0, Math.min(200, ddl.length())) + "...");
         log.debug("[TableSyncService] Full DDL: {}", ddl);
 
-        context.getTargetConnector().execute(ddl);
         logItem.setExecuteSql(ddl);
+        context.getTargetConnector().execute(ddl);
     }
 }
