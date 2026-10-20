@@ -224,13 +224,23 @@
           </el-col>
         </el-row>
 
+        <el-form-item label="分片库架构创建" prop="structureReuseMode">
+          <el-switch v-model="form.structureReuseMode" active-value="1" inactive-value="0" :disabled="!supportsShardedSchema" />
+          <div class="form-tip" v-if="!supportsShardedSchema">请选择 MySQL、TiDB、StarRocks、PostgreSQL、SQL Server 或 Oracle 源数据源。</div>
+          <div class="form-tip" v-else-if="form.structureReuseMode === '1'">
+            按库名或 Schema 名排序选择第一个匹配范围，只采集其表结构并用于所有匹配范围；多个模式共用一份结构，结构不同请拆分任务。
+          </div>
+          <div class="form-tip" v-else>关闭时逐库采集表结构。</div>
+        </el-form-item>
+
         <el-form-item label="源Schema模式" prop="sourceSchemaPattern">
           <el-input
             v-model="form.sourceSchemaPattern"
             type="textarea"
             :rows="2"
-            placeholder="多个模式用逗号分隔，支持通配符%，如: db_%, schema_2024%, test_db（可选，留空表示所有Schema）">
+            :placeholder="form.structureReuseMode === '1' ? '多个模式用逗号分隔，支持通配符%，留空范围见下方提示' : '多个模式用逗号分隔，支持通配符%，如: db_%, schema_2024%, test_db（可选，留空表示所有Schema）'">
           </el-input>
+          <div class="form-tip" v-if="form.structureReuseMode === '1'">{{ shardScopeHint }}</div>
           
         </el-form-item>
 
@@ -299,6 +309,14 @@
     <!-- 预览对话框 -->
     <el-dialog title="同步预览 - 匹配的表列表" :visible.sync="previewOpen" width="700px" append-to-body>
       <div v-loading="previewLoading">
+        <el-alert
+          v-if="previewTemplateSchema"
+          :title="'本次模板库：' + previewTemplateSchema"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 15px;"
+        />
         <el-alert
           v-if="previewTables.length > 0"
           :title="'共匹配到 ' + previewSchemaCount + ' 个库，' + previewTableCount + ' 张表'"
@@ -430,6 +448,15 @@
           show-icon
           style="margin-bottom: 20px;">
         </el-alert>
+
+        <el-alert
+          v-if="progressTemplateSchema"
+          :title="'本次模板库：' + progressTemplateSchema"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 15px;"
+        />
 
         <div v-if="progressData.syncProgress" style="padding: 0 20px;">
           <div style="margin-bottom: 15px;">
@@ -582,6 +609,7 @@ export default {
       previewTables: [],
       previewSchemaCount: 0,
       previewTableCount: 0,
+      previewTemplateSchema: "",
       // 日志弹出层
       logOpen: false,
       logLoading: false,
@@ -637,6 +665,38 @@ export default {
     };
   },
   computed: {
+    sourceDatasourceType() {
+      const source = this.datasourceOptions.find(item => String(item.datasourceId) === String(this.form.sourceDatasourceId));
+      return source ? String(source.datasourceType || '').toUpperCase() : '';
+    },
+    supportsShardedSchema() {
+      return ['MYSQL', 'TIDB', 'STARROCKS', 'POSTGRESQL', 'SQLSERVER', 'ORACLE'].includes(this.sourceDatasourceType);
+    },
+    shardScopeHint() {
+      if (this.sourceDatasourceType === 'POSTGRESQL') {
+        return '匹配当前连接数据库内的 Schema，留空默认 public。';
+      }
+      if (this.sourceDatasourceType === 'SQLSERVER') {
+        return '匹配数据库名，采集首库 dbo 下的表结构；留空默认当前数据库。';
+      }
+      if (this.sourceDatasourceType === 'ORACLE') {
+        return '匹配用户 / Owner，留空默认当前用户。';
+      }
+      return '匹配数据库名，留空匹配所有可见数据库。';
+    },
+    progressTemplateSchema() {
+      if (this.progressInfo.templateSchema) {
+        return this.progressInfo.templateSchema;
+      }
+      if (!['2', '3', '4'].includes(this.progressData.syncStatus)) {
+        return '';
+      }
+      try {
+        return JSON.parse(this.progressData.lastSyncResult || '{}').templateSchema || '';
+      } catch (e) {
+        return '';
+      }
+    },
     /** 解析进度信息 */
     progressInfo() {
       if (!this.progressData.syncProgress) {
@@ -724,6 +784,7 @@ export default {
         sourceDatasourceId: null,
         sourceSchemaPattern: null,
         sourceTablePattern: null,
+        structureReuseMode: "0",
         targetDatasourceId: null,
         ifExistsAction: "0",
         status: "0",
@@ -758,7 +819,10 @@ export default {
       this.reset();
       const syncId = row.syncId || this.ids;
       getDataSync(syncId).then(response => {
-        this.form = response.data;
+        this.form = {
+          ...response.data,
+          structureReuseMode: response.data.structureReuseMode || "0"
+        };
         this.open = true;
         this.title = "修改同步任务";
       });
@@ -768,7 +832,10 @@ export default {
       this.reset();
       const syncId = row.syncId;
       getDataSync(syncId).then(response => {
-        this.form = response.data;
+        this.form = {
+          ...response.data,
+          structureReuseMode: response.data.structureReuseMode || "0"
+        };
         this.form.syncId = null;
         this.form.syncCode = null;
         this.form.syncName = (this.form.syncName || '') + '_copy';
@@ -784,6 +851,9 @@ export default {
           if (this.form.sourceDatasourceId === this.form.targetDatasourceId) {
             this.$modal.msgError("源数据源和目标数据源不能相同");
             return;
+          }
+          if (!this.supportsShardedSchema) {
+            this.form.structureReuseMode = "0";
           }
           if (this.form.syncId != null) {
             updateDataSync(this.form).then(response => {
@@ -824,6 +894,7 @@ export default {
     },
     /** 源数据源变更 */
     handleSourceChange(val) {
+      this.form.structureReuseMode = "0";
       // 清空目标数据源（如果与源相同）
       if (this.form.targetDatasourceId === val) {
         this.form.targetDatasourceId = null;
@@ -836,11 +907,13 @@ export default {
       this.previewTables = [];
       this.previewSchemaCount = 0;
       this.previewTableCount = 0;
+      this.previewTemplateSchema = "";
       previewSync(row.syncId).then(response => {
         const result = response.data || {};
         this.previewTables = result.tables || [];
         this.previewSchemaCount = result.schemaCount || 0;
         this.previewTableCount = result.tableCount || 0;
+        this.previewTemplateSchema = result.templateSchema || "";
         this.previewLoading = false;
       }).catch(() => {
         this.previewLoading = false;
@@ -1068,6 +1141,12 @@ export default {
 </script>
 
 <style scoped>
+.form-tip {
+  margin-top: 4px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 20px;
+}
 /* 缩小 textarea placeholder 字体大小 */
 ::v-deep .el-textarea__inner::placeholder {
   font-size: 10px;

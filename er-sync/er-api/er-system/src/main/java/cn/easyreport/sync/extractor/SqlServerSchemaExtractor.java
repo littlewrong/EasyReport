@@ -7,7 +7,14 @@ import cn.easyreport.sync.model.TableMeta;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 /**
  * SQL Server schema extractor.
@@ -78,6 +85,182 @@ public class SqlServerSchemaExtractor implements SchemaExtractor {
         }
 
         return tables;
+    }
+
+    @Override
+    public List<TableMeta> listTablesUsingFirstSchema(String schemaPattern, String tablePattern) throws Exception {
+        return listFirstSchemaTables(schemaPattern, tablePattern, true);
+    }
+
+    @Override
+    public List<TableMeta> listTableNamesUsingFirstSchema(String schemaPattern, String tablePattern) throws Exception {
+        return listFirstSchemaTables(schemaPattern, tablePattern, false);
+    }
+
+    private List<TableMeta> listFirstSchemaTables(String schemaPattern, String tablePattern, boolean includeMetadata) throws Exception {
+        Class.forName(datasource.getDriverClass());
+        try (Connection conn = DriverManager.getConnection(datasource.getJdbcUrl(), datasource.getUsername(), datasource.getPassword())) {
+            FirstScopeDiscovery discovery = discoverFirstScope(conn, schemaPattern, tablePattern);
+            List<TableMeta> templates = new ArrayList<>();
+            if (!discovery.scopes.isEmpty()) {
+                String catalog = discovery.scopes.get(0);
+                for (String tableName : discovery.tables) {
+                    TableMeta table = new TableMeta();
+                    table.setDatabase(catalog);
+                    table.setSchema("dbo");
+                    table.setName(tableName);
+                    if (includeMetadata) {
+                        populateCatalogTable(conn, table);
+                    }
+                    templates.add(table);
+                }
+            }
+            return FirstSchemaSupport.expand(discovery.scopes, templates, includeMetadata, true);
+        }
+    }
+
+    private FirstScopeDiscovery discoverFirstScope(Connection conn, String schemaPattern, String tablePattern) throws Exception {
+        List<String> schemas = splitPattern(schemaPattern);
+        List<String> params = new ArrayList<>();
+        StringBuilder sql = new StringBuilder("SELECT name FROM sys.databases WHERE state=0 AND HAS_DBACCESS(name)=1");
+        if (schemas.isEmpty()) {
+            // 默认仅选择连接当前数据库，避免空模式意外扩大为服务器上的所有数据库。
+            String catalog = conn.getCatalog();
+            if (catalog == null || catalog.trim().isEmpty()) {
+                throw new IllegalArgumentException("SQL Server 源 Schema 为空时，必须在连接中配置默认数据库");
+            }
+            sql.append(" AND name = ?");
+            params.add(catalog);
+        } else {
+            appendFirstScopePatterns(sql, params, "name", schemas);
+        }
+        sql.append(" ORDER BY name");
+        List<String> scopes = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            bindFirstScopePatterns(ps, params);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) scopes.add(rs.getString("name"));
+            }
+        }
+        List<String> tableNames = new ArrayList<>();
+        if (scopes.isEmpty()) return new FirstScopeDiscovery(scopes, tableNames);
+
+        String firstCatalog = scopes.get(0);
+        conn.setCatalog(firstCatalog);
+        sql = new StringBuilder("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES "
+            + "WHERE TABLE_TYPE='BASE TABLE' AND TABLE_CATALOG=? AND TABLE_SCHEMA='dbo'");
+        params = new ArrayList<>();
+        params.add(firstCatalog);
+        appendFirstScopePatterns(sql, params, "TABLE_NAME", splitPattern(tablePattern));
+        sql.append(" ORDER BY TABLE_NAME");
+        try (PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            bindFirstScopePatterns(ps, params);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) tableNames.add(rs.getString("TABLE_NAME"));
+            }
+        }
+        if (tableNames.isEmpty()) {
+            throw new IllegalStateException("首个匹配数据库 " + firstCatalog
+                + " 的 dbo 未匹配到任何表，请检查源表模式或调整源 Schema 范围");
+        }
+        return new FirstScopeDiscovery(scopes, tableNames);
+    }
+
+    private void populateCatalogTable(Connection conn, TableMeta table) throws SQLException {
+        String catalog = table.getDatabase();
+        String schema = table.getSchema();
+        String name = table.getName();
+        String commentSql = "SELECT CAST(ep.value AS nvarchar(max)) AS REMARKS FROM sys.tables t "
+            + "JOIN sys.schemas s ON s.schema_id=t.schema_id "
+            + "LEFT JOIN sys.extended_properties ep ON ep.class=1 AND ep.major_id=t.object_id "
+            + "AND ep.minor_id=0 AND ep.name='MS_Description' WHERE s.name=? AND t.name=?";
+        try (PreparedStatement ps = conn.prepareStatement(commentSql)) {
+            ps.setString(1, schema);
+            ps.setString(2, name);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) table.setComment(rs.getString("REMARKS"));
+            }
+        }
+
+        DatabaseMetaData metadata = conn.getMetaData();
+        List<ColumnMeta> columns = new ArrayList<>();
+        String escape = metadata.getSearchStringEscape();
+        String tablePattern = escape == null || escape.isEmpty() ? name
+            : name.replace(escape, escape + escape).replace("%", escape + "%").replace("_", escape + "_");
+        try (ResultSet rs = metadata.getColumns(catalog, schema, tablePattern, "%")) {
+            while (rs.next()) {
+                ColumnMeta column = new ColumnMeta();
+                column.setName(rs.getString("COLUMN_NAME"));
+                column.setColumnType(formatSqlServerType(rs.getString("TYPE_NAME"), rs.getInt("COLUMN_SIZE"), rs.getInt("DECIMAL_DIGITS")));
+                column.setNullable("YES".equalsIgnoreCase(rs.getString("IS_NULLABLE")));
+                column.setDefaultValue(normalizeSqlServerDefault(rs.getString("COLUMN_DEF")));
+                column.setComment(rs.getString("REMARKS"));
+                column.setAutoIncrement("YES".equalsIgnoreCase(rs.getString("IS_AUTOINCREMENT")));
+                column.setOrdinalPosition(rs.getInt("ORDINAL_POSITION"));
+                columns.add(column);
+            }
+        }
+        columns.sort(Comparator.comparing(ColumnMeta::getOrdinalPosition));
+        table.setColumns(columns);
+
+        SortedMap<Integer, String> primaryKey = new TreeMap<>();
+        Set<String> primaryIndexNames = new HashSet<>();
+        try (ResultSet rs = metadata.getPrimaryKeys(catalog, schema, name)) {
+            while (rs.next()) {
+                primaryKey.put(rs.getInt("KEY_SEQ"), rs.getString("COLUMN_NAME"));
+                String primaryName = rs.getString("PK_NAME");
+                if (primaryName != null) primaryIndexNames.add(primaryName);
+            }
+        }
+        table.setPrimaryKey(new ArrayList<>(primaryKey.values()));
+
+        Map<String, IndexMeta> indexes = new LinkedHashMap<>();
+        Map<String, SortedMap<Integer, String>> indexColumns = new LinkedHashMap<>();
+        try (ResultSet rs = metadata.getIndexInfo(catalog, schema, name, false, false)) {
+            while (rs.next()) {
+                String indexName = rs.getString("INDEX_NAME");
+                String columnName = rs.getString("COLUMN_NAME");
+                if (indexName == null || columnName == null || primaryIndexNames.contains(indexName)) continue;
+                IndexMeta index = indexes.get(indexName);
+                if (index == null) {
+                    index = new IndexMeta();
+                    index.setName(indexName);
+                    index.setUnique(!rs.getBoolean("NON_UNIQUE"));
+                    indexes.put(indexName, index);
+                }
+                indexColumns.computeIfAbsent(indexName, key -> new TreeMap<>())
+                    .put(rs.getInt("ORDINAL_POSITION"), columnName);
+            }
+        }
+        for (Map.Entry<String, IndexMeta> entry : indexes.entrySet()) {
+            entry.getValue().setColumns(new ArrayList<>(indexColumns.get(entry.getKey()).values()));
+        }
+        table.setIndexes(new ArrayList<>(indexes.values()));
+    }
+
+    private void appendFirstScopePatterns(StringBuilder sql, List<String> params, String column, List<String> patterns) {
+        if (patterns.isEmpty()) return;
+        sql.append(" AND (");
+        for (int i = 0; i < patterns.size(); i++) {
+            if (i > 0) sql.append(" OR ");
+            sql.append(column).append(" LIKE ? ESCAPE '\\'");
+            params.add(patterns.get(i));
+        }
+        sql.append(")");
+    }
+
+    private void bindFirstScopePatterns(PreparedStatement ps, List<String> params) throws SQLException {
+        for (int i = 0; i < params.size(); i++) ps.setString(i + 1, params.get(i));
+    }
+
+    private static class FirstScopeDiscovery {
+        private final List<String> scopes;
+        private final List<String> tables;
+
+        private FirstScopeDiscovery(List<String> scopes, List<String> tables) {
+            this.scopes = scopes;
+            this.tables = tables;
+        }
     }
 
     private List<String> splitPattern(String pattern) {

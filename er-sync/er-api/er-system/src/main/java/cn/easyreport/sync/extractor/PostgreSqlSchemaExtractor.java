@@ -67,6 +67,84 @@ public class PostgreSqlSchemaExtractor implements SchemaExtractor {
         return result;
     }
 
+
+    @Override
+    public List<TableMeta> listTablesUsingFirstSchema(String schemaPattern, String tablePattern) throws Exception {
+        return listTablesUsingFirstSchema(schemaPattern, tablePattern, true);
+    }
+
+    @Override
+    public List<TableMeta> listTableNamesUsingFirstSchema(String schemaPattern, String tablePattern) throws Exception {
+        return listTablesUsingFirstSchema(schemaPattern, tablePattern, false);
+    }
+
+    private List<TableMeta> listTablesUsingFirstSchema(String schemaPattern, String tablePattern, boolean includeMetadata) throws Exception {
+        try (Connection conn = openConnection()) {
+            List<String> scopes = queryMatchingSchemas(conn, schemaPattern);
+            List<TableMeta> templates = new ArrayList<>();
+            if (!scopes.isEmpty()) {
+                String firstSchema = scopes.get(0);
+                for (String name : queryFirstSchemaTableNames(conn, firstSchema, tablePattern)) {
+                    if (includeMetadata) {
+                        templates.add(extractTable(conn, firstSchema, name));
+                    } else {
+                        TableMeta table = new TableMeta();
+                        table.setSchema(firstSchema);
+                        table.setName(name);
+                        templates.add(table);
+                    }
+                }
+            }
+            return FirstSchemaSupport.expand(scopes, templates, includeMetadata, false);
+        }
+    }
+
+    private List<String> queryMatchingSchemas(Connection conn, String schemaPattern) throws Exception {
+        List<String> patterns = splitPattern(schemaPattern);
+        if (patterns.isEmpty()) patterns.add("public");
+        StringBuilder sql = new StringBuilder("SELECT schema_name FROM information_schema.schemata WHERE 1=1");
+        List<String> params = new ArrayList<>();
+        appendLikePatterns(sql, params, "schema_name", patterns);
+        sql.append(" ORDER BY schema_name");
+        List<String> scopes = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            for (int i = 0; i < params.size(); i++) ps.setString(i + 1, params.get(i));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) scopes.add(rs.getString("schema_name"));
+            }
+        }
+        return scopes;
+    }
+
+    private List<String> queryFirstSchemaTableNames(Connection conn, String schema, String tablePattern) throws Exception {
+        StringBuilder sql = new StringBuilder(
+            "SELECT table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema=?");
+        List<String> params = new ArrayList<>();
+        params.add(schema);
+        appendLikePatterns(sql, params, "table_name", splitPattern(tablePattern));
+        sql.append(" ORDER BY table_name");
+        List<String> names = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            for (int i = 0; i < params.size(); i++) ps.setString(i + 1, params.get(i));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) names.add(rs.getString("table_name"));
+            }
+        }
+        return names;
+    }
+
+    private void appendLikePatterns(StringBuilder sql, List<String> params, String column, List<String> patterns) {
+        if (patterns.isEmpty()) return;
+        sql.append(" AND (");
+        for (int i = 0; i < patterns.size(); i++) {
+            if (i > 0) sql.append(" OR ");
+            sql.append(column).append(" LIKE ?");
+            params.add(patterns.get(i));
+        }
+        sql.append(")");
+    }
+
+
     private List<String> splitPattern(String pattern) {
         List<String> result = new ArrayList<>();
         if (pattern == null || pattern.trim().isEmpty()) return result;
@@ -105,7 +183,7 @@ public class PostgreSqlSchemaExtractor implements SchemaExtractor {
         // 获取主键
         List<String> pkColumns = new ArrayList<>();
         String pkSql = "SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey) " +
-                       "WHERE i.indrelid = (? || '.' || ?)::regclass AND i.indisprimary ORDER BY array_position(i.indkey, a.attnum)";
+                       "WHERE i.indrelid = (quote_ident(?) || '.' || quote_ident(?))::regclass AND i.indisprimary ORDER BY array_position(i.indkey, a.attnum)";
         try (PreparedStatement ps = conn.prepareStatement(pkSql)) {
             ps.setString(1, schema);
             ps.setString(2, tableName);

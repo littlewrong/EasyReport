@@ -43,6 +43,10 @@ public class ErDataSync extends BaseEntity
     @Excel(name = "源表匹配模式")
     private String sourceTablePattern;
 
+    /** 分片库架构创建（0关闭 1开启） */
+    @Excel(name = "分片库架构创建", readConverterExp = "0=关闭,1=开启")
+    private String structureReuseMode;
+
     /** 匹配方式：0 模糊 1 精确 */
     @Excel(name = "匹配方式", readConverterExp = "0=模糊,1=精确")
     private String matchType;
@@ -152,6 +156,16 @@ public class ErDataSync extends BaseEntity
     public String getSourceTablePattern()
     {
         return sourceTablePattern;
+    }
+
+    public void setStructureReuseMode(String structureReuseMode)
+    {
+        this.structureReuseMode = structureReuseMode;
+    }
+
+    public String getStructureReuseMode()
+    {
+        return structureReuseMode;
     }
 
     public void setMatchType(String matchType)
@@ -273,6 +287,7 @@ public class ErDataSync extends BaseEntity
             .append("sourceDatasourceId", getSourceDatasourceId())
             .append("sourceSchemaPattern", getSourceSchemaPattern())
             .append("sourceTablePattern", getSourceTablePattern())
+            .append("structureReuseMode", getStructureReuseMode())
             .append("matchType", getMatchType())
             .append("targetDatasourceId", getTargetDatasourceId())
             .append("ifExistsAction", getIfExistsAction())

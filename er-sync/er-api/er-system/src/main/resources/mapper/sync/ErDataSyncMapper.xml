@@ -12,6 +12,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="sourceDatasourceName" column="source_datasource_name" />
         <result property="sourceSchemaPattern" column="source_schema_pattern" />
         <result property="sourceTablePattern" column="source_table_pattern" />
+        <result property="structureReuseMode" column="structure_reuse_mode" />
         <result property="targetDatasourceId" column="target_datasource_id" />
         <result property="targetDatasourceName" column="target_datasource_name" />
         <result property="ifExistsAction"     column="if_exists_action"     />
@@ -31,6 +32,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <sql id="selectErDataSyncVo">
         select s.sync_id, s.sync_name, s.sync_code, s.source_datasource_id, s.source_schema_pattern, s.source_table_pattern,
+               s.structure_reuse_mode,
                s.target_datasource_id, s.if_exists_action, s.sync_status, s.sync_progress, s.last_sync_time, s.last_sync_result,
                s.cron_expression, s.job_id, s.status, s.create_by, s.create_time, s.update_by, s.update_time, s.remark,
                sd.datasource_name as source_datasource_name,
@@ -87,6 +89,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="sourceDatasourceId != null">source_datasource_id,</if>
             <if test="sourceSchemaPattern != null and sourceSchemaPattern != ''">source_schema_pattern,</if>
             <if test="sourceTablePattern != null and sourceTablePattern != ''">source_table_pattern,</if>
+            <if test="structureReuseMode != null">structure_reuse_mode,</if>
             <if test="targetDatasourceId != null">target_datasource_id,</if>
             <if test="ifExistsAction != null">if_exists_action,</if>
             <if test="syncStatus != null">sync_status,</if>
@@ -104,6 +107,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="sourceDatasourceId != null">#{sourceDatasourceId},</if>
             <if test="sourceSchemaPattern != null and sourceSchemaPattern != ''">#{sourceSchemaPattern},</if>
             <if test="sourceTablePattern != null and sourceTablePattern != ''">#{sourceTablePattern},</if>
+            <if test="structureReuseMode != null">#{structureReuseMode},</if>
             <if test="targetDatasourceId != null">#{targetDatasourceId},</if>
             <if test="ifExistsAction != null">#{ifExistsAction},</if>
             <if test="syncStatus != null">#{syncStatus},</if>
@@ -126,6 +130,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="sourceDatasourceId != null">source_datasource_id = #{sourceDatasourceId},</if>
             <if test="sourceSchemaPattern != null">source_schema_pattern = #{sourceSchemaPattern},</if>
             <if test="sourceTablePattern != null and sourceTablePattern != ''">source_table_pattern = #{sourceTablePattern},</if>
+            <if test="structureReuseMode != null">structure_reuse_mode = #{structureReuseMode},</if>
             <if test="targetDatasourceId != null">target_datasource_id = #{targetDatasourceId},</if>
             <if test="ifExistsAction != null">if_exists_action = #{ifExistsAction},</if>
             <if test="syncStatus != null">sync_status = #{syncStatus},</if>

@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.alibaba.fastjson2.JSON;
 import cn.easyreport.common.utils.DateUtils;
 import cn.easyreport.sync.domain.ErDataTransfer;
 import cn.easyreport.sync.domain.ErDataTransferLog;
@@ -25,12 +24,17 @@ import cn.easyreport.sync.mapper.ErDataTransferLogMapper;
 import cn.easyreport.sync.mapper.ErDataTransferProgressMapper;
 import cn.easyreport.sync.domain.ErDataTransferProgress;
 import cn.easyreport.sync.core.SyncProgressCallback;
+import cn.easyreport.sync.core.SyncProgressPayload;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Abstract base class for data sync executors.
  * Subclasses implement database-specific behavior.
  */
 public abstract class DataSyncExecutor {
+
+    private static final Logger log = LoggerFactory.getLogger(DataSyncExecutor.class);
 
     /**
      * 停止检查器接口
@@ -1282,18 +1286,14 @@ public abstract class DataSyncExecutor {
     private void updateProgressWithTables(Long transferId, int current, int total, String message,
                                           List<String> pendingTables, List<String> completedTables) {
         if (transferId == null) return;
-        Map<String, Object> progress = new HashMap<>();
-        progress.put("current", current);
-        progress.put("total", total);
-        progress.put("percent", (total > 0 && current >= 0) ? (current * 100 / total) : 0);
-        progress.put("message", message);
-        progress.put("pendingTables", pendingTables != null ? pendingTables : new ArrayList<>());
-        progress.put("completedTables", completedTables != null ? completedTables : new ArrayList<>());
-
         ErDataTransfer upd = new ErDataTransfer();
         upd.setTransferId(transferId);
-        upd.setSyncProgress(JSON.toJSONString(progress));
-        transferMapper.updateErDataTransfer(upd);
+        upd.setSyncProgress(SyncProgressPayload.withTables(current, total, message, pendingTables, completedTables));
+        try {
+            transferMapper.updateErDataTransfer(upd);
+        } catch (RuntimeException e) {
+            log.warn("Unable to save display progress for transfer {}, continuing data sync", transferId, e);
+        }
     }
 
     protected Object convertColumnValue(Object value, String sourceTypeName) {

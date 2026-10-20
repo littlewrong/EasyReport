@@ -582,9 +582,16 @@
 
         <!-- 表列表显示 -->
         <div v-if="syncProgressInfo.pendingTables || syncProgressInfo.completedTables" style="margin-top: 20px; padding: 0 20px;">
+          <el-alert
+            v-if="syncProgressInfo.tableListsTruncated"
+            title="表数量较多，列表仅展示部分待同步表和最近完成表；下方计数为实际总数，详细结果请查看同步日志。"
+            type="info"
+            :closable="false"
+            style="margin-bottom: 10px;">
+          </el-alert>
           <el-tabs type="border-card" style="box-shadow: none;">
-            <el-tab-pane v-if="syncProgressInfo.completedTables && syncProgressInfo.completedTables.length > 0">
-              <span slot="label"><i class="el-icon-check"></i> 已同步 ({{ syncProgressInfo.completedTables.length }})</span>
+            <el-tab-pane v-if="syncProgressInfo.completedTableCount > 0">
+              <span slot="label"><i class="el-icon-check"></i> 已同步 ({{ syncProgressInfo.completedTableCount }})</span>
               <el-table
                 :data="syncProgressInfo.completedTables"
                 max-height="200"
@@ -599,8 +606,8 @@
                 </el-table-column>
               </el-table>
             </el-tab-pane>
-            <el-tab-pane v-if="syncProgressInfo.pendingTables && syncProgressInfo.pendingTables.length > 0">
-              <span slot="label"><i class="el-icon-time"></i> 待同步 ({{ syncProgressInfo.pendingTables.length }})</span>
+            <el-tab-pane v-if="syncProgressInfo.pendingTableCount > 0">
+              <span slot="label"><i class="el-icon-time"></i> 待同步 ({{ syncProgressInfo.pendingTableCount }})</span>
               <el-table
                 :data="syncProgressInfo.pendingTables"
                 max-height="200"
@@ -746,7 +753,7 @@ export default {
     /** 解析同步进度信息 */
     syncProgressInfo() {
       if (!this.syncProgressData.syncProgress) {
-        return { current: 0, total: 0, percent: 0, message: '', pendingTables: [], completedTables: [] };
+        return { current: 0, total: 0, percent: 0, message: '', pendingTables: [], completedTables: [], pendingTableCount: 0, completedTableCount: 0, tableListsTruncated: false };
       }
       try {
         const parsed = JSON.parse(this.syncProgressData.syncProgress);
@@ -756,10 +763,13 @@ export default {
           percent: parsed.percent || 0,
           message: parsed.message || '',
           pendingTables: parsed.pendingTables || [],
-          completedTables: parsed.completedTables || []
+          completedTables: parsed.completedTables || [],
+          pendingTableCount: parsed.pendingTableCount != null ? parsed.pendingTableCount : (parsed.pendingTables || []).length,
+          completedTableCount: parsed.completedTableCount != null ? parsed.completedTableCount : (parsed.completedTables || []).length,
+          tableListsTruncated: parsed.tableListsTruncated === true
         };
       } catch (e) {
-        return { current: 0, total: 0, percent: 0, message: '', pendingTables: [], completedTables: [] };
+        return { current: 0, total: 0, percent: 0, message: '', pendingTables: [], completedTables: [], pendingTableCount: 0, completedTableCount: 0, tableListsTruncated: false };
       }
     }
   },

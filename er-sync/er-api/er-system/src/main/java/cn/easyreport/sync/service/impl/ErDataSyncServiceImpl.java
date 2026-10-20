@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.alibaba.fastjson2.JSON;
 import cn.easyreport.common.utils.DateUtils;
 import cn.easyreport.common.utils.StringUtils;
+import cn.easyreport.common.exception.ServiceException;
 import cn.easyreport.sync.domain.ErDataSync;
 import cn.easyreport.sync.domain.ErDataSyncLog;
 import cn.easyreport.sync.domain.ErDatasource;
@@ -31,6 +32,9 @@ import cn.easyreport.sync.mapper.ErDatasourceMapper;
 import cn.easyreport.sync.service.IErDataSyncService;
 import cn.easyreport.sync.core.SchemaSyncExecutor;
 import cn.easyreport.sync.model.SyncResult;
+import cn.easyreport.sync.model.TableMeta;
+import cn.easyreport.sync.extractor.ExtendedExtractorFactory;
+import cn.easyreport.sync.extractor.FirstSchemaSupport;
 import cn.easyreport.quartz.service.ISysJobService;
 import cn.easyreport.quartz.domain.SysJob;
 
@@ -393,7 +397,10 @@ public class ErDataSyncServiceImpl implements IErDataSyncService
 
             updateSync.setSyncStatus(syncResult.isSuccess() ? "2" : "3");
             updateSync.setLastSyncTime(DateUtils.getNowDate());
-            updateSync.setLastSyncResult("{\"message\":\"" + syncResult.getMessage() + "\"}");
+            Map<String, Object> syncSummary = new HashMap<>();
+            syncSummary.put("message", syncResult.getMessage());
+            syncSummary.put("templateSchema", syncResult.getTemplateSchema());
+            updateSync.setLastSyncResult(JSON.toJSONString(syncSummary));
             erDataSyncMapper.updateErDataSync(updateSync);
 
             result.put("success", syncResult.isSuccess());
@@ -445,6 +452,11 @@ public class ErDataSyncServiceImpl implements IErDataSyncService
             result.put("schemaCount", 0);
             result.put("tableCount", 0);
             return result;
+        }
+
+        if ("1".equals(syncTask.getStructureReuseMode()))
+        {
+            return previewShardedSchemas(syncTask, sourceDatasource);
         }
 
         Connection conn = null;
@@ -744,6 +756,42 @@ public class ErDataSyncServiceImpl implements IErDataSyncService
     }
 
     /**
+     * Preview the same shard/table combinations that the executor will create,
+     * without reading column or index metadata.
+     */
+    private Map<String, Object> previewShardedSchemas(ErDataSync task, ErDatasource source)
+    {
+        try
+        {
+            List<TableMeta> plannedTables = ExtendedExtractorFactory.build(source).listTableNamesUsingFirstSchema(
+                task.getSourceSchemaPattern(), task.getSourceTablePattern());
+            List<Map<String, String>> tables = new ArrayList<>();
+            Set<String> schemas = new HashSet<>();
+            for (TableMeta table : plannedTables)
+            {
+                String sourceScope = FirstSchemaSupport.scopeOf(table, source.getDatasourceType());
+                schemas.add(sourceScope);
+                Map<String, String> item = new HashMap<>();
+                item.put("schemaName", sourceScope);
+                item.put("tableName", table.getName());
+                tables.add(item);
+            }
+            Map<String, Object> result = new HashMap<>();
+            result.put("tables", tables);
+            result.put("schemaCount", schemas.size());
+            result.put("tableCount", tables.size());
+            result.put("templateSchema", plannedTables.isEmpty() ? null
+                : FirstSchemaSupport.scopeOf(plannedTables.get(0), source.getDatasourceType()));
+            return result;
+        }
+        catch (Exception e)
+        {
+            log.error("分片库架构预览失败", e);
+            throw new ServiceException("分片库架构预览失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 异步任务执行逻辑
      *
      * @param syncId 同步任务ID
@@ -836,6 +884,7 @@ public class ErDataSyncServiceImpl implements IErDataSyncService
             resultMap.put("message", syncResult.getMessage());
             resultMap.put("totalCount", syncResult.getTotalCount());
             resultMap.put("successCount", syncResult.getSuccessCount());
+            resultMap.put("templateSchema", syncResult.getTemplateSchema());
             updateSync.setLastSyncResult(JSON.toJSONString(resultMap));
 
             // 更新最终进度（同步完成后不再需要存储表列表，避免超出字段长度）
@@ -844,6 +893,7 @@ public class ErDataSyncServiceImpl implements IErDataSyncService
             finalProgress.put("total", syncResult.getTotalCount());
             finalProgress.put("percent", syncResult.getTotalCount() > 0 ? 100 : 0);
             finalProgress.put("message", syncResult.getMessage());
+            finalProgress.put("templateSchema", syncResult.getTemplateSchema());
             updateSync.setSyncProgress(JSON.toJSONString(finalProgress));
 
             erDataSyncMapper.updateErDataSync(updateSync);

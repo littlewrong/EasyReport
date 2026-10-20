@@ -8,6 +8,7 @@ import cn.easyreport.sync.model.TableMeta;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Oracle Schema 提取器
@@ -78,6 +79,109 @@ public class OracleSchemaExtractor implements SchemaExtractor {
             }
         }
         return result;
+    }
+
+    @Override
+    public List<TableMeta> listTablesUsingFirstSchema(String schemaPattern, String tablePattern) throws Exception {
+        return listFirstSchemaTables(schemaPattern, tablePattern, true);
+    }
+
+    @Override
+    public List<TableMeta> listTableNamesUsingFirstSchema(String schemaPattern, String tablePattern) throws Exception {
+        return listFirstSchemaTables(schemaPattern, tablePattern, false);
+    }
+
+    private List<TableMeta> listFirstSchemaTables(String schemaPattern, String tablePattern, boolean includeMetadata) throws Exception {
+        try (Connection conn = openConnection()) {
+            FirstScopeDiscovery discovery = discoverFirstScope(conn, schemaPattern, tablePattern);
+            List<TableMeta> templates = new ArrayList<>();
+            if (!discovery.scopes.isEmpty()) {
+                String owner = discovery.scopes.get(0);
+                for (String tableName : discovery.tables) {
+                    if (includeMetadata) {
+                        templates.add(extractTable(conn, owner, tableName));
+                    } else {
+                        TableMeta table = new TableMeta();
+                        table.setSchema(owner);
+                        table.setName(tableName);
+                        templates.add(table);
+                    }
+                }
+            }
+            return FirstSchemaSupport.expand(discovery.scopes, templates, includeMetadata, false);
+        }
+    }
+
+    private FirstScopeDiscovery discoverFirstScope(Connection conn, String schemaPattern, String tablePattern) throws Exception {
+        List<String> schemas = splitPattern(schemaPattern);
+        List<String> params = new ArrayList<>();
+        StringBuilder sql = new StringBuilder("SELECT USERNAME FROM ALL_USERS WHERE 1=1");
+        if (schemas.isEmpty()) {
+            // 空模式沿用普通模式的当前用户名，使用等号避免用户名里的下划线变成通配符。
+            String username = ds.getUsername();
+            if (username == null || username.trim().isEmpty()) {
+                throw new IllegalArgumentException("Oracle 源 Schema 为空时，必须配置源数据源用户名");
+            }
+            sql.append(" AND USERNAME = ?");
+            params.add(username.toUpperCase(Locale.ROOT));
+        } else {
+            schemas.replaceAll(value -> value.toUpperCase(Locale.ROOT));
+            appendFirstScopePatterns(sql, params, "USERNAME", schemas);
+        }
+        sql.append(" ORDER BY USERNAME");
+        List<String> scopes = new ArrayList<>();
+        try (PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            bindFirstScopePatterns(ps, params);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) scopes.add(rs.getString("USERNAME"));
+            }
+        }
+        List<String> tableNames = new ArrayList<>();
+        if (scopes.isEmpty()) return new FirstScopeDiscovery(scopes, tableNames);
+
+        List<String> tablePatterns = splitPattern(tablePattern);
+        tablePatterns.replaceAll(value -> value.toUpperCase(Locale.ROOT));
+        sql = new StringBuilder("SELECT TABLE_NAME FROM ALL_TABLES WHERE OWNER = ?");
+        params = new ArrayList<>();
+        params.add(scopes.get(0));
+        appendFirstScopePatterns(sql, params, "TABLE_NAME", tablePatterns);
+        sql.append(" ORDER BY TABLE_NAME");
+        try (PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            bindFirstScopePatterns(ps, params);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) tableNames.add(rs.getString("TABLE_NAME"));
+            }
+        }
+        if (tableNames.isEmpty()) {
+            throw new IllegalStateException("首个匹配 Schema " + scopes.get(0)
+                + " 未匹配到任何表，请检查源表模式或调整源 Schema 范围");
+        }
+        return new FirstScopeDiscovery(scopes, tableNames);
+    }
+
+    private void appendFirstScopePatterns(StringBuilder sql, List<String> params, String column, List<String> patterns) {
+        if (patterns.isEmpty()) return;
+        sql.append(" AND (");
+        for (int i = 0; i < patterns.size(); i++) {
+            if (i > 0) sql.append(" OR ");
+            sql.append(column).append(" LIKE ? ESCAPE '\\'");
+            params.add(patterns.get(i));
+        }
+        sql.append(")");
+    }
+
+    private void bindFirstScopePatterns(PreparedStatement ps, List<String> params) throws SQLException {
+        for (int i = 0; i < params.size(); i++) ps.setString(i + 1, params.get(i));
+    }
+
+    private static class FirstScopeDiscovery {
+        private final List<String> scopes;
+        private final List<String> tables;
+
+        private FirstScopeDiscovery(List<String> scopes, List<String> tables) {
+            this.scopes = scopes;
+            this.tables = tables;
+        }
     }
 
     private List<String> splitPattern(String pattern) {

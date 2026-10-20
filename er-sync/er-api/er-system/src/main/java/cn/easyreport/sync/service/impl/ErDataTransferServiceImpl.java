@@ -16,12 +16,12 @@ import java.util.Set;
 import java.util.StringJoiner;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
-import com.alibaba.fastjson2.JSON;
 import cn.easyreport.sync.datasync.DataSyncExecutor;
 import cn.easyreport.sync.datasync.DataSyncExecutor.DataSyncResult;
 import cn.easyreport.sync.datasync.DataSyncExtractor;
 import cn.easyreport.sync.datasync.DataSyncFactory;
 import cn.easyreport.sync.datasync.DataSyncExecutorFactory;
+import cn.easyreport.sync.core.SyncProgressPayload;
 import cn.easyreport.sync.strategy.DatabaseStrategy;
 import cn.easyreport.sync.strategy.DatabaseStrategyFactory;
 import org.slf4j.Logger;
@@ -1650,15 +1650,14 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
     }
 
     private void updateProgress(Long transferId, long current, long total, String message) {
-        Map<String, Object> progress = new HashMap<>();
-        progress.put("current", current);
-        progress.put("total", total);
-        progress.put("percent", (total > 0 && current >= 0) ? (current * 100 / total) : 0);
-        progress.put("message", message);
         ErDataTransfer upd = new ErDataTransfer();
         upd.setTransferId(transferId);
-        upd.setSyncProgress(JSON.toJSONString(progress));
-        erDataTransferMapper.updateErDataTransfer(upd);
+        upd.setSyncProgress(SyncProgressPayload.summary(current, total, message));
+        try {
+            erDataTransferMapper.updateErDataTransfer(upd);
+        } catch (RuntimeException e) {
+            log.warn("保存数据同步展示进度失败，transferId={}，继续执行同步", transferId, e);
+        }
     }
 
     private static class SyncTableResult {

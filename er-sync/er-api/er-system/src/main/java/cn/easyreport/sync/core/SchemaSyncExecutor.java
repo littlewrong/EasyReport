@@ -11,6 +11,7 @@ import cn.easyreport.sync.dialect.ExtendedDialectFactory;
 import cn.easyreport.sync.dialect.SchemaDialect;
 import cn.easyreport.sync.extractor.ExtendedExtractorFactory;
 import cn.easyreport.sync.extractor.SchemaExtractor;
+import cn.easyreport.sync.extractor.FirstSchemaSupport;
 import cn.easyreport.sync.mapper.DatabaseTypeMapper;
 import cn.easyreport.sync.model.ColumnMeta;
 import cn.easyreport.sync.model.SyncResult;
@@ -53,7 +54,7 @@ public class SchemaSyncExecutor {
 
         log.info("[SchemaSyncExecutor] 开始执行架构同步，任务ID: {}", task.getSyncId());
 
-        try (DataSourceConnector target = ConnectorFactory.build(targetDs)) {
+        try {
 
             String sourceSchemaPattern = task.getSourceSchemaPattern();
             String tablePattern = task.getSourceTablePattern();
@@ -65,88 +66,110 @@ public class SchemaSyncExecutor {
             SchemaDialect dialect = ExtendedDialectFactory.build(targetDs);
             DatabaseStrategy strategy = DatabaseStrategyFactory.getStrategy(targetDs.getDatasourceType());
 
-            // 查询所有匹配的表（tableMeta.getSchema() 是实际库名）
-            List<TableMeta> tables = extractor.listTables(sourceSchemaPattern, tablePattern);
-
-            TableSyncService tableSyncService = new TableSyncService();
-            result.setTotalCount(tables.size());
-            int successCount = 0;
-            int currentIndex = 0;
-
-            // 初始化待同步表列表（用 schema.table 全限定名）
-            log.info("[SchemaSyncExecutor] 找到 {} 张表，初始化待同步列表", tables.size());
-            for (TableMeta tableMeta : tables) {
-                String actualSchema = tableMeta.getSchema() != null ? tableMeta.getSchema() : sourceSchemaPattern;
-                result.getPendingTables().add(formatName(actualSchema, tableMeta.getName()));
-            }
-
-            // 按实际 schema 分组，每个源库对应创建一个目标库（1:1 复制）
-            java.util.LinkedHashMap<String, List<TableMeta>> tablesBySchema = new java.util.LinkedHashMap<>();
-            for (TableMeta t : tables) {
-                String actualSchema = t.getSchema() != null ? t.getSchema() : sourceSchemaPattern;
-                tablesBySchema.computeIfAbsent(actualSchema, k -> new java.util.ArrayList<>()).add(t);
-            }
-
-            for (java.util.Map.Entry<String, List<TableMeta>> entry : tablesBySchema.entrySet()) {
-                String actualSchema = entry.getKey();
-                List<TableMeta> schemaTables = entry.getValue();
-
-                // 为当前实际库创建目标配置和目标库
-                TargetConfig schemaTargetConfig = TargetConfig.create(
-                    actualSchema,
-                    targetDs.getDatasourceType(),
-                    target.getDatabaseName()
-                );
-                createDatabaseIfNeeded(targetDs, target, schemaTargetConfig);
-
-                for (TableMeta tableMeta : schemaTables) {
-                    if (stopChecker != null && stopChecker.shouldStop()) {
-                        log.info("[SchemaSyncExecutor] 检测到停止标志，停止同步");
-                        result.setStopped(true);
-                        result.setSuccess(true);
-                        result.setMessage("同步已停止（已完成 " + currentIndex + " 张表，剩余 " + (tables.size() - currentIndex) + " 张表）");
-                        break;
-                    }
-
-                    currentIndex++;
-                    String fullTableName = formatName(actualSchema, tableMeta.getName());
-                    result.getPendingTables().remove(fullTableName);
-
-                    log.info("[SchemaSyncExecutor] 开始同步表 [{}/{}]: {}", currentIndex, tables.size(), fullTableName);
-
-                    TableSyncContext context = new TableSyncContext(
-                        task, sourceDs, targetDs, target, dialect, strategy,
-                        schemaTargetConfig, tableMeta, actualSchema
-                    );
-
-                    ErDataSyncLog logItem = tableSyncService.syncTable(context);
-
-                    if ("0".equals(logItem.getSyncResult())) successCount++;
-                    if ("1".equals(logItem.getSyncResult())) {
-                        result.setSuccess(false);
-                        result.setMessage("部分表同步失败");
-                    }
-
-                    result.getLogs().add(logItem);
-                    result.getCompletedTables().add(fullTableName);
-
-                    // 回调在 syncTable 之后触发，确保 N/N 时所有表已实际完成
+            // In shard mode the patterns select databases; the first database supplies
+            // the matching table definitions for every selected database.
+            String reuseMode = task.getStructureReuseMode();
+            List<TableMeta> tables;
+            if ("1".equals(reuseMode)) {
+                tables = extractor.listTablesUsingFirstSchema(sourceSchemaPattern, tablePattern);
+                if (!tables.isEmpty()) {
+                    result.setTemplateSchema(FirstSchemaSupport.scopeOf(tables.get(0), sourceDs.getDatasourceType()));
+                    log.info("[SchemaSyncExecutor] 分片库架构模板: {}", result.getTemplateSchema());
                     if (callback != null) {
-                        callback.onProgress(currentIndex, tables.size(), "已完成表: " + fullTableName);
+                        callback.onProgress(0, tables.size(), "模板库: " + result.getTemplateSchema() + "；开始创建分片库架构");
                     }
                 }
-
-                if (result.isStopped()) break;
+            } else if (reuseMode == null || "0".equals(reuseMode)) {
+                tables = extractor.listTables(sourceSchemaPattern, tablePattern);
+            } else {
+                throw new IllegalArgumentException("无效的结构采集方式: " + reuseMode);
             }
 
-            log.info("[SchemaSyncExecutor] 所有表同步完成，总数: {}, 成功: {}", tables.size(), successCount);
-            result.setSuccessCount(successCount);
+            // Open the target only after source metadata collection to avoid idle timeouts.
+            try (DataSourceConnector target = ConnectorFactory.build(targetDs)) {
+                TableSyncService tableSyncService = new TableSyncService();
+                result.setTotalCount(tables.size());
+                int successCount = 0;
+                int currentIndex = 0;
 
-            if (tables.isEmpty()) {
-                result.setSuccess(false);
-                result.setMessage("未匹配到任何表");
-            } else if (result.isSuccess()) {
-                result.setMessage("OK");
+                // 初始化待同步表列表（用 schema.table 全限定名）
+                log.info("[SchemaSyncExecutor] 找到 {} 张表，初始化待同步列表", tables.size());
+                for (TableMeta tableMeta : tables) {
+                    String sourceScope = FirstSchemaSupport.scopeOf(tableMeta, sourceDs.getDatasourceType());
+                    String actualSchema = sourceScope != null ? sourceScope : sourceSchemaPattern;
+                    result.getPendingTables().add(formatName(actualSchema, tableMeta.getName()));
+                }
+
+                // 按实际 schema 分组，每个源库对应创建一个目标库（1:1 复制）
+                java.util.LinkedHashMap<String, List<TableMeta>> tablesBySchema = new java.util.LinkedHashMap<>();
+                for (TableMeta t : tables) {
+                    String sourceScope = FirstSchemaSupport.scopeOf(t, sourceDs.getDatasourceType());
+                    String actualSchema = sourceScope != null ? sourceScope : sourceSchemaPattern;
+                    tablesBySchema.computeIfAbsent(actualSchema, k -> new java.util.ArrayList<>()).add(t);
+                }
+
+                for (java.util.Map.Entry<String, List<TableMeta>> entry : tablesBySchema.entrySet()) {
+                    String actualSchema = entry.getKey();
+                    List<TableMeta> schemaTables = entry.getValue();
+
+                    // 为当前实际库创建目标配置和目标库
+                    TargetConfig schemaTargetConfig = TargetConfig.create(
+                        actualSchema,
+                        targetDs.getDatasourceType(),
+                        target.getDatabaseName()
+                    );
+                    createDatabaseIfNeeded(targetDs, target, schemaTargetConfig);
+
+                    for (TableMeta tableMeta : schemaTables) {
+                        if (stopChecker != null && stopChecker.shouldStop()) {
+                            log.info("[SchemaSyncExecutor] 检测到停止标志，停止同步");
+                            result.setStopped(true);
+                            result.setSuccess(true);
+                            result.setMessage("同步已停止（已完成 " + currentIndex + " 张表，剩余 " + (tables.size() - currentIndex) + " 张表）");
+                            break;
+                        }
+
+                        currentIndex++;
+                        String fullTableName = formatName(actualSchema, tableMeta.getName());
+                        result.getPendingTables().remove(fullTableName);
+
+                        log.info("[SchemaSyncExecutor] 开始同步表 [{}/{}]: {}", currentIndex, tables.size(), fullTableName);
+
+                        TableSyncContext context = new TableSyncContext(
+                            task, sourceDs, targetDs, target, dialect, strategy,
+                            schemaTargetConfig, tableMeta, actualSchema
+                        );
+
+                        ErDataSyncLog logItem = tableSyncService.syncTable(context);
+
+                        if ("0".equals(logItem.getSyncResult())) successCount++;
+                        if ("1".equals(logItem.getSyncResult())) {
+                            result.setSuccess(false);
+                            result.setMessage("部分表同步失败");
+                        }
+
+                        result.getLogs().add(logItem);
+                        result.getCompletedTables().add(fullTableName);
+
+                        // 回调在 syncTable 之后触发，确保 N/N 时所有表已实际完成
+                        if (callback != null) {
+                            String templateInfo = result.getTemplateSchema() == null ? "" : "模板库: " + result.getTemplateSchema() + "；";
+                            callback.onProgress(currentIndex, tables.size(), templateInfo + "已完成表: " + fullTableName);
+                        }
+                    }
+
+                    if (result.isStopped()) break;
+                }
+
+                log.info("[SchemaSyncExecutor] 所有表同步完成，总数: {}, 成功: {}", tables.size(), successCount);
+                result.setSuccessCount(successCount);
+
+                if (tables.isEmpty()) {
+                    result.setSuccess(false);
+                    result.setMessage("未匹配到任何表");
+                } else if (result.isSuccess()) {
+                    result.setMessage("OK");
+                }
             }
 
         } catch (Exception e) {
@@ -291,7 +314,7 @@ public class SchemaSyncExecutor {
             return schema;
         }
         if ("ORACLE".equalsIgnoreCase(sourceDbType)) {
-            return schema.toUpperCase();
+            return schema.toUpperCase(java.util.Locale.ROOT);
         }
         return schema;
     }

@@ -12,6 +12,7 @@ public class SyncResult {
     private boolean success;
     private boolean stopped; // 是否被停止
     private String message;
+    private String templateSchema;
     private int totalCount;
     private int successCount;
     private final List<ErDataSyncLog> logs = new ArrayList<>();
@@ -40,6 +41,14 @@ public class SyncResult {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public String getTemplateSchema() {
+        return templateSchema;
+    }
+
+    public void setTemplateSchema(String templateSchema) {
+        this.templateSchema = templateSchema;
     }
 
     public int getTotalCount() {
