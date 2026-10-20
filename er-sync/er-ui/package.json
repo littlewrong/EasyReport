@@ -1,8 +1,8 @@
 {
   "name": "ruoyi",
   "version": "3.9.1",
-  "description": "EasyReport-Sync",
-  "author": "易报表",
+  "description": "EasyReport",
+  "author": "EasyReport",
   "license": "MIT",
   "scripts": {
     "dev": "vue-cli-service serve",
