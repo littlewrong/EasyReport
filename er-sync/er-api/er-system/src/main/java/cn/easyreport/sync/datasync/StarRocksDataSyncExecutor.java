@@ -3,6 +3,9 @@ package cn.easyreport.sync.datasync;
 import cn.easyreport.sync.mapper.ErDataTransferLogMapper;
 import cn.easyreport.sync.mapper.ErDataTransferMapper;
 import cn.easyreport.sync.mapper.ErDataTransferProgressMapper;
+import cn.easyreport.sync.core.SyncProgressCallback;
+import cn.easyreport.sync.domain.ErDataTransfer;
+import cn.easyreport.sync.domain.ErDatasource;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -18,6 +21,70 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
 
     public StarRocksDataSyncExecutor(ErDataTransferMapper transferMapper, ErDataTransferLogMapper logMapper, ErDataTransferProgressMapper progressMapper) {
         super(transferMapper, logMapper, progressMapper);
+    }
+
+    @Override
+    protected DirectFullImport prepareDirectFullImport(ErDataTransfer task, ErDatasource sourceDs,
+            String schema, String table, String targetTable, List<String> sourceCols,
+            List<String> targetCols, DataSyncExtractor extractor, Connection sourceConn,
+            Connection targetConn, String tsField, SyncProgressCallback callback) throws Exception {
+        if (task == null || !"0".equals(task.getSyncMode()) || !"1".equals(task.getExternalTableEnabled())) {
+            return null;
+        }
+        if (task.getCatalogName() != null && !task.getCatalogName().trim().isEmpty()) {
+            checkStopped();
+            final StarRocksCatalogFullImport catalogImport = StarRocksCatalogFullImport.prepare(
+                    sourceDs, sourceConn, targetConn, task.getCatalogName().trim(), schema, table,
+                    targetTable, sourceCols, targetCols, tsField, task.getExternalTableThresholdWan(),
+                    task.getExternalTableWindowUnit(), callback, cancellationContext());
+            return new DirectFullImport() {
+                @Override public FullSyncStats execute() throws Exception {
+                    StarRocksCatalogFullImport.Result result = catalogImport.execute();
+                    FullSyncStats stats = new FullSyncStats();
+                    stats.processed = result.processed;
+                    stats.maxTs = result.maxTs;
+                    return stats;
+                }
+                @Override public void close() { catalogImport.close(); }
+            };
+        }
+        // Persisted tasks without a Catalog keep their original MYSQL external-table behavior.
+        boolean supportedSource = sourceDs != null
+                && (("TIDB".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof TiDbDataSyncExtractor)
+                    || ("MYSQL".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof MySqlDataSyncExtractor));
+        if (task == null || !"0".equals(task.getSyncMode())
+                || !"1".equals(task.getExternalTableEnabled()) || !supportedSource) {
+            return null;
+        }
+        checkStopped();
+        final StarRocksExternalFullImport externalImport;
+        try {
+            externalImport = StarRocksExternalFullImport.prepare(
+                    sourceDs, sourceConn, targetConn, schema, table, targetTable, sourceCols, targetCols,
+                    tsField, task.getTransferId(), task.getExternalTableThresholdWan(),
+                    task.getExternalTableWindowUnit(), callback, cancellationContext());
+        } catch (StarRocksExternalFullImport.UnsupportedImportException unsupported) {
+            checkStopped();
+            String message = "外部表不支持当前源配置，使用原 JDBC 初始化：" + unsupported.getMessage();
+            System.out.println("[StarRocksDataSyncExecutor] " + message);
+            if (callback != null) callback.onProgress(0, -1, message);
+            return null;
+        }
+        return new DirectFullImport() {
+            @Override
+            public FullSyncStats execute() throws Exception {
+                StarRocksExternalFullImport.Result result = externalImport.execute();
+                FullSyncStats stats = new FullSyncStats();
+                stats.processed = result.processed;
+                stats.maxTs = result.maxTs;
+                return stats;
+            }
+
+            @Override
+            public void close() throws Exception {
+                externalImport.close();
+            }
+        };
     }
 
     /**
@@ -66,7 +133,7 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
      * 使用 SHOW ALTER TABLE COLUMN 轮询，直到所有任务状态为 FINISHED 或 CANCELLED。
      * 超时后打印警告但继续执行（不抛异常）。
      */
-    private void waitForSchemaChange(Connection conn, String dbName, String tblName) {
+    private void waitForSchemaChange(Connection conn, String dbName, String tblName) throws Exception {
         // 最多等待 5 分钟，每 3 秒轮询一次
         int maxWaitMs = 5 * 60 * 1000;
         int pollIntervalMs = 3000;
@@ -75,18 +142,21 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
         String showSql = "SHOW ALTER TABLE COLUMN FROM `" + dbName + "` WHERE TableName = '" + tblName + "'";
 
         while (waited < maxWaitMs) {
+            checkStopped();
             try {
                 Thread.sleep(pollIntervalMs);
                 waited += pollIntervalMs;
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
-                break;
+                throw new DataSyncCancellation.SyncStoppedException();
             }
+            checkStopped();
 
             boolean allDone = true;
             try (Statement st = conn.createStatement();
                  ResultSet rs = st.executeQuery(showSql)) {
                 while (rs.next()) {
+                    checkStopped();
                     String state = rs.getString("State");
                     if (state != null && !state.equalsIgnoreCase("FINISHED") && !state.equalsIgnoreCase("CANCELLED")) {
                         allDone = false;
@@ -94,7 +164,10 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
                         break;
                     }
                 }
+            } catch (DataSyncCancellation.SyncStoppedException stopped) {
+                throw stopped;
             } catch (Exception e) {
+                checkStopped();
                 System.err.println("[StarRocksDataSyncExecutor] 查询 schema change 状态失败: " + e.getMessage());
                 // 查询失败时保守等待，继续轮询
                 allDone = false;

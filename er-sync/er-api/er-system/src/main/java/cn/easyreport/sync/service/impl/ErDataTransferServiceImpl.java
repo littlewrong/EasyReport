@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import cn.easyreport.common.utils.DateUtils;
 import cn.easyreport.common.utils.StringUtils;
+import cn.easyreport.common.exception.ServiceException;
 import cn.easyreport.sync.domain.ErDataTransfer;
 import cn.easyreport.sync.domain.ErDataTransferLog;
 import cn.easyreport.sync.domain.ErDatasource;
@@ -57,7 +58,20 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
     private static final ConcurrentHashMap<Long, Boolean> stopFlags = new ConcurrentHashMap<>();
 
     // 本实例内正在执行的数据传输任务，防止重复点击/定时任务并发启动同一个 transferId。
-    private static final ConcurrentHashMap<Long, Boolean> runningTransfers = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Long, TransferRun> runningTransfers = new ConcurrentHashMap<>();
+
+    // 取消请求必须发送给实际持有 JDBC Statement 的执行器。
+    private static final ConcurrentHashMap<Long, DataSyncExecutor> activeExecutors = new ConcurrentHashMap<>();
+
+    private static final String STOPPING_PROGRESS = SyncProgressPayload.summary(0, 0,
+            "正在停止，正在取消当前SQL并清理临时表...");
+
+    private static class TransferRun
+    {
+        private volatile boolean stopRequested;
+        private boolean claimed;
+        private long nextStatusCheckNanos;
+    }
 
     @Autowired
     private ErDataTransferMapper erDataTransferMapper;
@@ -109,6 +123,7 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
     public int insertErDataTransfer(ErDataTransfer erDataTransfer)
     {
         log.info("[Quartz同步] 新增数据传输任务，前端传来的status={}", erDataTransfer.getStatus());
+        normalizeExternalTableOptions(erDataTransfer, null);
 
         // 预处理：将空字符串转换为null，避免查询时出现问题
         if (erDataTransfer.getSourceSchemaPattern() != null && erDataTransfer.getSourceSchemaPattern().trim().isEmpty())
@@ -190,6 +205,7 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
 
         erDataTransfer.setUpdateTime(DateUtils.getNowDate());
         ErDataTransfer oldTask = erDataTransferMapper.selectErDataTransferByTransferId(erDataTransfer.getTransferId());
+        normalizeExternalTableOptions(erDataTransfer, oldTask);
 
         int rows = erDataTransferMapper.updateErDataTransfer(erDataTransfer);
 
@@ -274,6 +290,86 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         }
 
         return rows;
+    }
+
+    /** 默认使用JDBC；新增任务补策略默认值，稀疏更新不能覆盖未提交的配置。 */
+    private void normalizeExternalTableOptions(ErDataTransfer task, ErDataTransfer oldTask)
+    {
+        if (oldTask == null)
+        {
+            if (task.getExternalTableThresholdWan() == null) task.setExternalTableThresholdWan(50);
+            if (task.getExternalTableWindowUnit() == null) task.setExternalTableWindowUnit("YEAR");
+        }
+        if (task.getExternalTableThresholdWan() != null && task.getExternalTableThresholdWan() <= 0)
+        {
+            throw new ServiceException("Catalog导入整批阈值必须为1至2147483647的整数，单位为万条");
+        }
+        String windowUnit = task.getExternalTableWindowUnit();
+        if (windowUnit != null && !"YEAR".equals(windowUnit) && !"MONTH".equals(windowUnit)
+                && !"DAY".equals(windowUnit))
+        {
+            throw new ServiceException("Catalog导入时间分片单位仅允许YEAR、MONTH或DAY");
+        }
+        String enabled = task.getExternalTableEnabled();
+        if (enabled != null && !"0".equals(enabled) && !"1".equals(enabled))
+        {
+            throw new ServiceException("Catalog导入开关仅允许0或1");
+        }
+        if (task.getCatalogName() != null)
+        {
+            task.setCatalogName(task.getCatalogName().trim());
+        }
+        if (enabled == null && oldTask == null)
+        {
+            task.setExternalTableEnabled("0");
+            return;
+        }
+        if ("0".equals(enabled))
+        {
+            return;
+        }
+        boolean bindingChanged = oldTask != null && (task.getSyncMode() != null
+                || task.getSourceDatasourceId() != null || task.getTargetDatasourceId() != null
+                || task.getCatalogName() != null);
+        if (enabled == null && (!bindingChanged || !"1".equals(oldTask.getExternalTableEnabled())))
+        {
+            return;
+        }
+
+        String syncMode = task.getSyncMode() != null ? task.getSyncMode()
+                : oldTask != null ? oldTask.getSyncMode() : "0";
+        Long sourceId = task.getSourceDatasourceId() != null ? task.getSourceDatasourceId()
+                : oldTask != null ? oldTask.getSourceDatasourceId() : null;
+        Long targetId = task.getTargetDatasourceId() != null ? task.getTargetDatasourceId()
+                : oldTask != null ? oldTask.getTargetDatasourceId() : null;
+        ErDatasource source = sourceId != null ? erDatasourceMapper.selectErDatasourceByDatasourceId(sourceId) : null;
+        ErDatasource target = targetId != null ? erDatasourceMapper.selectErDatasourceByDatasourceId(targetId) : null;
+        String sourceType = source != null ? source.getDatasourceType() : null;
+        String targetType = target != null ? target.getDatasourceType() : null;
+        boolean supported = "0".equals(syncMode)
+                && ("MYSQL".equalsIgnoreCase(sourceType) || "TIDB".equalsIgnoreCase(sourceType)
+                    || "POSTGRESQL".equalsIgnoreCase(sourceType) || "ORACLE".equalsIgnoreCase(sourceType)
+                    || "SQLSERVER".equalsIgnoreCase(sourceType) || "STARROCKS".equalsIgnoreCase(sourceType))
+                && "STARROCKS".equalsIgnoreCase(targetType);
+        if (!supported)
+        {
+            if ("1".equals(enabled))
+            {
+                throw new ServiceException("Catalog导入仅支持MySQL/TiDB/PostgreSQL/Oracle/SQLServer/StarRocks到StarRocks的初始化同步");
+            }
+            task.setExternalTableEnabled("0");
+            return;
+        }
+        String catalogName = task.getCatalogName() != null ? task.getCatalogName()
+                : oldTask != null ? oldTask.getCatalogName() : null;
+        if (catalogName == null || catalogName.isEmpty())
+        {
+            throw new ServiceException("启用Catalog导入时必须填写Catalog名称");
+        }
+        if (catalogName.length() > 1023 || !catalogName.matches("[a-zA-Z][a-zA-Z0-9_]*"))
+        {
+            throw new ServiceException("Catalog导入名称须以字母开头，仅包含字母、数字、下划线，且不超过1023个字符");
+        }
     }
 
     /**
@@ -385,61 +481,68 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         }
 
         // 检查是否已经在同步中
-        if ("1".equals(transferTask.getSyncStatus()))
+        if ("1".equals(transferTask.getSyncStatus()) || "5".equals(transferTask.getSyncStatus()))
         {
             result.put("success", false);
             result.put("message", "任务正在同步中，请勿重复执行");
             return result;
         }
 
-        if (runningTransfers.putIfAbsent(transferId, Boolean.TRUE) != null)
+        TransferRun run = new TransferRun();
+        synchronized (run)
+        {
+        // 发布运行锁时就持有它，停止请求需等本轮原子认领完成再判断状态。
+        if (runningTransfers.putIfAbsent(transferId, run) != null)
         {
             result.put("success", false);
             result.put("message", "任务正在同步中，请勿重复执行");
             return result;
         }
-
         try {
             ErDatasource source = erDatasourceMapper.selectErDatasourceByDatasourceId(transferTask.getSourceDatasourceId());
             ErDatasource target = erDatasourceMapper.selectErDatasourceByDatasourceId(transferTask.getTargetDatasourceId());
             if (source == null || target == null) {
-                runningTransfers.remove(transferId);
+                releaseRun(transferId, run);
                 result.put("success", false);
                 result.put("message", "源或目标数据源未配置");
                 return result;
             }
 
             // 清除停止标志（如果之前有）
-            stopFlags.remove(transferId);
+            if (!run.stopRequested) stopFlags.remove(transferId);
 
-            // 更新状态为同步中
+            // 配置库原子认领任务，防止不同服务实例同时启动同一个任务。
             ErDataTransfer updateTransfer = new ErDataTransfer();
             updateTransfer.setTransferId(transferId);
-            updateTransfer.setSyncStatus("1"); // 同步中
-            updateTransfer.setSyncProgress("{\"current\":0,\"total\":0,\"percent\":0,\"message\":\"准备开始同步...\"}");
-            erDataTransferMapper.updateErDataTransfer(updateTransfer);
+            updateTransfer.setSyncProgress(SyncProgressPayload.summary(0, 0, "准备开始同步..."));
+            if (erDataTransferMapper.claimTransfer(updateTransfer) == 0) {
+                releaseRun(transferId, run);
+                result.put("success", false);
+                result.put("message", "任务正在同步或停止中，请勿重复执行");
+                return result;
+            }
+            run.claimed = true;
+            if (run.stopRequested) {
+                erDataTransferMapper.requestTransferStop(transferId, STOPPING_PROGRESS, true);
+            }
 
             // 异步执行同步任务
             Thread asyncThread = new Thread(() -> {
-                executeTransferAsync(transferId, transferTask, source, target);
+                executeTransferAsync(transferId, transferTask, source, target, run);
             });
             asyncThread.setName("DataSync-" + transferId);
             asyncThread.setUncaughtExceptionHandler((t, e) -> {
                 log.error("同步任务 [" + transferId + "] 线程异常退出", e);
-                // 确保异常时也更新状态
-                try {
-                    ErDataTransfer errorUpdate = new ErDataTransfer();
-                    errorUpdate.setTransferId(transferId);
-                    errorUpdate.setSyncStatus("3"); // 同步失败
-                    errorUpdate.setLastSyncTime(DateUtils.getNowDate());
-                    String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getName();
-                    errorUpdate.setLastSyncResult("{\"error\":\"线程异常: " + errorMsg.replace("\"", "'") + "\"}");
-                    erDataTransferMapper.updateErDataTransfer(errorUpdate);
-                } catch (Exception ex) {
-                    log.error("更新异常状态失败", ex);
+                synchronized (run) {
+                    // 旧线程的异常处理不能覆盖已经启动的新一轮任务。
+                    if (runningTransfers.get(transferId) == run) {
+                        try {
+                            finishRun(transferId, run, null, e);
+                        } finally {
+                            releaseRun(transferId, run);
+                        }
+                    }
                 }
-                stopFlags.remove(transferId);
-                runningTransfers.remove(transferId);
             });
             asyncThread.start();
             log.info("已启动异步同步线程: {}", asyncThread.getName());
@@ -448,12 +551,16 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
             result.put("message", "同步任务已启动");
             return result;
         } catch (Exception e) {
-            runningTransfers.remove(transferId);
-            stopFlags.remove(transferId);
+            try {
+                finishRun(transferId, run, null, e);
+            } finally {
+                releaseRun(transferId, run);
+            }
             log.error("启动同步任务 [" + transferId + "] 失败", e);
             result.put("success", false);
             result.put("message", "启动同步任务失败: " + (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             return result;
+        }
         }
     }
 
@@ -461,23 +568,28 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
      * 异步执行同步任务的核心逻辑
      * 注意：此方法在异步线程中执行，不能使用@Transactional注解
      */
-    private void executeTransferAsync(Long transferId, ErDataTransfer transferTask, ErDatasource source, ErDatasource target)
+    private void executeTransferAsync(Long transferId, ErDataTransfer transferTask, ErDatasource source,
+                                     ErDatasource target, TransferRun run)
     {
         log.info("开始异步执行同步任务 [{}]", transferId);
-        ErDataTransfer updateTransfer = new ErDataTransfer();
-        updateTransfer.setTransferId(transferId);
+        DataSyncResult syncResult = null;
+        Throwable failure = null;
 
         try
         {
             log.info("创建 DataSyncExecutor 执行器（根据目标数据库类型: {}），任务 [{}]", target.getDatasourceType(), transferId);
-            DataSyncExecutor executor = DataSyncExecutorFactory.create(target, erDataTransferMapper, erDataTransferLogMapper, erDataTransferProgressMapper);
+            DataSyncExecutor executor = createExecutor(target);
+            synchronized (run) {
+                activeExecutors.put(transferId, executor);
+                if (shouldStop(transferId, run)) executor.requestStop();
+            }
 
             log.info("调用 executor.execute() 开始同步，任务 [{}]", transferId);
-            DataSyncResult syncResult = executor.execute(transferTask, source, target,
+            syncResult = executor.execute(transferTask, source, target,
                 (current, total, message) -> {
                     updateProgress(transferId, current, total, message);
                 },
-                () -> stopFlags.getOrDefault(transferId, false)); // 停止检查器
+                () -> shouldStop(transferId, run));
 
             log.info("executor.execute() 执行完成，任务 [{}]，结果: success={}, stopped={}, message={}",
                 transferId, syncResult.isSuccess(), syncResult.isStopped(), syncResult.getMessage());
@@ -495,56 +607,83 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
                 log.error("保存同步日志失败，任务 [{}]", transferId, e);
             }
 
-            // 检查当前状态，如果已经被手动停止（状态4），则不再更新状态
-            ErDataTransfer currentTask = erDataTransferMapper.selectErDataTransferByTransferId(transferId);
-            if (currentTask != null && "4".equals(currentTask.getSyncStatus())) {
-                log.info("同步任务 [{}] 已被手动停止，跳过状态更新", transferId);
-                stopFlags.remove(transferId);
-                return;
-            }
-
-            // 检查是否是停止导致的
-            String syncStatus;
-            if (syncResult.isStopped()) {
-                syncStatus = "4"; // 已停止
-            } else {
-                syncStatus = syncResult.isSuccess() ? "2" : "3";
-            }
-
-            // 更新状态
-            log.info("更新任务状态，任务 [{}]，新状态: {}", transferId, syncStatus);
-            updateTransfer.setSyncStatus(syncStatus);
-            updateTransfer.setLastSyncTime(DateUtils.getNowDate());
-            updateTransfer.setLastSyncResult("{\"message\":\"" + syncResult.getMessage() + "\"}");
-            erDataTransferMapper.updateErDataTransfer(updateTransfer);
-
-            log.info("同步任务 [{}] 执行完成，最终状态: {}, 结果: {}", transferId, syncStatus, syncResult.getMessage());
-
-            // 清除停止标志
-            stopFlags.remove(transferId);
         }
-        catch (Exception e)
+        catch (Throwable e)
         {
+            failure = e;
             log.error("执行同步任务 [" + transferId + "] 失败", e);
-
-            try {
-                // 更新状态为同步失败
-                updateTransfer.setSyncStatus("3"); // 同步失败
-                updateTransfer.setLastSyncTime(DateUtils.getNowDate());
-                String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getName();
-                updateTransfer.setLastSyncResult("{\"error\":\"" + errorMsg.replace("\"", "'") + "\"}");
-                erDataTransferMapper.updateErDataTransfer(updateTransfer);
-                log.info("已更新任务 [{}] 状态为失败", transferId);
-            } catch (Exception updateEx) {
-                log.error("更新任务 [" + transferId + "] 失败状态时出错", updateEx);
-            }
-
-            // 清除停止标志
-            stopFlags.remove(transferId);
         }
         finally
         {
-            runningTransfers.remove(transferId);
+            // executor 返回/抛错时，其 finally 已完成 SQL、连接及外部临时表清理。
+            synchronized (run) {
+                try {
+                    finishRun(transferId, run, syncResult, failure);
+                } finally {
+                    releaseRun(transferId, run);
+                }
+            }
+        }
+    }
+
+    protected DataSyncExecutor createExecutor(ErDatasource target)
+    {
+        return DataSyncExecutorFactory.create(target, erDataTransferMapper,
+                erDataTransferLogMapper, erDataTransferProgressMapper);
+    }
+
+    /** 本地立即响应；执行器的取消监视器同时检查其他实例写入的停止请求。 */
+    private boolean shouldStop(Long transferId, TransferRun run)
+    {
+        if (runningTransfers.get(transferId) != run) return false;
+        if (run.stopRequested || stopFlags.getOrDefault(transferId, false)) return true;
+        synchronized (run) {
+            if (runningTransfers.get(transferId) != run) return false;
+            if (run.stopRequested || stopFlags.getOrDefault(transferId, false)) return true;
+            long now = System.nanoTime();
+            if (now < run.nextStatusCheckNanos) return false;
+            run.nextStatusCheckNanos = now + java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
+            try {
+                ErDataTransfer task = erDataTransferMapper.selectErDataTransferByTransferId(transferId);
+                if (runningTransfers.get(transferId) != run) return false;
+                if (task != null && ("5".equals(task.getSyncStatus()) || "4".equals(task.getSyncStatus()))) {
+                    run.stopRequested = true;
+                    stopFlags.put(transferId, true);
+                }
+            } catch (RuntimeException e) {
+                log.warn("读取同步任务停止请求失败，transferId={}，稍后重试", transferId, e);
+            }
+            return run.stopRequested;
+        }
+    }
+
+    private void finishRun(Long transferId, TransferRun run, DataSyncResult syncResult, Throwable failure)
+    {
+        // 未认领成功的启动失败不能覆盖其他实例已认领的任务状态。
+        if (!run.claimed) return;
+        boolean stopped = run.stopRequested || stopFlags.getOrDefault(transferId, false)
+                || (syncResult != null && syncResult.isStopped());
+        DataSyncExecutor executor = activeExecutors.get(transferId);
+        stopped = stopped || (executor != null && executor.isStopRequested());
+        ErDataTransfer finished = new ErDataTransfer();
+        finished.setTransferId(transferId);
+        finished.setSyncStatus(stopped ? "4" : failure == null && syncResult != null && syncResult.isSuccess() ? "2" : "3");
+        finished.setLastSyncTime(DateUtils.getNowDate());
+        Map<String, String> detail = new HashMap<>();
+        if (stopped) detail.put("message", "任务已停止，后台执行已结束");
+        else if (failure != null) detail.put("error", failure.getMessage() != null ? failure.getMessage() : failure.getClass().getName());
+        else detail.put("message", syncResult != null ? syncResult.getMessage() : "同步线程异常结束");
+        finished.setLastSyncResult(com.alibaba.fastjson2.JSON.toJSONString(detail));
+        // SQL 原子判断数据库中的停止中状态，覆盖“成功完成”和远程停止同时发生的竞态。
+        erDataTransferMapper.finishTransfer(finished);
+    }
+
+    private void releaseRun(Long transferId, TransferRun run)
+    {
+        if (runningTransfers.get(transferId) == run) {
+            activeExecutors.remove(transferId);
+            stopFlags.remove(transferId);
+            runningTransfers.remove(transferId, run);
         }
     }
 
@@ -853,7 +992,8 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
             result.put("message", "同步任务不存在");
             return result;
         }
-        if ("1".equals(transferTask.getSyncStatus()))
+        if ("1".equals(transferTask.getSyncStatus()) || "5".equals(transferTask.getSyncStatus())
+                || runningTransfers.containsKey(transferId))
         {
             result.put("success", false);
             result.put("message", "任务正在同步中，不能刷新时间戳");
@@ -1167,7 +1307,7 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
     }
 
     /**
-     * 停止同步任务（优雅停止，当前表处理完成后停止）
+     * 提交停止请求；执行器取消 SQL 并完成资源清理后才标记已停止。
      *
      * @param transferId 同步任务ID
      * @return 停止结果
@@ -1177,40 +1317,47 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
     {
         Map<String, Object> result = new HashMap<>();
 
-        ErDataTransfer transferTask = erDataTransferMapper.selectErDataTransferByTransferId(transferId);
-        if (transferTask == null)
-        {
-            result.put("success", false);
-            result.put("message", "同步任务不存在");
+        TransferRun run = runningTransfers.get(transferId);
+        synchronized (run != null ? run : new Object()) {
+            ErDataTransfer transferTask = erDataTransferMapper.selectErDataTransferByTransferId(transferId);
+            if (transferTask == null) {
+                result.put("success", false);
+                result.put("message", "同步任务不存在");
+                return result;
+            }
+            boolean localRunning = run != null && runningTransfers.get(transferId) == run;
+            String status = transferTask.getSyncStatus();
+            if ("4".equals(status) && !localRunning) {
+                result.put("success", true);
+                result.put("message", "任务已停止");
+                return result;
+            }
+            if (!localRunning && !"1".equals(status) && !"5".equals(status)) {
+                result.put("success", false);
+                result.put("message", "任务未在同步中");
+                return result;
+            }
+            if (localRunning) {
+                run.stopRequested = true;
+                stopFlags.put(transferId, true);
+                DataSyncExecutor executor = activeExecutors.get(transferId);
+                if (executor != null) executor.requestStop();
+            }
+            // 无本地执行器可能表示任务在其他实例执行，不能据此宣称已经停止。
+            int changed = erDataTransferMapper.requestTransferStop(transferId, STOPPING_PROGRESS, localRunning);
+            if (changed == 0) {
+                ErDataTransfer latest = erDataTransferMapper.selectErDataTransferByTransferId(transferId);
+                if (latest == null || (!"5".equals(latest.getSyncStatus()) && !"4".equals(latest.getSyncStatus()))) {
+                    result.put("success", false);
+                    result.put("message", "任务已结束，无需停止");
+                    return result;
+                }
+            }
+            log.info("已提交同步任务 [{}] 的停止请求", transferId);
+            result.put("success", true);
+            result.put("message", "已提交停止请求，正在取消当前SQL并清理临时表");
             return result;
         }
-
-        // 只有正在同步中的任务才能停止
-        if (!"1".equals(transferTask.getSyncStatus()))
-        {
-            result.put("success", false);
-            result.put("message", "任务未在同步中");
-            return result;
-        }
-
-        // 设置停止标志（用于正在运行的异步任务）
-        stopFlags.put(transferId, true);
-
-        // 直接更新数据库状态为已停止
-        // 如果异步任务还在运行，它会检测到停止标志并优雅退出
-        // 如果异步任务已经不存在（如程序重启），直接更新状态可以解除锁定
-        ErDataTransfer updateTransfer = new ErDataTransfer();
-        updateTransfer.setTransferId(transferId);
-        updateTransfer.setSyncStatus("4"); // 已停止
-        updateTransfer.setLastSyncTime(DateUtils.getNowDate());
-        updateTransfer.setLastSyncResult("{\"message\":\"任务已被手动停止\"}");
-        erDataTransferMapper.updateErDataTransfer(updateTransfer);
-
-        log.info("已停止同步任务 [{}]", transferId);
-
-        result.put("success", true);
-        result.put("message", "任务已停止");
-        return result;
     }
 
     // ================= 数据同步核心实现 =================
@@ -1654,7 +1801,7 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         upd.setTransferId(transferId);
         upd.setSyncProgress(SyncProgressPayload.summary(current, total, message));
         try {
-            erDataTransferMapper.updateErDataTransfer(upd);
+            erDataTransferMapper.updateTransferProgress(upd);
         } catch (RuntimeException e) {
             log.warn("保存数据同步展示进度失败，transferId={}，继续执行同步", transferId, e);
         }

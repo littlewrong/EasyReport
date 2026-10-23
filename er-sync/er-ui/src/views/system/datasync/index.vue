@@ -224,7 +224,7 @@
           </el-col>
         </el-row>
 
-        <el-form-item label="分片库架构创建" prop="structureReuseMode">
+        <el-form-item label="分片库架构共用" prop="structureReuseMode">
           <el-switch v-model="form.structureReuseMode" active-value="1" inactive-value="0" :disabled="!supportsShardedSchema" />
           <div class="form-tip" v-if="!supportsShardedSchema">请选择 MySQL、TiDB、StarRocks、PostgreSQL、SQL Server 或 Oracle 源数据源。</div>
           <div class="form-tip" v-else-if="form.structureReuseMode === '1'">

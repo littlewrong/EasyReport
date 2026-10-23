@@ -1,6 +1,7 @@
 package cn.easyreport.sync.mapper;
 
 import java.util.List;
+import org.apache.ibatis.annotations.Param;
 import cn.easyreport.sync.domain.ErDataTransfer;
 
 /**
@@ -42,6 +43,20 @@ public interface ErDataTransferMapper
      * @return 结果
      */
     public int updateErDataTransfer(ErDataTransfer erDataTransfer);
+
+    /** 在配置库原子认领，禁止不同实例同时启动运行中/停止中的同一个任务。 */
+    int claimTransfer(ErDataTransfer erDataTransfer);
+
+    /** 远程仅运行中的任务接收请求；仍有本地运行锁时也覆盖准备阶段及旧版误标。 */
+    int requestTransferStop(@Param("transferId") Long transferId,
+                            @Param("syncProgress") String syncProgress,
+                            @Param("allowLocalActive") boolean allowLocalActive);
+
+    /** 原子保留并完成已提交的停止请求，防止末次成功/失败覆盖停止状态。 */
+    int finishTransfer(ErDataTransfer erDataTransfer);
+
+    /** 停止中及结束状态不再接受工作线程的展示进度。 */
+    int updateTransferProgress(ErDataTransfer erDataTransfer);
 
     /**
      * 删除数据同步任务

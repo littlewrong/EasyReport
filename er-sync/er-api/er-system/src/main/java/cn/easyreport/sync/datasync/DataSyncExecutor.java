@@ -47,6 +47,23 @@ public abstract class DataSyncExecutor {
     protected final ErDataTransferLogMapper logMapper;
     protected final ErDataTransferProgressMapper progressMapper;
     private final DataSyncValueConverter valueConverter;
+    private final DataSyncCancellation cancellation = new DataSyncCancellation();
+
+    public void requestStop() {
+        cancellation.requestStop();
+    }
+
+    public boolean isStopRequested() {
+        return cancellation.isStopRequested();
+    }
+
+    protected void checkStopped() throws DataSyncCancellation.SyncStoppedException {
+        cancellation.checkStopped();
+    }
+
+    protected DataSyncCancellation cancellationContext() {
+        return cancellation;
+    }
 
     public DataSyncExecutor(ErDataTransferMapper transferMapper, ErDataTransferLogMapper logMapper, ErDataTransferProgressMapper progressMapper) {
         this(transferMapper, logMapper, progressMapper, new DefaultDataSyncValueConverter());
@@ -92,6 +109,41 @@ public abstract class DataSyncExecutor {
      */
     protected void afterBatchInsert(Connection targetConn, String tableName) throws Exception {
         // Default: do nothing
+    }
+
+    /**
+     * 可选的数据库直连全量导入。准备和源表可读校验须在清空目标表之前完成。
+     * 返回 null 时沿用 JDBC 批量搬运；调用方在成功、失败时均关闭导入资源。
+     */
+    protected DirectFullImport prepareDirectFullImport(ErDataTransfer task, ErDatasource sourceDs,
+            String schema, String table, String targetTable, List<String> sourceCols,
+            List<String> targetCols, DataSyncExtractor extractor, Connection sourceConn,
+            Connection targetConn, String tsField, SyncProgressCallback callback) throws Exception {
+        return null;
+    }
+
+    protected interface DirectFullImport extends AutoCloseable {
+        FullSyncStats execute() throws Exception;
+        @Override
+        void close() throws Exception;
+    }
+
+    private DirectFullImport manageDirectFullImport(DirectFullImport directImport) {
+        if (directImport == null) return null;
+        return new DirectFullImport() {
+            @Override
+            public FullSyncStats execute() throws Exception {
+                checkStopped();
+                return directImport.execute();
+            }
+
+            @Override
+            public void close() throws Exception {
+                try (DataSyncCancellation.CleanupScope ignored = cancellation.allowCleanup()) {
+                    directImport.close();
+                }
+            }
+        };
     }
 
     /**
@@ -144,6 +196,7 @@ public abstract class DataSyncExecutor {
         int maxRowsByParams = Math.max(1, getMaxFullInsertParams() / columnCount);
         int maxRowsPerStatement = Math.max(1, Math.min(maxRowsByParams, getMaxFullInsertRows()));
         for (int start = 0; start < rows.size(); start += maxRowsPerStatement) {
+            checkStopped();
             int end = Math.min(start + maxRowsPerStatement, rows.size());
             executeFullInsertStatement(conn, rows, start, end, targetTable, cols);
         }
@@ -256,7 +309,9 @@ public abstract class DataSyncExecutor {
         System.out.println("[DataSyncExecutor] 建立数据库连接");
         Connection sourceConn = null;
         Connection targetConn = null;
+        cancellation.start(stopChecker);
         try {
+            checkStopped();
             sourceConn = openManagedConnection(sourceDs);
             targetConn = openManagedConnection(targetDs);
 
@@ -284,7 +339,7 @@ public abstract class DataSyncExecutor {
             System.out.println("[DataSyncExecutor] 开始同步表，总数: " + tables.size());
             for (int idx = 0; idx < tables.size(); idx++) {
                 // 检查是否需要停止
-                if (stopChecker != null && stopChecker.shouldStop()) {
+                if (isStopRequested()) {
                     System.out.println("[DataSyncExecutor] 检测到停止标志，停止同步");
                     result.setStopped(true);
                     result.setSuccess(true); // 优雅停止视为成功
@@ -309,6 +364,7 @@ public abstract class DataSyncExecutor {
                     "正在同步: " + fullTableName, result.getPendingTables(), result.getCompletedTables());
 
                 try {
+                    checkStopped();
                     // 上一张表耗时较长（>wait_timeout）时，源/目标连接可能已被服务端关闭。
                     // 在每张表同步前校验连接活性，失效时重建，避免后续表全部抛出
                     // "The last packet successfully received ... is longer than 'wait_timeout'"。
@@ -326,7 +382,7 @@ public abstract class DataSyncExecutor {
                     SyncProgressCallback tableProgressCallback = (current, total, message) ->
                         updateProgressWithTables(task.getTransferId(), currentTableNo, tables.size(),
                             message, result.getPendingTables(), result.getCompletedTables());
-                    SyncTableResult tr = syncTable(task, spec.schema, spec.table, extractor, loader, sourceConn, targetConn, batchSize, tableProgressCallback, lastSyncMap);
+                    SyncTableResult tr = syncTable(task, sourceDs, spec.schema, spec.table, extractor, loader, sourceConn, targetConn, batchSize, tableProgressCallback, lastSyncMap);
                     result.addLog(tr.log);
                     result.getCompletedTables().add(fullTableName);
 
@@ -344,6 +400,19 @@ public abstract class DataSyncExecutor {
                         maxSyncTs = tr.maxTs;
                     }
                 } catch (Exception e) {
+                    if (isStopRequested() || e instanceof DataSyncCancellation.SyncStoppedException) {
+                        reportStopCleanupErrors(task.getTransferId(), e);
+                        result.setStopped(true);
+                        result.setSuccess(true);
+                        result.setMessage("同步已停止，当前表未完成：" + fullTableName);
+                        if (!result.getPendingTables().contains(fullTableName)) {
+                            result.getPendingTables().add(0, fullTableName);
+                        }
+                        updateProgressWithTables(task.getTransferId(), idx, tables.size(),
+                                "同步正在停止，当前表未完成：" + fullTableName,
+                                result.getPendingTables(), result.getCompletedTables());
+                        break;
+                    }
                     System.err.println("[DataSyncExecutor] 同步表失败 [" + fullTableName + "]: " + e.getMessage());
                     e.printStackTrace();
 
@@ -374,8 +443,14 @@ public abstract class DataSyncExecutor {
             }
             System.out.println("[DataSyncExecutor] 所有表同步完成");
 
+            if (isStopRequested()) {
+                result.setStopped(true);
+                result.setSuccess(true);
+                if (!result.getMessage().startsWith("同步已停止")) result.setMessage("同步已停止");
+            }
+
             System.out.println("[DataSyncExecutor] 更新最后同步时间戳");
-            if (maxSyncTs != null) {
+            if (maxSyncTs != null && !result.isStopped()) {
                 ErDataTransfer upd = new ErDataTransfer();
                 upd.setTransferId(task.getTransferId());
                 upd.setLastSyncValue(String.valueOf(maxSyncTs.getTime()));
@@ -399,9 +474,22 @@ public abstract class DataSyncExecutor {
             result.setSuccessCount(successCount);
             result.setFailCount(failCount);
             System.out.println("[DataSyncExecutor] 统计结果 - 总数: " + totalCount + ", 成功: " + successCount + ", 失败: " + failCount);
+        } catch (Exception e) {
+            if (!isStopRequested() && !(e instanceof DataSyncCancellation.SyncStoppedException)) throw e;
+            reportStopCleanupErrors(task.getTransferId(), e);
+            result.setStopped(true);
+            result.setSuccess(true);
+            result.setMessage("同步已停止");
         } finally {
-            closeQuietly(sourceConn);
-            closeQuietly(targetConn);
+            try {
+                if (isStopRequested() && targetConn != null) {
+                    try { targetConn.rollback(); } catch (Exception ignored) { }
+                }
+                closeQuietly(sourceConn);
+                closeQuietly(targetConn);
+            } finally {
+                cancellation.close();
+            }
         }
         System.out.println("[DataSyncExecutor] execute方法执行完成，返回结果");
         return result;
@@ -411,10 +499,18 @@ public abstract class DataSyncExecutor {
      * 打开数据源连接并完成通用会话初始化；数据库特定初始化由子类 hook 处理。
      */
     private Connection openManagedConnection(ErDatasource ds) throws Exception {
-        Connection conn = DriverManager.getConnection(ds.getJdbcUrl(), ds.getUsername(), ds.getPassword());
-        conn.setAutoCommit(false);
-        initializeConnection(ds, conn);
-        return conn;
+        checkStopped();
+        Connection conn = cancellation.wrap(DriverManager.getConnection(ds.getJdbcUrl(), ds.getUsername(), ds.getPassword()));
+        try {
+            checkStopped();
+            conn.setAutoCommit(false);
+            initializeConnection(ds, conn);
+            checkStopped();
+            return conn;
+        } catch (Exception e) {
+            closeQuietly(conn);
+            throw e;
+        }
     }
 
     /**
@@ -442,7 +538,7 @@ public abstract class DataSyncExecutor {
         }
     }
 
-    private SyncTableResult syncTable(ErDataTransfer task, String schema, String table, DataSyncExtractor extractor, DataSyncLoader loader,
+    private SyncTableResult syncTable(ErDataTransfer task, ErDatasource sourceDs, String schema, String table, DataSyncExtractor extractor, DataSyncLoader loader,
                                       Connection sourceConn, Connection targetConn, int batchSize, SyncProgressCallback callback,
                                       Map<String, Timestamp> lastSyncMap) throws Exception {
         SyncTableResult tr = new SyncTableResult();
@@ -500,11 +596,12 @@ public abstract class DataSyncExecutor {
         try {
             prepareTargetSchema(sourceConn, targetConn, schema, table, targetTableSqlName);
         } catch (Exception e) {
+            checkStopped();
             System.out.println("[DataSyncExecutor] prepareTargetSchema 警告（忽略，继续同步）: " + e.getMessage());
         }
 
         if ("0".equals(task.getSyncMode())) {
-            tr = syncFull(task, schema, table, targetTableSqlName, sourceCols, targetCols, targetPk, extractor, loader, sourceConn, targetConn, batchSize, tsField, doInsert, doUpdate, callback);
+            tr = syncFull(task, sourceDs, schema, table, targetTableSqlName, sourceCols, targetCols, targetPk, extractor, loader, sourceConn, targetConn, batchSize, tsField, doInsert, doUpdate, callback);
         } else {
             tr = syncIncremental(task, schema, table, targetTableSqlName, sourceCols, targetCols, targetPk, extractor, loader, sourceConn, targetConn, batchSize, tsField, doInsert, doUpdate, doDelete, callback, lastSyncMap);
         }
@@ -516,7 +613,7 @@ public abstract class DataSyncExecutor {
         return tr;
     }
 
-    private SyncTableResult syncFull(ErDataTransfer task, String schema, String table, String targetTable,
+    private SyncTableResult syncFull(ErDataTransfer task, ErDatasource sourceDs, String schema, String table, String targetTable,
                                      List<String> sourceCols, List<String> targetCols, List<String> targetPk,
                                      DataSyncExtractor extractor, DataSyncLoader loader,
                                      Connection sourceConn, Connection targetConn, int batchSize, String tsField,
@@ -541,38 +638,35 @@ public abstract class DataSyncExecutor {
         }
         if (sourcePk.isEmpty()) sourcePk = sourceCols.subList(0, 1);
 
-        // Clear target table using database-specific method
-        clearTable(targetConn, targetTable);
-        targetConn.commit();
+        FullSyncStats stats;
+        try (DirectFullImport directImport = manageDirectFullImport(prepareDirectFullImport(task, sourceDs, schema, table,
+                targetTable, sourceCols, targetCols, extractor, sourceConn, targetConn, tsField, callback))) {
+            checkStopped();
+            // 外部表准备成功后才清空目标，避免源映射或权限检查失败时清空已有数据。
+            clearTable(targetConn, targetTable);
+            checkStopped();
+            targetConn.commit();
 
-        // Full sync always TRUNCATEs first, so target is always empty; always use INSERT, never MERGE
-        // Oracle JDBC addBatch()/executeBatch() silently fails for MERGE INTO statements
-        String upsertSql = loader.buildUpsertSql(targetTable, targetCols, false, targetPk);
-
-        System.out.println("[DataSyncExecutor.syncFull] Generated upsert SQL: " + upsertSql);
-
-        beforeBatchInsert(targetConn, targetTable);
-        try {
-            try (PreparedStatement psIns = targetConn.prepareStatement(upsertSql)) {
-                FullSyncStats stats;
-                if (shouldUseTimestampWindowFullSync(extractor, tsField)) {
-                    stats = syncFullByTimestampWindow(schema, table, targetTable, sourceCols, targetCols, targetPk,
-                            sourcePk, extractor, sourceConn, targetConn, psIns, batchSize, tsField,
-                            callback, tr.log.getSourceTable());
+            beforeBatchInsert(targetConn, targetTable);
+            try {
+                if (directImport != null) {
+                    stats = directImport.execute();
                 } else {
-                    String selectSql = extractor.buildSelectFull(schema, table, tsField, sourcePk);
-                    stats = syncFullQuery(selectSql, null, targetTable, sourceCols, targetCols, targetPk,
-                            sourceConn, targetConn, psIns, batchSize, tsField, callback,
-                            tr.log.getSourceTable(), "Full sync", new FullSyncStats());
-                }
-                tr.log.setTotalCount(stats.processed);
-                tr.log.setSuccessCount(stats.processed);
-                tr.log.setFailCount(0L);
-                tr.log.setSyncResult("0");
-                tr.maxTs = stats.maxTs;
-                if (stats.maxTs != null) {
-                    tr.log.setLastSyncValue(String.valueOf(stats.maxTs.getTime()));
-                    saveProgress(task.getTransferId(), tr.log.getSourceTable(), stats.maxTs);
+                    // 全量同步已清空目标，沿用原有 INSERT 批量搬运。
+                    String upsertSql = loader.buildUpsertSql(targetTable, targetCols, false, targetPk);
+                    System.out.println("[DataSyncExecutor.syncFull] Generated upsert SQL: " + upsertSql);
+                    try (PreparedStatement psIns = targetConn.prepareStatement(upsertSql)) {
+                        if (shouldUseTimestampWindowFullSync(extractor, tsField)) {
+                            stats = syncFullByTimestampWindow(schema, table, targetTable, sourceCols, targetCols, targetPk,
+                                    sourcePk, extractor, sourceConn, targetConn, psIns, batchSize, tsField,
+                                    callback, tr.log.getSourceTable());
+                        } else {
+                            String selectSql = extractor.buildSelectFull(schema, table, tsField, sourcePk);
+                            stats = syncFullQuery(selectSql, null, targetTable, sourceCols, targetCols, targetPk,
+                                    sourceConn, targetConn, psIns, batchSize, tsField, callback,
+                                    tr.log.getSourceTable(), "Full sync", new FullSyncStats());
+                        }
+                    }
                 }
             } catch (Exception e) {
                 targetConn.rollback();
@@ -580,9 +674,22 @@ public abstract class DataSyncExecutor {
                 tr.log.setSyncResult("1");
                 tr.log.setErrorMessage(e.getMessage());
                 throw e;
+            } finally {
+                try (DataSyncCancellation.CleanupScope ignored = cancellation.allowCleanup()) {
+                    afterBatchInsert(targetConn, targetTable);
+                }
             }
-        } finally {
-            afterBatchInsert(targetConn, targetTable);
+        }
+        // 导入与资源清理均成功后，才将整张表标记完成并推进断点。
+        checkStopped();
+        tr.log.setTotalCount(stats.processed);
+        tr.log.setSuccessCount(stats.processed);
+        tr.log.setFailCount(0L);
+        tr.log.setSyncResult("0");
+        tr.maxTs = stats.maxTs;
+        if (stats.maxTs != null) {
+            tr.log.setLastSyncValue(String.valueOf(stats.maxTs.getTime()));
+            saveProgress(task.getTransferId(), tr.log.getSourceTable(), stats.maxTs);
         }
         return tr;
     }
@@ -599,10 +706,11 @@ public abstract class DataSyncExecutor {
                                                     String sourceTableName) throws Exception {
         TimestampBounds bounds = loadTimestampBounds(extractor, sourceConn, schema, table, tsField);
         if (bounds == null || bounds.minTs == null || bounds.maxTs == null) {
-            System.out.println("[DataSyncExecutor.syncFull] 时间戳范围为空，回退为普通全表查询: " + sourceTableName);
-            return syncFullQuery(extractor.buildSelectFull(schema, table, tsField, sourcePk), null, targetTable,
-                    sourceCols, targetCols, targetPk, sourceConn, targetConn, psIns, batchSize, tsField,
-                    callback, sourceTableName, "Full sync", new FullSyncStats());
+            checkStopped();
+            String message = "时间戳字段无非 NULL 数据，跳过初始化: " + sourceTableName;
+            System.out.println("[DataSyncExecutor.syncFull] " + message);
+            if (callback != null) callback.onProgress(0, 0, message);
+            return new FullSyncStats();
         }
 
         System.out.println("[DataSyncExecutor.syncFull] 启用按天窗口全量同步: " + sourceTableName
@@ -613,6 +721,7 @@ public abstract class DataSyncExecutor {
         Timestamp windowStart = truncateToDay(bounds.minTs);
         int windowDays = Math.max(1, getFullSyncWindowDays());
         while (!windowStart.after(bounds.maxTs)) {
+            checkStopped();
             Timestamp currentStart = windowStart;
             Timestamp currentEnd = addDays(currentStart, windowDays);
             String messagePrefix = "Full sync " + currentStart.toLocalDateTime().toLocalDate();
@@ -658,8 +767,12 @@ public abstract class DataSyncExecutor {
                 }
 
                 List<Object[]> rowBuffer = new ArrayList<>();
+                boolean hasTimestampField = tsField != null && !tsField.trim().isEmpty();
                 int batch = 0;
                 while (rs.next()) {
+                    checkStopped();
+                    Object rawTimestamp = hasTimestampField ? rs.getObject(tsField) : null;
+                    if (hasTimestampField && rawTimestamp == null) continue;
                     Object[] rowData = new Object[sourceCols.size()];
                     for (int i = 0; i < sourceCols.size(); i++) {
                         Object val = rs.getObject(sourceCols.get(i));
@@ -667,7 +780,8 @@ public abstract class DataSyncExecutor {
                         rowData[i] = val;
                         if (!useBufferedFullInsert()) psIns.setObject(i + 1, val);
                     }
-                    Timestamp ts = readTimestampColumn(rs, tsField);
+                    Object convertedTimestamp = hasTimestampField ? convertValue(rawTimestamp) : null;
+                    Timestamp ts = convertedTimestamp instanceof Timestamp ? (Timestamp) convertedTimestamp : null;
                     if (ts != null && (stats.maxTs == null || ts.after(stats.maxTs))) stats.maxTs = ts;
                     if (useBufferedFullInsert()) {
                         rowBuffer.add(rowData);
@@ -677,27 +791,32 @@ public abstract class DataSyncExecutor {
                     batch++;
                     stats.processed++;
                     if (batch >= batchSize) {
+                        checkStopped();
                         if (useBufferedFullInsert()) {
                             executeBufferedFullInsert(targetConn, rowBuffer, targetTable, targetCols, targetPk);
                             rowBuffer.clear();
                         } else {
                             psIns.executeBatch();
                         }
+                        checkStopped();
                         targetConn.commit();
                         batch = 0;
                         if (callback != null) {
+                            checkStopped();
                             callback.onProgress((int)Math.min(stats.processed, Integer.MAX_VALUE), -1,
                                     messagePrefix + ": " + sourceTableName + "(" + stats.processed + ")");
                         }
                     }
                 }
                 if (batch > 0) {
+                    checkStopped();
                     if (useBufferedFullInsert()) {
                         executeBufferedFullInsert(targetConn, rowBuffer, targetTable, targetCols, targetPk);
                         rowBuffer.clear();
                     } else {
                         psIns.executeBatch();
                     }
+                    checkStopped();
                     targetConn.commit();
                 }
             }
@@ -788,6 +907,7 @@ public abstract class DataSyncExecutor {
                 int batch = 0;
                 long processed = 0;
                 while (rs.next()) {
+                    checkStopped();
                     Object[] rowData = new Object[sourceCols.size()];
                     for (int i = 0; i < sourceCols.size(); i++) {
                         Object val = rs.getObject(sourceCols.get(i));
@@ -807,12 +927,14 @@ public abstract class DataSyncExecutor {
                     batch++;
                     processed++;
                     if (batch >= batchSize) {
+                        checkStopped();
                         if (useBufferedUpsert()) {
                             executeBufferedUpsert(targetConn, rowBuffer, targetTable, targetCols, targetPk);
                             rowBuffer.clear();
                         } else if (!useRowByRowUpsert()) {
                             psIns.executeBatch();
                         }
+                        checkStopped();
                         targetConn.commit();
                         batch = 0;
                         if (callback != null) callback.onProgress((int)Math.min(processed, Integer.MAX_VALUE), -1, "Incremental: " + tr.log.getSourceTable() + "(" + processed + ")");
@@ -820,6 +942,7 @@ public abstract class DataSyncExecutor {
                 }
                 System.out.println("[DataSyncExecutor.syncIncremental] 数据读取完成，总记录数: " + processed + "，剩余batch: " + batch);
                 if (batch > 0) {
+                    checkStopped();
                     System.out.println("[DataSyncExecutor.syncIncremental] 提交最后一批数据: " + batch + " 条");
                     if (useBufferedUpsert()) {
                         executeBufferedUpsert(targetConn, rowBuffer, targetTable, targetCols, targetPk);
@@ -827,6 +950,7 @@ public abstract class DataSyncExecutor {
                     } else if (!useRowByRowUpsert()) {
                         psIns.executeBatch();
                     }
+                    checkStopped();
                     targetConn.commit();
                     System.out.println("[DataSyncExecutor.syncIncremental] 最后一批数据已提交");
                 }
@@ -836,8 +960,10 @@ public abstract class DataSyncExecutor {
                 tr.log.setSyncResult("0");
                 System.out.println("[DataSyncExecutor.syncIncremental] 增量同步完成，总数: " + processed);
             } catch (Exception e) {
-                System.err.println("[DataSyncExecutor.syncIncremental] 增量同步异常: " + e.getMessage());
-                e.printStackTrace();
+                if (!isStopRequested() && !(e instanceof DataSyncCancellation.SyncStoppedException)) {
+                    System.err.println("[DataSyncExecutor.syncIncremental] 增量同步异常: " + e.getMessage());
+                    e.printStackTrace();
+                }
                 targetConn.rollback();
                 tr.success = false;
                 tr.log.setSyncResult("1");
@@ -845,10 +971,13 @@ public abstract class DataSyncExecutor {
                 throw e;
             }
         } finally {
-            afterBatchInsert(targetConn, targetTable);
+            try (DataSyncCancellation.CleanupScope ignored = cancellation.allowCleanup()) {
+                afterBatchInsert(targetConn, targetTable);
+            }
         }
 
         // delete alignment
+        checkStopped();
         if (doDelete) {
             System.out.println("[DataSyncExecutor.syncIncremental] 开始删除对齐");
             try {
@@ -865,6 +994,7 @@ public abstract class DataSyncExecutor {
                     System.out.println("[DataSyncExecutor.syncIncremental] 更新统计信息，总数: " + tr.log.getTotalCount() + ", 成功: " + tr.log.getSuccessCount());
                 }
             } catch (Exception e) {
+                checkStopped();
                 System.err.println("[DataSyncExecutor.syncIncremental] 删除对齐失败: " + e.getMessage());
                 e.printStackTrace();
                 // 删除对齐失败不影响整体同步结果，只记录错误
@@ -926,6 +1056,7 @@ public abstract class DataSyncExecutor {
         int totalDeleted = 0;
 
         while (hasMore) {
+            checkStopped();
             batchCount++;
             List<Object> ids = new ArrayList<>();
             Timestamp maxTs = cursor;
@@ -933,6 +1064,7 @@ public abstract class DataSyncExecutor {
                 setAlignDeleteQueryParams(ps, cursor, batchSize);
                 ResultSet rs = ps.executeQuery();
                 while (rs.next()) {
+                    checkStopped();
                     ids.add(rs.getObject(pk));
                     Timestamp ts = rs.getTimestamp(tsField);
                     if (ts != null && (maxTs == null || ts.after(maxTs))) {
@@ -951,6 +1083,7 @@ public abstract class DataSyncExecutor {
                     : quoteSourceIdentifier(sourceTable);
             int deleteChunkSize = getDeleteBatchSize();
             for (int start = 0; start < ids.size(); start += deleteChunkSize) {
+                checkStopped();
                 int end = Math.min(start + deleteChunkSize, ids.size());
                 List<Object> chunk = ids.subList(start, end);
                 String checkSql = "SELECT " + quoteSourceIdentifier(pk) + " FROM " + sourceTableName +
@@ -991,6 +1124,7 @@ public abstract class DataSyncExecutor {
         int total = 0;
         int deleteChunkSize = getDeleteBatchSize();
         for (int start = 0; start < deleteIds.size(); start += deleteChunkSize) {
+            checkStopped();
             int end = Math.min(start + deleteChunkSize, deleteIds.size());
             List<Object> chunk = deleteIds.subList(start, end);
             String deleteSql = "DELETE FROM " + targetTable + " WHERE " + quoteTargetIdentifier(pk) +
@@ -1000,6 +1134,7 @@ public abstract class DataSyncExecutor {
                 total += ps.executeUpdate();
             }
         }
+        checkStopped();
         targetConn.commit();
         return total;
     }
@@ -1154,9 +1289,9 @@ public abstract class DataSyncExecutor {
         ErDataTransferLog log;
     }
 
-    private static class FullSyncStats {
-        long processed;
-        Timestamp maxTs;
+    protected static class FullSyncStats {
+        protected long processed;
+        protected Timestamp maxTs;
     }
 
     private static class TimestampBounds {
@@ -1240,13 +1375,27 @@ public abstract class DataSyncExecutor {
         return targetStrategy.quoteIdentifier(schema) + "." + targetStrategy.quoteIdentifier(table);
     }
 
-    private void saveProgress(Long transferId, String sourceTable, Timestamp ts) {
+    private void saveProgress(Long transferId, String sourceTable, Timestamp ts) throws DataSyncCancellation.SyncStoppedException {
+        checkStopped();
         if (transferId == null || sourceTable == null || ts == null) return;
         ErDataTransferProgress p = new ErDataTransferProgress();
         p.setTransferId(transferId);
         p.setSourceTable(sourceTable);
         p.setLastSyncValue(String.valueOf(ts.getTime()));
         progressMapper.upsert(p);
+    }
+
+    private void reportStopCleanupErrors(Long transferId, Throwable failure) {
+        if (failure.getMessage() != null && failure.getMessage().contains("清理导入外表失败")) {
+            log.warn("同步任务 {} 的临时外表清理失败，请按日志中的表名检查残留", transferId, failure);
+        }
+        for (Throwable cleanupError : failure.getSuppressed()) {
+            log.warn("同步任务 {} 停止期间的资源清理异常，请检查临时外表是否残留", transferId, cleanupError);
+        }
+        if (!(failure instanceof DataSyncCancellation.SyncStoppedException)
+                && failure.getSuppressed().length == 0) {
+            log.debug("同步任务 {} 因停止请求结束当前操作", transferId, failure);
+        }
     }
 
     private Map<String, Timestamp> loadLastSyncMap(Long transferId) {
@@ -1286,11 +1435,12 @@ public abstract class DataSyncExecutor {
     private void updateProgressWithTables(Long transferId, int current, int total, String message,
                                           List<String> pendingTables, List<String> completedTables) {
         if (transferId == null) return;
+        if (isStopRequested()) message = "同步正在停止，正在取消当前 SQL 并清理资源";
         ErDataTransfer upd = new ErDataTransfer();
         upd.setTransferId(transferId);
         upd.setSyncProgress(SyncProgressPayload.withTables(current, total, message, pendingTables, completedTables));
         try {
-            transferMapper.updateErDataTransfer(upd);
+            transferMapper.updateTransferProgress(upd);
         } catch (RuntimeException e) {
             log.warn("Unable to save display progress for transfer {}, continuing data sync", transferId, e);
         }

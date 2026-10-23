@@ -1,17 +1,7 @@
 /*
- Navicat Premium Data Transfer
-
- Source Server         : localhost
- Source Server Type    : MySQL
- Source Server Version : 80026 (8.0.26)
- Source Host           : localhost:3306
- Source Schema         : easyreport
-
- Target Server Type    : MySQL
- Target Server Version : 80026 (8.0.26)
- File Encoding         : 65001
-
- Date: 08/06/2026 10:02:49
+ EasyReport 初始化结构与公开基础数据（MySQL 8）。
+ 仅用于空库首次安装；已有库请使用对应 upgrade_*.sql，勿整份执行本文件。
+ 不包含业务数据源密码、同步任务、断点、业务方案或历史运行日志；安装后自行配置。
 */
 
 SET NAMES utf8mb4;
@@ -28,7 +18,7 @@ CREATE TABLE `er_data_sync`  (
   `source_datasource_id` bigint NOT NULL COMMENT '源数据源ID',
   `source_schema_pattern` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL COMMENT '源Schema匹配模式（支持通配符和逗号分隔）',
   `source_table_pattern` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL COMMENT '源表匹配模式（支持通配符和逗号分隔）',
-  `structure_reuse_mode` char(1) NOT NULL DEFAULT '0' COMMENT '分片库架构创建（0关闭 1开启）',
+  `structure_reuse_mode` char(1) NOT NULL DEFAULT '0' COMMENT '分片库架构共用（0关闭 1开启）',
   `target_datasource_id` bigint NOT NULL COMMENT '目标数据源ID',
   `if_exists_action` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT '0' COMMENT '目标表已存在时（0跳过 1删除重建）',
   `sync_status` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT '0' COMMENT '同步状态（0待同步 1同步中 2同步成功 3同步失败）',
@@ -91,6 +81,10 @@ CREATE TABLE `er_data_transfer`  (
   `match_type` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT '0' COMMENT '匹配方式（0模糊匹配 1精确匹配）',
   `target_datasource_id` bigint NOT NULL COMMENT '目标数据源ID',
   `sync_mode` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT '0' COMMENT '同步模式（0初始化同步 1增量同步）',
+  `external_table_enabled` char(1) NOT NULL DEFAULT '0' COMMENT 'Catalog模式导入（0关闭 1开启，仅到StarRocks初始化同步）',
+  `catalog_name` varchar(1023) NULL DEFAULT NULL COMMENT '目标StarRocks已有的JDBC Catalog名称',
+  `external_table_threshold_wan` int NOT NULL DEFAULT 50 COMMENT '外部表整批导入阈值（万条，少于时整批导入）',
+  `external_table_window_unit` varchar(8) NOT NULL DEFAULT 'YEAR' COMMENT '外部表时间分片单位（YEAR年 MONTH月 DAY日）',
   `timestamp_field` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT 'time_stamp' COMMENT '时间戳字段（增量同步使用）',
   `sync_insert` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT '1' COMMENT '同步INSERT（0否 1是）',
   `sync_update` char(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT '1' COMMENT '同步UPDATE（0否 1是）',
@@ -116,7 +110,6 @@ CREATE TABLE `er_data_transfer`  (
 -- ----------------------------
 -- Records of er_data_transfer
 -- ----------------------------
-INSERT INTO `er_data_transfer` VALUES (62, 'StarRocks-To-Tidb', '1000', 4, 'synctest', 'test_wide_table', '0', 3, '0', 'time_stamp', '1', '1', '0', 2, 10, '4', '{\"current\":133510,\"total\":-1,\"message\":\"Full sync 2023-08-02: synctest.test_wide_table(133510)\",\"percent\":0}', '2026-04-30 18:44:51', '1690984396000', '{\"message\":\"任务已被手动停止\"}', '', NULL, '0', 'admin', '2026-04-30 14:31:53', 'admin', '2026-04-30 18:47:24', NULL);
 
 -- ----------------------------
 -- Table structure for er_data_transfer_log
@@ -147,18 +140,6 @@ CREATE TABLE `er_data_transfer_log`  (
 -- ----------------------------
 -- Records of er_data_transfer_log
 -- ----------------------------
-INSERT INTO `er_data_transfer_log` VALUES (220, 62, 'synctest.test_binary', '`synctest`.`test_binary`', '0', 'FULL', 3, 3, 0, '2026-04-30 14:31:57', '2026-04-30 14:31:58', 167, '0', NULL, '1773064255000', '2026-04-30 14:37:08');
-INSERT INTO `er_data_transfer_log` VALUES (221, 62, 'synctest.test_composite_pk', '`synctest`.`test_composite_pk`', '0', 'FULL', 8, 8, 0, '2026-04-30 14:31:58', '2026-04-30 14:31:58', 174, '0', NULL, '1773064255000', '2026-04-30 14:37:08');
-INSERT INTO `er_data_transfer_log` VALUES (222, 62, 'synctest.test_datetime', '`synctest`.`test_datetime`', '0', 'FULL', 5, 5, 0, '2026-04-30 14:31:58', '2026-04-30 14:31:58', 175, '0', NULL, '1773064255000', '2026-04-30 14:37:08');
-INSERT INTO `er_data_transfer_log` VALUES (223, 62, 'synctest.test_default_values', '`synctest`.`test_default_values`', '0', 'FULL', 4, 4, 0, '2026-04-30 14:31:58', '2026-04-30 14:31:58', 150, '0', NULL, '1773064255000', '2026-04-30 14:37:08');
-INSERT INTO `er_data_transfer_log` VALUES (224, 62, 'synctest.test_empty', '`synctest`.`test_empty`', '0', 'FULL', 0, 0, 0, '2026-04-30 14:31:58', '2026-04-30 14:31:58', 86, '0', NULL, '', '2026-04-30 14:37:08');
-INSERT INTO `er_data_transfer_log` VALUES (225, 62, 'synctest.test_numeric', 'synctest.test_numeric', '0', 'FULL', 0, 0, 0, '2026-04-30 14:31:59', '2026-04-30 14:31:59', 0, '1', 'Data truncation: Out of range value for column \'col_tinyint_u\' at row 1', '', '2026-04-30 14:37:08');
-INSERT INTO `er_data_transfer_log` VALUES (226, 62, 'synctest.test_order', '`synctest`.`test_order`', '0', 'FULL', 15, 15, 0, '2026-04-30 14:31:59', '2026-04-30 14:31:59', 268, '0', NULL, '1773064254000', '2026-04-30 14:37:08');
-INSERT INTO `er_data_transfer_log` VALUES (227, 62, 'synctest.test_string', '`synctest`.`test_string`', '0', 'FULL', 5, 5, 0, '2026-04-30 14:31:59', '2026-04-30 14:31:59', 178, '0', NULL, '1773064255000', '2026-04-30 14:37:08');
-INSERT INTO `er_data_transfer_log` VALUES (228, 62, 'synctest.test_user', '`synctest`.`test_user`', '0', 'FULL', 10, 10, 0, '2026-04-30 14:31:59', '2026-04-30 14:31:59', 194, '0', NULL, '1773064254000', '2026-04-30 14:37:08');
-INSERT INTO `er_data_transfer_log` VALUES (229, 62, 'synctest.test_wide_table', 'synctest.test_wide_table', '0', 'FULL', 0, 0, 0, '2026-04-30 14:37:09', '2026-04-30 14:37:09', 0, '1', 'Communications link failure during rollback(). Transaction resolution unknown.', '', '2026-04-30 14:37:08');
-INSERT INTO `er_data_transfer_log` VALUES (230, 62, 'synctest.test_wide_table', 'synctest.test_wide_table', '0', 'FULL', 0, 0, 0, '2026-04-30 14:39:55', '2026-04-30 14:39:55', 0, '1', 'Can not read response from server. Expected to read 241 bytes, read 152 bytes before connection was unexpectedly lost.', '', '2026-04-30 14:39:55');
-INSERT INTO `er_data_transfer_log` VALUES (231, 62, 'synctest.test_wide_table', 'synctest.test_wide_table', '0', 'FULL', 0, 0, 0, '2026-04-30 15:27:52', '2026-04-30 15:27:52', 0, '1', 'Incorrect bigint value: \'07052d57-1bbf-11f1-8e40-00ff049af2c5\' for column \'id\' at row 1', '', '2026-04-30 15:27:51');
 
 -- ----------------------------
 -- Table structure for er_data_transfer_progress
@@ -178,14 +159,6 @@ CREATE TABLE `er_data_transfer_progress`  (
 -- ----------------------------
 -- Records of er_data_transfer_progress
 -- ----------------------------
-INSERT INTO `er_data_transfer_progress` VALUES (140, 62, 'synctest.test_binary', '1773064255000', '2026-04-30 14:31:57', '2026-04-30 14:31:57');
-INSERT INTO `er_data_transfer_progress` VALUES (141, 62, 'synctest.test_composite_pk', '1773064255000', '2026-04-30 14:31:57', '2026-04-30 14:31:57');
-INSERT INTO `er_data_transfer_progress` VALUES (142, 62, 'synctest.test_datetime', '1773064255000', '2026-04-30 14:31:58', '2026-04-30 14:31:58');
-INSERT INTO `er_data_transfer_progress` VALUES (143, 62, 'synctest.test_default_values', '1773064255000', '2026-04-30 14:31:58', '2026-04-30 14:31:58');
-INSERT INTO `er_data_transfer_progress` VALUES (144, 62, 'synctest.test_order', '1773064254000', '2026-04-30 14:31:58', '2026-04-30 14:31:58');
-INSERT INTO `er_data_transfer_progress` VALUES (145, 62, 'synctest.test_string', '1773064255000', '2026-04-30 14:31:59', '2026-04-30 14:31:59');
-INSERT INTO `er_data_transfer_progress` VALUES (146, 62, 'synctest.test_user', '1773064254000', '2026-04-30 14:31:59', '2026-04-30 14:31:59');
-INSERT INTO `er_data_transfer_progress` VALUES (147, 62, 'synctest.test_wide_table', '1690984396000', '2026-04-30 18:47:24', '2026-04-30 18:47:24');
 
 -- ----------------------------
 -- Table structure for er_datasource
@@ -218,11 +191,6 @@ CREATE TABLE `er_datasource`  (
 -- ----------------------------
 -- Records of er_datasource
 -- ----------------------------
-INSERT INTO `er_datasource` VALUES (1, 'MySQL', 'MYSQL', 'localhost', 3306, 'easyreport', 'easyreport', 'er888888', 'com.mysql.cj.jdbc.Driver', 'jdbc:mysql://localhost:3306/easyreport?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8', '{\"autoReconnect\":\"true\",\"maxReconnects\":\"3\"}', '0', '0', '连接成功', '2026-03-31 15:47:35', 'admin', '2026-01-21 09:14:04', 'admin', '2026-03-31 15:47:34', 'MySQL');
-INSERT INTO `er_datasource` VALUES (2, 'PostgreSQL', 'POSTGRESQL', 'localhost', 54321, 'easyreport', 'system', 'er888888', 'org.postgresql.Driver', 'jdbc:postgresql://localhost:54321/easyreport', '{\"ssl\":\"false\"}', '0', '1', '连接失败：尝试连线已失败。', '2026-03-31 15:47:32', 'admin', '2026-01-21 09:14:04', 'admin', '2026-03-31 15:47:31', 'PostgreSQL开发数据源');
-INSERT INTO `er_datasource` VALUES (3, 'TiDB', 'TIDB', 'localhost', 4000, 'easyreport', 'easyreport', 'er888888', 'com.mysql.cj.jdbc.Driver', 'jdbc:mysql://localhost:4000/erp_base?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8', '{}', '0', '0', '连接成功', '2026-04-30 14:29:14', 'admin', '2026-01-21 09:14:04', 'admin', '2026-04-30 14:29:14', 'TiDB生产数据源');
-INSERT INTO `er_datasource` VALUES (4, 'StarRocks', 'STARROCKS', 'localhost', 9030, 'erp_base', 'easyreport', 'er888888', 'com.mysql.cj.jdbc.Driver', 'jdbc:mysql://localhost:9030/erp_base?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8', '{}', '0', '0', '连接成功', '2026-04-30 14:29:16', 'admin', '2026-01-21 09:14:04', 'admin', '2026-04-30 14:29:15', 'StarRocks分析数据源');
-INSERT INTO `er_datasource` VALUES (5, 'MSSQL', 'SQLSERVER', 'localhost', 1433, 'easyreport', 'easyreport', 'er888888', 'com.microsoft.sqlserver.jdbc.SQLServerDriver', 'jdbc:sqlserver://localhost:1433;DatabaseName=PMS_base;encrypt=false;trustServerCertificate=true;integratedSecurity=false', '', '0', '0', '连接成功', '2026-03-31 15:47:27', 'admin', '2026-01-21 11:45:39', 'admin', '2026-03-31 15:47:26', NULL);
 
 -- ----------------------------
 -- Table structure for er_model_config
@@ -305,7 +273,6 @@ CREATE TABLE `er_project_plan`  (
 -- ----------------------------
 -- Records of er_project_plan
 -- ----------------------------
-INSERT INTO `er_project_plan` VALUES (1, 1, '1', '3423432', '包干制', 103, '研发部门', '', '', '强电', '安全保障', 'sdfdsf', 'sdfdsf', 'sdfdsfsdf', '1', '1', '0', 0.00, '经营成本', '0', '框架落地', '2026-01-01', '2026-01-01', 'sdfdsfsdfsf', '1', 'sdfdsfd', 3433.00, '0', '2', 'admin', '2026-01-22 09:20:23', '', NULL, 'dsfds');
 
 -- ----------------------------
 -- Table structure for er_prompt_template
@@ -387,7 +354,6 @@ CREATE TABLE `er_renovation_plan`  (
 -- ----------------------------
 -- Records of er_renovation_plan
 -- ----------------------------
-INSERT INTO `er_renovation_plan` VALUES (1, 1, '1', '11', '1', '研发部门', NULL, NULL, 103, '2', '1', NULL, 'dfsdf', 'sdf', '1', '1', '1', 0.00, '1', '1', '1', '2026-01-01', '2026-01-21', 'sdfdsf', '1', 'sdf', 0.00, '0', '0', 'admin', '2026-01-21 20:56:52', '', NULL, 'sfdsf');
 
 -- ----------------------------
 -- Table structure for gen_table
@@ -896,67 +862,6 @@ CREATE TABLE `sys_logininfor`  (
 -- ----------------------------
 -- Records of sys_logininfor
 -- ----------------------------
-INSERT INTO `sys_logininfor` VALUES (100, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2025-12-25 17:37:32');
-INSERT INTO `sys_logininfor` VALUES (101, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2025-12-25 18:46:14');
-INSERT INTO `sys_logininfor` VALUES (102, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2025-12-25 18:50:30');
-INSERT INTO `sys_logininfor` VALUES (103, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '1', '验证码错误', '2025-12-25 19:00:27');
-INSERT INTO `sys_logininfor` VALUES (104, 'vben', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '1', '验证码已失效', '2025-12-25 19:01:59');
-INSERT INTO `sys_logininfor` VALUES (105, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '1', '验证码已失效', '2025-12-25 19:02:14');
-INSERT INTO `sys_logininfor` VALUES (106, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2025-12-25 19:10:26');
-INSERT INTO `sys_logininfor` VALUES (107, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2025-12-26 09:26:11');
-INSERT INTO `sys_logininfor` VALUES (108, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2025-12-26 10:11:23');
-INSERT INTO `sys_logininfor` VALUES (109, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-06 16:17:59');
-INSERT INTO `sys_logininfor` VALUES (110, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-06 16:33:53');
-INSERT INTO `sys_logininfor` VALUES (111, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-06 18:17:39');
-INSERT INTO `sys_logininfor` VALUES (112, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-07 15:24:42');
-INSERT INTO `sys_logininfor` VALUES (113, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '退出成功', '2026-01-07 15:26:52');
-INSERT INTO `sys_logininfor` VALUES (114, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-07 15:26:55');
-INSERT INTO `sys_logininfor` VALUES (115, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '1', '验证码错误', '2026-01-07 16:09:46');
-INSERT INTO `sys_logininfor` VALUES (116, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-07 16:09:50');
-INSERT INTO `sys_logininfor` VALUES (117, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-16 10:10:32');
-INSERT INTO `sys_logininfor` VALUES (118, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-16 14:50:09');
-INSERT INTO `sys_logininfor` VALUES (119, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-21 09:11:07');
-INSERT INTO `sys_logininfor` VALUES (120, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-21 09:37:15');
-INSERT INTO `sys_logininfor` VALUES (121, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-21 10:41:29');
-INSERT INTO `sys_logininfor` VALUES (122, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-21 13:33:34');
-INSERT INTO `sys_logininfor` VALUES (123, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-21 14:05:20');
-INSERT INTO `sys_logininfor` VALUES (124, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-21 17:12:16');
-INSERT INTO `sys_logininfor` VALUES (125, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-21 17:41:07');
-INSERT INTO `sys_logininfor` VALUES (126, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-21 17:43:39');
-INSERT INTO `sys_logininfor` VALUES (127, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-21 20:12:08');
-INSERT INTO `sys_logininfor` VALUES (128, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-21 20:26:56');
-INSERT INTO `sys_logininfor` VALUES (129, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-21 20:29:35');
-INSERT INTO `sys_logininfor` VALUES (130, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-21 21:08:25');
-INSERT INTO `sys_logininfor` VALUES (131, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-22 09:00:00');
-INSERT INTO `sys_logininfor` VALUES (132, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '1', '验证码错误', '2026-01-22 10:34:58');
-INSERT INTO `sys_logininfor` VALUES (133, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '1', '验证码错误', '2026-01-22 10:34:59');
-INSERT INTO `sys_logininfor` VALUES (134, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '1', '验证码错误', '2026-01-22 10:35:06');
-INSERT INTO `sys_logininfor` VALUES (135, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-22 10:35:15');
-INSERT INTO `sys_logininfor` VALUES (136, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '1', '验证码错误', '2026-01-23 09:49:27');
-INSERT INTO `sys_logininfor` VALUES (137, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-23 09:49:30');
-INSERT INTO `sys_logininfor` VALUES (138, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-23 09:56:16');
-INSERT INTO `sys_logininfor` VALUES (139, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-23 13:38:30');
-INSERT INTO `sys_logininfor` VALUES (140, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-23 14:51:52');
-INSERT INTO `sys_logininfor` VALUES (141, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-23 17:11:26');
-INSERT INTO `sys_logininfor` VALUES (142, 'admin', '127.0.0.1', '内网IP', 'Chrome 143', 'Windows10', '0', '登录成功', '2026-01-23 17:51:26');
-INSERT INTO `sys_logininfor` VALUES (143, 'admin', '127.0.0.1', '内网IP', 'Chrome 146', 'Windows10', '0', '登录成功', '2026-03-31 15:47:14');
-INSERT INTO `sys_logininfor` VALUES (144, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '1', '验证码错误', '2026-04-30 14:28:10');
-INSERT INTO `sys_logininfor` VALUES (145, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '0', '登录成功', '2026-04-30 14:28:10');
-INSERT INTO `sys_logininfor` VALUES (146, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '0', '登录成功', '2026-04-30 15:27:35');
-INSERT INTO `sys_logininfor` VALUES (147, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '1', '验证码错误', '2026-04-30 18:42:21');
-INSERT INTO `sys_logininfor` VALUES (148, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '1', '验证码已失效', '2026-04-30 18:42:21');
-INSERT INTO `sys_logininfor` VALUES (149, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '1', '验证码错误', '2026-04-30 18:42:23');
-INSERT INTO `sys_logininfor` VALUES (150, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '1', '验证码错误', '2026-04-30 18:42:24');
-INSERT INTO `sys_logininfor` VALUES (151, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '1', '验证码错误', '2026-04-30 18:42:28');
-INSERT INTO `sys_logininfor` VALUES (152, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '1', '用户不存在/密码错误', '2026-04-30 18:42:30');
-INSERT INTO `sys_logininfor` VALUES (153, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '1', '用户不存在/密码错误', '2026-04-30 18:42:36');
-INSERT INTO `sys_logininfor` VALUES (154, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '1', '验证码错误', '2026-04-30 18:44:17');
-INSERT INTO `sys_logininfor` VALUES (155, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '1', '用户不存在/密码错误', '2026-04-30 18:44:17');
-INSERT INTO `sys_logininfor` VALUES (156, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '0', '登录成功', '2026-04-30 18:44:25');
-INSERT INTO `sys_logininfor` VALUES (157, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '0', '登录成功', '2026-05-06 14:28:25');
-INSERT INTO `sys_logininfor` VALUES (158, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '0', '登录成功', '2026-05-06 15:51:50');
-INSERT INTO `sys_logininfor` VALUES (159, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '1', '验证码错误', '2026-05-12 13:57:35');
-INSERT INTO `sys_logininfor` VALUES (160, 'admin', '127.0.0.1', '内网IP', 'Chrome 147', 'Windows10', '0', '登录成功', '2026-05-12 13:57:36');
 
 -- ----------------------------
 -- Table structure for sys_menu

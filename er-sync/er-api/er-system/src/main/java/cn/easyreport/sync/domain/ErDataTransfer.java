@@ -57,6 +57,18 @@ public class ErDataTransfer extends BaseEntity
     @Excel(name = "同步模式", readConverterExp = "0=初始化同步,1=增量同步")
     private String syncMode;
 
+    /** Catalog模式导入（0关闭 1开启，仅支持到StarRocks的初始化同步） */
+    private String externalTableEnabled;
+
+    /** 已在目标StarRocks创建的JDBC Catalog名称；旧外部表任务可为空 */
+    private String catalogName;
+
+    /** 外部表整批导入阈值（万条，少于该值时整批导入） */
+    private Integer externalTableThresholdWan;
+
+    /** 外部表时间分片单位（YEAR年 MONTH月 DAY日） */
+    private String externalTableWindowUnit;
+
     /** 时间戳字段 */
     private String timestampField;
 
@@ -75,8 +87,8 @@ public class ErDataTransfer extends BaseEntity
     /** 批次大小 */
     private Integer batchSize;
 
-    /** 同步状态（0待同步 1同步中 2同步成功 3同步失败） */
-    @Excel(name = "同步状态", readConverterExp = "0=待同步,1=同步中,2=同步成功,3=同步失败")
+    /** 同步状态（0待同步 1同步中 2同步成功 3同步失败 4已停止 5停止中） */
+    @Excel(name = "同步状态", readConverterExp = "0=待同步,1=同步中,2=同步成功,3=同步失败,4=已停止,5=停止中")
     private String syncStatus;
 
     /** 同步进度（JSON格式） */
@@ -211,6 +223,46 @@ public class ErDataTransfer extends BaseEntity
     public String getSyncMode()
     {
         return syncMode;
+    }
+
+    public void setExternalTableEnabled(String externalTableEnabled)
+    {
+        this.externalTableEnabled = externalTableEnabled;
+    }
+
+    public String getExternalTableEnabled()
+    {
+        return externalTableEnabled;
+    }
+
+    public void setCatalogName(String catalogName)
+    {
+        this.catalogName = catalogName;
+    }
+
+    public String getCatalogName()
+    {
+        return catalogName;
+    }
+
+    public void setExternalTableThresholdWan(Integer externalTableThresholdWan)
+    {
+        this.externalTableThresholdWan = externalTableThresholdWan;
+    }
+
+    public Integer getExternalTableThresholdWan()
+    {
+        return externalTableThresholdWan;
+    }
+
+    public void setExternalTableWindowUnit(String externalTableWindowUnit)
+    {
+        this.externalTableWindowUnit = externalTableWindowUnit;
+    }
+
+    public String getExternalTableWindowUnit()
+    {
+        return externalTableWindowUnit;
     }
 
     public void setTimestampField(String timestampField)
@@ -364,6 +416,10 @@ public class ErDataTransfer extends BaseEntity
             .append("sourceTable", getSourceTable())
             .append("targetDatasourceId", getTargetDatasourceId())
             .append("syncMode", getSyncMode())
+            .append("externalTableEnabled", getExternalTableEnabled())
+            .append("catalogName", getCatalogName())
+            .append("externalTableThresholdWan", getExternalTableThresholdWan())
+            .append("externalTableWindowUnit", getExternalTableWindowUnit())
             .append("timestampField", getTimestampField())
             .append("syncInsert", getSyncInsert())
             .append("syncUpdate", getSyncUpdate())

@@ -230,7 +230,7 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="源数据源" prop="sourceDatasourceId">
-              <el-select v-model="form.sourceDatasourceId" placeholder="请选择源数据源" style="width: 100%;" @change="handleSourceChange">
+              <el-select v-model="form.sourceDatasourceId" placeholder="请选择源数据源" filterable style="width: 100%;" @change="handleSourceChange">
                 <el-option
                   v-for="item in datasourceOptions"
                   :key="item.datasourceId"
@@ -265,7 +265,7 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="目标数据源" prop="targetDatasourceId">
-              <el-select v-model="form.targetDatasourceId" placeholder="请选择目标数据源" style="width: 100%;">
+              <el-select v-model="form.targetDatasourceId" placeholder="请选择目标数据源" filterable style="width: 100%;">
                 <el-option
                   v-for="item in datasourceOptions"
                   :key="item.datasourceId"
@@ -582,7 +582,7 @@
 
 <script>
 import { listCombineSync, getCombineSync, delCombineSync, addCombineSync, updateCombineSync, executeCombineSync, previewCombineSync, listCombineLog, getCombineProgress, refreshCombineProgress, getCombineSyncProgress, stopCombineSync } from "@/api/system/combinesync";
-import { listDatasource } from "@/api/system/datasource";
+import { getDatasourceOptions } from "@/api/system/datasource";
 
 export default {
   name: "CombineSync",
@@ -696,9 +696,9 @@ export default {
       });
     },
     getDatasourceOptions() {
-      listDatasource({ status: '0' }).then(response => {
+      getDatasourceOptions().then(response => {
         // 合并同步功能只支持 StarRocks 类型的数据源
-        this.datasourceOptions = response.rows.filter(item => 
+        this.datasourceOptions = (response.data || []).filter(item =>
           item.datasourceType && item.datasourceType.toUpperCase() === 'STARROCKS'
         );
       });

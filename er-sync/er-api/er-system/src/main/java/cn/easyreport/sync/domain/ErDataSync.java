@@ -43,8 +43,8 @@ public class ErDataSync extends BaseEntity
     @Excel(name = "源表匹配模式")
     private String sourceTablePattern;
 
-    /** 分片库架构创建（0关闭 1开启） */
-    @Excel(name = "分片库架构创建", readConverterExp = "0=关闭,1=开启")
+    /** 分片库架构共用（0关闭 1开启） */
+    @Excel(name = "分片库架构共用", readConverterExp = "0=关闭,1=开启")
     private String structureReuseMode;
 
     /** 匹配方式：0 模糊 1 精确 */

@@ -16,6 +16,42 @@ import java.util.List;
 public class StarRocksDataSyncExtractor implements DataSyncExtractor {
 
     @Override
+    public List<String[]> listTableSpecs(Connection conn, List<String> schemaPatterns, List<String> tablePatterns) throws SQLException {
+        List<String[]> result = new ArrayList<>();
+        StringBuilder sql = new StringBuilder(
+            "SELECT table_schema, table_name FROM information_schema.tables WHERE table_type='BASE TABLE'");
+        List<String> params = new ArrayList<>();
+        if (!schemaPatterns.isEmpty()) {
+            sql.append(" AND (");
+            for (int i = 0; i < schemaPatterns.size(); i++) {
+                if (i > 0) sql.append(" OR ");
+                sql.append("table_schema LIKE ?");
+                params.add(schemaPatterns.get(i));
+            }
+            sql.append(")");
+        }
+        if (!tablePatterns.isEmpty()) {
+            sql.append(" AND (");
+            for (int i = 0; i < tablePatterns.size(); i++) {
+                if (i > 0) sql.append(" OR ");
+                sql.append("table_name LIKE ?");
+                params.add(tablePatterns.get(i));
+            }
+            sql.append(")");
+        }
+        sql.append(" ORDER BY table_schema, table_name");
+        try (PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            for (int i = 0; i < params.size(); i++) ps.setString(i + 1, params.get(i));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.add(new String[]{rs.getString("table_schema"), rs.getString("table_name")});
+                }
+            }
+        }
+        return result;
+    }
+
+    @Override
     public List<String> listTables(DatabaseMetaData meta, String dbType, String schemaPattern, String tablePattern) throws SQLException {
         List<String> list = new ArrayList<>();
         try (ResultSet rs = meta.getTables(schemaPattern, null, tablePattern, new String[]{"TABLE"})) {

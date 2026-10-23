@@ -33,6 +33,8 @@
             <el-option label="同步中" value="1" />
             <el-option label="同步成功" value="2" />
             <el-option label="同步失败" value="3" />
+            <el-option label="已停止" value="4" />
+            <el-option label="停止中" value="5" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态" prop="status">
@@ -115,7 +117,7 @@
           <el-tag
             :type="getSyncStatusType(scope.row.syncStatus)"
             size="small"
-            :style="scope.row.syncStatus === '1' || scope.row.syncStatus === '2' || scope.row.syncStatus === '3' || scope.row.syncStatus === '4' ? 'cursor: pointer;' : ''"
+            :style="scope.row.syncStatus !== '0' ? 'cursor: pointer;' : ''"
             @click="scope.row.syncStatus !== '0' ? showSyncProgress(scope.row.transferId) : null">
             {{ getSyncStatusLabel(scope.row.syncStatus) }}
           </el-tag>
@@ -152,7 +154,7 @@
             icon="el-icon-refresh"
             @click="handleExecute(scope.row)"
             v-hasPermi="['system:datatransfer:execute']"
-            :disabled="scope.row.syncStatus === '1'"
+            :disabled="isTransferRunning(scope.row.syncStatus)"
           >同步</el-button>
           <el-button
             size="mini"
@@ -167,7 +169,7 @@
             icon="el-icon-data-line"
             @click="showSyncProgress(scope.row.transferId)"
             v-hasPermi="['system:datatransfer:query']"
-            v-if="scope.row.syncStatus === '1' || scope.row.syncStatus === '2' || scope.row.syncStatus === '3' || scope.row.syncStatus === '4'"
+            v-if="scope.row.syncStatus !== '0'"
           >进度</el-button>
           <el-button
             size="mini"
@@ -182,7 +184,7 @@
             icon="el-icon-refresh"
             @click="handleRefreshTransferProgress(scope.row)"
             v-hasPermi="['system:datatransfer:execute']"
-            :disabled="scope.row.syncStatus === '1'"
+            :disabled="isTransferRunning(scope.row.syncStatus)"
           >刷新TS</el-button>
           <el-button
             size="mini"
@@ -239,7 +241,7 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="源数据源" prop="sourceDatasourceId">
-              <el-select v-model="form.sourceDatasourceId" placeholder="请选择源数据源" style="width: 100%;" @change="handleSourceChange">
+              <el-select v-model="form.sourceDatasourceId" placeholder="请选择源数据源" filterable style="width: 100%;" @change="handleSourceChange">
                 <el-option
                   v-for="item in datasourceOptions"
                   :key="item.datasourceId"
@@ -274,7 +276,7 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="目标数据源" prop="targetDatasourceId">
-              <el-select v-model="form.targetDatasourceId" placeholder="请选择目标数据源" style="width: 100%;">
+              <el-select v-model="form.targetDatasourceId" placeholder="请选择目标数据源" filterable style="width: 100%;">
                 <el-option
                   v-for="item in datasourceOptions"
                   :key="item.datasourceId"
@@ -301,7 +303,67 @@
           </el-col>
         </el-row>
 
-        <!-- 第二行：时间戳字段（独立一行，始终显示） -->
+        <el-form-item
+          v-if="canUseExternalTableImport"
+          label="Catalog 导入"
+          prop="externalTableEnabled"
+          class="external-table-import-item">
+          <div class="external-table-import-option">
+            <el-switch v-model="form.externalTableEnabled" active-value="1" inactive-value="0" />
+            <el-form-item
+              v-if="isExternalTableImportEnabled"
+              label="Catalog 名称"
+              prop="catalogName"
+              :required="true"
+              label-width="104px"
+              class="catalog-name-item">
+              <el-input
+                v-model="form.catalogName"
+                placeholder="例如：src_mysql"
+                :maxlength="1023"
+                clearable />
+            </el-form-item>
+          </div>
+          <div class="external-table-import-tip">{{ catalogImportTip }}</div>
+        </el-form-item>
+
+        <!-- Catalog 导入策略紧接导入开关 -->
+        <el-form-item v-if="isExternalTableImportEnabled" label="导入策略" class="external-table-policy-item">
+          <div class="external-table-policy-controls">
+            <div class="external-table-policy-clause">
+              <span>有效数据少于</span>
+              <el-form-item prop="externalTableThresholdWan" class="external-table-policy-field">
+                <el-input-number
+                  v-model="form.externalTableThresholdWan"
+                  :min="1"
+                  :max="2147483647"
+                  :step="1"
+                  :precision="0"
+                  controls-position="right"
+                  class="external-table-threshold"
+                  aria-label="整批导入阈值，单位万条" />
+              </el-form-item>
+              <span>万条时整批导入，</span>
+            </div>
+            <div class="external-table-policy-clause">
+              <span>否则按</span>
+              <el-form-item prop="externalTableWindowUnit" class="external-table-policy-field">
+                <el-select v-model="form.externalTableWindowUnit" class="external-table-window-unit" aria-label="分段导入时间单位">
+                  <el-option label="年" value="YEAR" />
+                  <el-option label="月" value="MONTH" />
+                  <el-option label="日" value="DAY" />
+                </el-select>
+              </el-form-item>
+              <span>导入</span>
+            </div>
+          </div>
+          <div class="external-table-policy-tip">
+            <template v-if="form.timestampField && form.timestampField.trim()">不同步时间戳为 NULL 的数据。</template>
+            <template v-else>未配置时间戳字段时按整表导入。</template>
+          </div>
+        </el-form-item>
+
+        <!-- 时间戳字段（独立一行，始终显示） -->
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="时间戳字段" prop="timestampField">
@@ -316,7 +378,7 @@
           </el-col>
         </el-row>
 
-        <!-- 第三行：同步操作（仅增量）+ 批次大小（两种模式都显示） -->
+        <!-- 同步操作与原 JDBC 批次大小 -->
         <el-row :gutter="20">
           <el-col :span="12" v-if="form.syncMode === '1'">
             <el-form-item label="同步操作" prop="syncOperations">
@@ -325,7 +387,7 @@
               <el-checkbox v-model="syncOperations.delete">DELETE</el-checkbox>
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :span="12" v-if="!isExternalTableImportEnabled">
             <el-form-item label="批次大小" prop="batchSize">
               <el-input-number v-model="form.batchSize" :min="10" :max="100000" :step="10" />
             </el-form-item>
@@ -639,7 +701,7 @@
 
       <div slot="footer" class="dialog-footer">
         <el-button @click="handleRefreshSyncProgress" icon="el-icon-refresh" :loading="syncProgressLoading">刷新进度</el-button>
-        <el-button @click="handleStopSync" type="danger" v-if="syncProgressData.syncStatus === '1'" :loading="stopping">停止同步</el-button>
+        <el-button @click="handleStopSync" type="danger" v-if="isTransferRunning(syncProgressData.syncStatus)" :loading="stopping || syncProgressData.syncStatus === '5'" :disabled="syncProgressData.syncStatus === '5'">{{ syncProgressData.syncStatus === '5' ? '停止中' : '停止同步' }}</el-button>
         <el-button @click="handleViewLogFromProgress" type="primary" v-if="syncProgressData.syncStatus === '2' || syncProgressData.syncStatus === '3' || syncProgressData.syncStatus === '4'">查看日志</el-button>
         <el-button @click="handleSyncProgressClose">关 闭</el-button>
       </div>
@@ -649,7 +711,7 @@
 
 <script>
 import { listDataTransfer, getDataTransfer, delDataTransfer, addDataTransfer, updateDataTransfer, executeTransfer, previewTransfer, listTransferLog, getTransferProgress, refreshTransferProgress, getTransferSyncProgress, stopTransfer } from "@/api/system/datatransfer";
-import { listDatasource } from "@/api/system/datasource";
+import { getDatasourceOptions } from "@/api/system/datasource";
 
 export default {
   name: "DataTransfer",
@@ -745,11 +807,45 @@ export default {
         ],
         targetDatasourceId: [
           { required: true, message: "请选择目标数据源", trigger: "change" }
+        ],
+        catalogName: [
+          { validator: (rule, value, callback) => this.validateCatalogName(rule, value, callback), trigger: ["blur", "change"] }
+        ],
+        externalTableThresholdWan: [
+          { validator: (rule, value, callback) => this.validateExternalTableThreshold(rule, value, callback), trigger: ["blur", "change"] }
+        ],
+        externalTableWindowUnit: [
+          { validator: (rule, value, callback) => this.validateExternalTableWindowUnit(rule, value, callback), trigger: "change" }
         ]
       }
     };
   },
   computed: {
+    catalogImportSourceType() {
+      const source = this.datasourceOptions.find(item => String(item.datasourceId) === String(this.form.sourceDatasourceId));
+      return source ? String(source.datasourceType).toUpperCase() : '';
+    },
+    /** 支持的 JDBC 源到 StarRocks 的初始化任务提供 Catalog 导入开关。 */
+    canUseExternalTableImport() {
+      const target = this.datasourceOptions.find(item => String(item.datasourceId) === String(this.form.targetDatasourceId));
+      const targetType = target ? String(target.datasourceType).toUpperCase() : '';
+      return this.form.syncMode === '0'
+        && ['MYSQL', 'TIDB', 'POSTGRESQL', 'ORACLE', 'SQLSERVER', 'STARROCKS'].includes(this.catalogImportSourceType)
+        && targetType === 'STARROCKS';
+    },
+    catalogImportTip() {
+      if (this.catalogImportSourceType === 'ORACLE' || this.catalogImportSourceType === 'SQLSERVER') {
+        const sourceName = this.catalogImportSourceType === 'ORACLE' ? 'Oracle' : 'SQL Server';
+        return `请先创建连接源 ${sourceName} 的 JDBC Catalog；目标 StarRocks 需支持对应 JDBC Catalog（3.2.9 / 3.3.1 对应版本线及以上）。`;
+      }
+      if (this.catalogImportSourceType === 'STARROCKS') {
+        return '请先创建连接源 StarRocks FE 查询端口（默认 9030）的 MySQL 兼容 JDBC Catalog；JSON、ARRAY、MAP 等复杂类型需验证。';
+      }
+      return '请先在目标 StarRocks 创建连接当前源数据源的 JDBC Catalog。';
+    },
+    isExternalTableImportEnabled() {
+      return this.canUseExternalTableImport && this.form.externalTableEnabled === '1';
+    },
     /** 解析同步进度信息 */
     syncProgressInfo() {
       if (!this.syncProgressData.syncProgress) {
@@ -773,6 +869,11 @@ export default {
       }
     }
   },
+  watch: {
+    canUseExternalTableImport(available) {
+      if (!available) this.$set(this.form, 'externalTableEnabled', '0');
+    }
+  },
   created() {
     this.getList();
     this.getDatasourceOptions();
@@ -790,6 +891,9 @@ export default {
         this.dataTransferList = response.rows;
         this.total = response.total;
         this.loading = false;
+        if (this.dataTransferList.some(item => this.isTransferRunning(item.syncStatus))) {
+          this.startAutoRefresh();
+        }
       });
     },
     /** 开始自动刷新 */
@@ -804,7 +908,7 @@ export default {
           this.dataTransferList = response.rows;
           this.total = response.total;
           // 检查是否还有同步中的任务
-          const hasSyncing = this.dataTransferList.some(item => item.syncStatus === '1');
+          const hasSyncing = this.dataTransferList.some(item => this.isTransferRunning(item.syncStatus));
           if (!hasSyncing) {
             this.stopAutoRefresh();
           }
@@ -822,8 +926,8 @@ export default {
     },
     /** 获取数据源选项 */
     getDatasourceOptions() {
-      listDatasource({ status: '0' }).then(response => {
-        this.datasourceOptions = response.rows;
+      getDatasourceOptions().then(response => {
+        this.datasourceOptions = response.data || [];
       });
     },
     /** 取消按钮 */
@@ -842,6 +946,10 @@ export default {
         sourceTable: null,
         targetDatasourceId: null,
         syncMode: "0",
+        externalTableEnabled: "0",
+        catalogName: "",
+        externalTableThresholdWan: 50,
+        externalTableWindowUnit: "YEAR",
         timestampField: "time_stamp",
         syncInsert: "1",
         syncUpdate: "1",
@@ -887,7 +995,7 @@ export default {
       this.reset();
       const transferId = row.transferId || this.ids;
       getDataTransfer(transferId).then(response => {
-        this.form = response.data;
+        this.form = this.normalizeExternalTableForm(response.data);
         // 设置同步操作复选框
         this.syncOperations.insert = this.form.syncInsert === '1';
         this.syncOperations.update = this.form.syncUpdate === '1';
@@ -902,7 +1010,7 @@ export default {
       this.reset();
       const transferId = row.transferId;
       getDataTransfer(transferId).then(response => {
-        this.form = response.data;
+        this.form = this.normalizeExternalTableForm(response.data);
         this.form.transferId = null;
         this.form.transferCode = null;
         this.form.transferName = (this.form.transferName || '') + '_copy';
@@ -914,6 +1022,46 @@ export default {
         this.open = true;
         this.title = "复制同步任务";
       });
+    },
+    /** 兼容旧任务缺少导入策略字段的响应；复制任务保留原策略。 */
+    normalizeExternalTableForm(data) {
+      return {
+        ...data,
+        externalTableEnabled: data.externalTableEnabled === '1' ? '1' : '0',
+        catalogName: typeof data.catalogName === 'string' ? data.catalogName.trim() : '',
+        externalTableThresholdWan: data.externalTableThresholdWan == null ? 50 : Number(data.externalTableThresholdWan),
+        externalTableWindowUnit: data.externalTableWindowUnit || 'YEAR'
+      };
+    },
+    validateCatalogName(rule, value, callback) {
+      if (!this.isExternalTableImportEnabled) {
+        callback();
+        return;
+      }
+      const catalogName = typeof value === 'string' ? value.trim() : '';
+      if (!catalogName) {
+        callback(new Error('请输入已在目标 StarRocks 创建的 Catalog 名称'));
+        return;
+      }
+      if (!/^[A-Za-z][A-Za-z0-9_]{0,1022}$/.test(catalogName)) {
+        callback(new Error('Catalog 名称须以字母开头，仅含字母、数字和下划线，最多 1023 个字符'));
+        return;
+      }
+      callback();
+    },
+    validateExternalTableThreshold(rule, value, callback) {
+      if (this.isExternalTableImportEnabled && (!Number.isInteger(value) || value < 1 || value > 2147483647)) {
+        callback(new Error('请输入 1 至 2147483647 之间的整数，单位为万条'));
+        return;
+      }
+      callback();
+    },
+    validateExternalTableWindowUnit(rule, value, callback) {
+      if (this.isExternalTableImportEnabled && !['YEAR', 'MONTH', 'DAY'].includes(value)) {
+        callback(new Error('请选择按年、月或日导入'));
+        return;
+      }
+      callback();
     },
     /** 提交按钮 */
     submitForm() {
@@ -928,6 +1076,8 @@ export default {
         this.form.syncInsert = this.syncOperations.insert ? '1' : '0';
         this.form.syncUpdate = this.syncOperations.update ? '1' : '0';
         this.form.syncDelete = this.syncOperations.delete ? '1' : '0';
+        this.form.externalTableEnabled = this.canUseExternalTableImport && this.form.externalTableEnabled === '1' ? '1' : '0';
+        this.form.catalogName = typeof this.form.catalogName === 'string' ? this.form.catalogName.trim() : '';
         // deleteWindowYears 已绑定在 form 上，直接提交
 
           if (this.form.transferId != null) {
@@ -1119,6 +1269,7 @@ export default {
       this.syncProgressOpen = true;
       this.syncProgressLoading = true;
       this.syncProgressData = {};
+      this.stopping = false;
       // 立即获取一次进度
       this.fetchSyncProgress(transferId);
       // 启动轮询（每1秒刷新一次）
@@ -1130,8 +1281,11 @@ export default {
         this.syncProgressData = response.data || {};
         this.syncProgressLoading = false;
         // 如果同步完成，停止轮询
-        if (this.syncProgressData.syncStatus !== '1') {
+        if (this.syncProgressData.syncStatus === '5') this.stopping = true;
+        if (!this.isTransferRunning(this.syncProgressData.syncStatus)) {
+          this.stopping = false;
           this.stopSyncProgressPolling();
+          this.getList();
         }
       }).catch(() => {
         this.syncProgressLoading = false;
@@ -1158,7 +1312,8 @@ export default {
         '1': '正在同步中...',
         '2': '同步成功',
         '3': '同步失败',
-        '4': '已停止'
+        '4': '已停止',
+        '5': '正在停止，正在取消当前SQL并清理临时表...'
       };
       return statusMap[this.syncProgressData.syncStatus] || '同步状态未知';
     },
@@ -1169,7 +1324,8 @@ export default {
         '1': 'warning',
         '2': 'success',
         '3': 'error',
-        '4': 'warning'
+        '4': 'warning',
+        '5': 'warning'
       };
       return typeMap[this.syncProgressData.syncStatus] || 'info';
     },
@@ -1179,7 +1335,7 @@ export default {
         return 'success';
       } else if (this.syncProgressData.syncStatus === '3') {
         return 'exception';
-      } else if (this.syncProgressData.syncStatus === '4') {
+      } else if (this.syncProgressData.syncStatus === '4' || this.syncProgressData.syncStatus === '5') {
         return 'warning';
       }
       return null;
@@ -1197,8 +1353,9 @@ export default {
         this.stopping = true;
         return stopTransfer(this.syncProgressData.transferId);
       }).then(() => {
-        this.$modal.msgSuccess("任务已停止");
-        this.stopping = false;
+        this.$modal.msgSuccess("已提交停止请求");
+        this.syncProgressData.syncStatus = '5';
+        this.startAutoRefresh();
         // 自动刷新一次进度和列表
         this.handleRefreshSyncProgress();
         this.getList();
@@ -1237,13 +1394,16 @@ export default {
       }
     },
     /** 获取同步状态类型 */
+    isTransferRunning(status) {
+      return status === '1' || status === '5';
+    },
     getSyncStatusType(status) {
-      const map = { '0': 'info', '1': 'warning', '2': 'success', '3': 'danger', '4': 'warning' };
+      const map = { '0': 'info', '1': 'warning', '2': 'success', '3': 'danger', '4': 'warning', '5': 'warning' };
       return map[status] || 'info';
     },
     /** 获取同步状态标签 */
     getSyncStatusLabel(status) {
-      const map = { '0': '待同步', '1': '同步中', '2': '同步成功', '3': '同步失败', '4': '已停止' };
+      const map = { '0': '待同步', '1': '同步中', '2': '同步成功', '3': '同步失败', '4': '已停止', '5': '停止中' };
       return map[status] || '未知';
     }
   }
@@ -1269,5 +1429,76 @@ export default {
   margin: 18px 0 14px 0;
   border-left: 3px solid #409EFF;
   background-color: #f5f7fa;
+}
+.external-table-import-item ::v-deep .el-form-item__label {
+  white-space: nowrap;
+}
+.external-table-policy-item ::v-deep .el-form-item__label {
+  white-space: nowrap;
+}
+.external-table-import-option {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-height: 36px;
+}
+.external-table-import-option .el-switch {
+  flex-shrink: 0;
+}
+.catalog-name-item {
+  flex: 0 1 384px;
+  min-width: 0;
+  max-width: 100%;
+  margin-bottom: 0;
+}
+.catalog-name-item ::v-deep .el-form-item__label {
+  white-space: nowrap;
+}
+.catalog-name-item ::v-deep .el-form-item__error {
+  position: static;
+  white-space: normal;
+  line-height: 18px;
+}
+.external-table-import-tip {
+  margin-top: 6px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 20px;
+}
+.external-table-policy-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 0;
+}
+.external-table-policy-clause {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.external-table-policy-field {
+  margin-bottom: 0;
+}
+.external-table-policy-field ::v-deep .el-form-item__error {
+  position: static;
+  max-width: 148px;
+  white-space: normal;
+  line-height: 18px;
+}
+.external-table-threshold {
+  width: 148px;
+}
+.external-table-window-unit {
+  width: 82px;
+}
+.external-table-policy-tip {
+  margin-top: 6px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 20px;
 }
 </style>

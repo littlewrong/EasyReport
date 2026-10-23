@@ -97,7 +97,7 @@ public class DataSyncProgressTest {
         ErDataTransferMapper proxy() {
             return (ErDataTransferMapper) Proxy.newProxyInstance(getClass().getClassLoader(),
                     new Class<?>[]{ErDataTransferMapper.class}, (object, method, args) -> {
-                        if (!"updateErDataTransfer".equals(method.getName())) throw new AssertionError(method.getName());
+                        if (!"updateTransferProgress".equals(method.getName())) throw new AssertionError(method.getName());
                         attempts.add((ErDataTransfer) args[0]);
                         if (failure != null) throw failure;
                         successfulWrites++;
