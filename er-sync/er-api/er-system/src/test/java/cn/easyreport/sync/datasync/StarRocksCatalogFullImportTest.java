@@ -4,6 +4,8 @@ import cn.easyreport.sync.domain.ErDataTransfer;
 import cn.easyreport.sync.domain.ErDatasource;
 import org.junit.Test;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Method;
 import java.lang.reflect.InvocationTargetException;
@@ -376,6 +378,89 @@ public class StarRocksCatalogFullImportTest {
         assertFalse(f.targetSql.stream().anyMatch(sql -> sql.startsWith("TRUNCATE") || sql.startsWith("DROP")));
     }
 
+    @Test public void earlySourceIdentityFailuresDiscardJdbcExceptionChains() throws Exception {
+        for (String type : new String[]{"MYSQL", "SQLSERVER", "ORACLE"}) {
+            Fixture f = "ORACLE".equals(type)
+                    ? new Fixture(type, "jdbc:oracle:thin:@//source:1521/erp_service", "erp_base")
+                    : "SQLSERVER".equals(type)
+                    ? new Fixture(type, "jdbc:sqlserver://source:1433;databaseName=erp_base", "erp_base") : new Fixture();
+            f.identityFailureMethod = "ORACLE".equals(type) ? "getMetaData" : "getCatalog";
+            try { f.prepare(50, "YEAR"); fail("Early identity checks must use the Catalog error boundary"); }
+            catch (SQLException expected) {
+                assertTrue(expected.getMessage().contains("尚未清空目标表"));
+                assertEquals("HY000", expected.getSQLState());
+                assertEquals(900, expected.getErrorCode());
+                assertNoDriverDetails(expected);
+            }
+            assertTrue(f.targetSql.isEmpty());
+            assertTrue(f.sourceSql.isEmpty());
+        }
+    }
+
+    @Test public void catalogValidationWithFailingCloseKeepsMessageAndTypeWithoutDriverChains() throws Exception {
+        Fixture invisible = new Fixture();
+        invisible.catalogSeesRows = false;
+        invisible.scanCloseFailure = sensitiveDriverFailure();
+        try { invisible.prepare(50, "YEAR"); fail("Catalog visibility validation must still fail"); }
+        catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("Catalog 未读取到数据"));
+            assertNoDriverDetails(expected);
+        }
+        assertTrue(invisible.inserts.isEmpty());
+        assertFalse(invisible.targetSql.stream().anyMatch(sql -> sql.startsWith("TRUNCATE") || sql.startsWith("CREATE ")));
+
+        Fixture capacity = new Fixture();
+        capacity.jsonColumn = true;
+        capacity.jsonBytes = 65534;
+        capacity.countCloseFailure = sensitiveDriverFailure();
+        try { capacity.prepare(50, "YEAR"); fail("JSON capacity validation must still fail"); }
+        catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("超出 Catalog/JSON 表达式容量"));
+            assertNoDriverDetails(expected);
+        }
+        assertTrue(capacity.inserts.isEmpty());
+    }
+
+    @Test public void sanitizedOracleFailureDoesNotRegainDriverDetailsFromOuterStatementClose() throws Exception {
+        Fixture f = new Fixture("ORACLE", "jdbc:oracle:thin:@//source:1521/erp_service", "erp_base");
+        f.count = 500000;
+        f.failWindowProbe = true;
+        f.scanStatementCloseFailure = sensitiveDriverFailure();
+        try { f.prepare(50, "YEAR"); fail("Window preflight must still fail before clearing the target"); }
+        catch (SQLException expected) {
+            assertTrue(expected.getMessage().contains("Oracle Catalog 时间窗口预检失败"));
+            assertNoDriverDetails(expected);
+        }
+        assertTrue(f.inserts.isEmpty());
+        assertFalse(f.targetSql.stream().anyMatch(sql -> sql.startsWith("TRUNCATE")));
+    }
+
+    @Test public void stoppedCatalogScanDoesNotExposeSuppressedCloseDetails() throws Exception {
+        Fixture f = new Fixture();
+        f.stopCatalogScan = true;
+        f.scanCloseFailure = sensitiveDriverFailure();
+        f.scanStatementCloseFailure = sensitiveDriverFailure();
+        try { f.prepare(50, "YEAR"); fail("Stop must propagate before target clear"); }
+        catch (DataSyncCancellation.SyncStoppedException expected) { assertNoDriverDetails(expected); }
+        assertTrue(f.inserts.isEmpty());
+        assertFalse(f.targetSql.stream().anyMatch(sql -> sql.startsWith("TRUNCATE")));
+    }
+
+    @Test public void invalidInsertedRowCountWithCloseFailureKeepsValidationType() throws Exception {
+        Fixture f = new Fixture();
+        f.insertAffected = -1;
+        f.insertStatementCloseFailure = sensitiveDriverFailure();
+        try (StarRocksCatalogFullImport importer = f.prepare(50, "YEAR")) {
+            try { importer.execute(); fail("Invalid inserted row count must still fail"); }
+            catch (IllegalStateException expected) {
+                assertTrue(expected.getMessage().contains("未返回有效导入行数"));
+                assertNoDriverDetails(expected);
+            }
+        }
+        assertEquals(1, f.inserts.size());
+        assertEquals(0, f.commits);
+    }
+
     @Test public void differentCatalogAccountStillCountsAndChecksCatalogReadabilityAndPlan() throws Exception {
         Fixture f = new Fixture();
         f.catalogUser = "another_user";
@@ -438,25 +523,35 @@ public class StarRocksCatalogFullImportTest {
     }
 
     @Test public void catalogHelperThroughFullSyncValidatesBeforeTruncateAndAdvancesCheckpoint() throws Exception {
-        Fixture f = new Fixture();
-        List<Object> checkpoints = new ArrayList<>();
-        runFullSync(f, checkpoints);
-        assertEquals(1, checkpoints.size());
-        int clear = f.targetSql.indexOf("TRUNCATE TABLE `warehouse`.`orders`");
-        assertTrue(clear > 0);
-        assertTrue(f.targetSql.stream().limit(clear).anyMatch(sql -> sql.startsWith("EXPLAIN INSERT")));
-        assertTrue(f.targetSql.indexOf(f.inserts.get(0)) > clear);
-        assertFalse(f.targetSql.stream().anyMatch(sql -> sql.startsWith("DROP ") || sql.startsWith("CREATE ")));
-        Fixture failure = new Fixture();
-        failure.failExplain = true;
-        checkpoints.clear();
-        try { runFullSync(failure, checkpoints); fail("Preflight failure must propagate"); }
-        catch (SQLException expected) { assertTrue(expected.getMessage().contains("尚未清空目标表")); }
-        assertFalse(failure.targetSql.stream().anyMatch(sql -> sql.startsWith("TRUNCATE")));
-        assertTrue(checkpoints.isEmpty());
+        for (String method : new String[]{null, ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG}) {
+            Fixture f = new Fixture();
+            List<Object> checkpoints = new ArrayList<>();
+            runFullSync(f, checkpoints, method, "src_mysql");
+            assertEquals(1, checkpoints.size());
+            int clear = f.targetSql.indexOf("TRUNCATE TABLE `warehouse`.`orders`");
+            assertTrue(clear > 0);
+            assertTrue(f.targetSql.stream().limit(clear).anyMatch(sql -> sql.startsWith("EXPLAIN INSERT")));
+            assertTrue(f.targetSql.stream().limit(clear).anyMatch(sql -> sql.startsWith("SELECT ") && sql.endsWith("LIMIT 1")));
+            assertTrue(f.targetSql.indexOf(f.inserts.get(0)) > clear);
+            assertTrue(f.inserts.get(0).contains("FROM `src_mysql`.`erp_base`.`orders`"));
+            assertFalse(f.targetSql.stream().anyMatch(sql -> sql.startsWith("DROP ") || sql.startsWith("CREATE ")));
+            Fixture failure = new Fixture();
+            failure.failExplain = true;
+            checkpoints.clear();
+            try { runFullSync(failure, checkpoints, method, "src_mysql"); fail("Preflight failure must propagate"); }
+            catch (SQLException expected) { assertTrue(expected.getMessage().contains("尚未清空目标表")); }
+            assertFalse(failure.targetSql.stream().anyMatch(sql -> sql.startsWith("TRUNCATE") || sql.startsWith("CREATE ")));
+            assertTrue(failure.inserts.isEmpty());
+            assertTrue(checkpoints.isEmpty());
+        }
     }
 
     private static Object runFullSync(Fixture f, List<Object> checkpoints) throws Exception {
+        return runFullSync(f, checkpoints, null, "src_mysql");
+    }
+
+    private static Object runFullSync(Fixture f, List<Object> checkpoints,
+            String directImportMethod, String catalogName) throws Exception {
         cn.easyreport.sync.mapper.ErDataTransferProgressMapper progress = proxy(
                 cn.easyreport.sync.mapper.ErDataTransferProgressMapper.class, (name, args) -> {
                     if (name.equals("upsert")) { checkpoints.add(args[0]); return 1; }
@@ -467,7 +562,8 @@ public class StarRocksCatalogFullImportTest {
         task.setTransferId(42L);
         task.setSyncMode("0");
         task.setExternalTableEnabled("1");
-        task.setCatalogName("src_mysql");
+        task.setDirectImportMethod(directImportMethod);
+        task.setCatalogName(catalogName);
         Method method = DataSyncExecutor.class.getDeclaredMethod("syncFull", ErDataTransfer.class,
                 ErDatasource.class, String.class, String.class, String.class, List.class, List.class,
                 List.class, DataSyncExtractor.class, DataSyncLoader.class, Connection.class,
@@ -500,15 +596,49 @@ public class StarRocksCatalogFullImportTest {
 
     @Test public void disabledAndIncrementalTasksWithCatalogDoNotTouchConnections() throws Exception {
         for (String[] config : new String[][]{{"0", "0"}, {"1", "1"}}) {
-            ErDataTransfer task = new ErDataTransfer();
-            task.setExternalTableEnabled(config[0]);
-            task.setSyncMode(config[1]);
-            task.setCatalogName("src_mysql");
-            Connection unused = proxy(Connection.class, (method, args) -> { throw new AssertionError(method); });
-            StarRocksDataSyncExecutor executor = new StarRocksDataSyncExecutor(null, null, null);
-            assertNull(executor.prepareDirectFullImport(task, null, "erp_base", "orders", "`warehouse`.`orders`",
-                    Arrays.asList("id", "time_stamp"), Arrays.asList("id", "time_stamp"), null, unused, unused, "time_stamp", null));
+            for (String method : new String[]{null, ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG,
+                    ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE, "UNRECOGNIZED"}) {
+                ErDataTransfer task = new ErDataTransfer();
+                task.setExternalTableEnabled(config[0]);
+                task.setSyncMode(config[1]);
+                task.setDirectImportMethod(method);
+                task.setCatalogName("src_mysql");
+                Connection unused = proxy(Connection.class, (name, args) -> { throw new AssertionError(name); });
+                StarRocksDataSyncExecutor executor = new StarRocksDataSyncExecutor(null, null, null);
+                assertNull(executor.prepareDirectFullImport(task, null, "erp_base", "orders", "`warehouse`.`orders`",
+                        Arrays.asList("id", "time_stamp"), Arrays.asList("id", "time_stamp"), null, unused, unused, "time_stamp", null));
+            }
         }
+    }
+
+    @Test public void explicitCatalogRequiresNameBeforeAnyPreflightOrTargetClear() throws Exception {
+        for (String name : new String[]{null, "", "   "}) {
+            Fixture f = new Fixture();
+            List<Object> checkpoints = new ArrayList<>();
+            try {
+                runFullSync(f, checkpoints, ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG, name);
+                fail("An explicit Catalog import must never select the external-table fallback without a name");
+            } catch (IllegalArgumentException expected) {
+                assertTrue(expected.getMessage(), expected.getMessage().contains("Catalog"));
+            }
+            assertTrue(f.sourceSql.isEmpty());
+            assertTrue(f.targetSql.isEmpty());
+            assertTrue(checkpoints.isEmpty());
+        }
+    }
+
+    @Test public void unknownImportMethodFailsBeforeAnyPreflightOrTargetClear() throws Exception {
+        Fixture f = new Fixture();
+        List<Object> checkpoints = new ArrayList<>();
+        try {
+            runFullSync(f, checkpoints, "UNRECOGNIZED", "src_mysql");
+            fail("An unknown method must not be inferred from a leftover Catalog name");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("导入方式"));
+        }
+        assertTrue(f.sourceSql.isEmpty());
+        assertTrue(f.targetSql.isEmpty());
+        assertTrue(checkpoints.isEmpty());
     }
 
     @Test public void explicitCatalogFailureDoesNotFallBackToLegacyMysqlImport() throws Exception {
@@ -516,7 +646,7 @@ public class StarRocksCatalogFullImportTest {
         f.catalogType = "hive";
         List<Object> checkpoints = new ArrayList<>();
         try {
-            runFullSync(f, checkpoints);
+            runFullSync(f, checkpoints, ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG, "src_mysql");
             fail("Explicit Catalog failure must propagate");
         } catch (IllegalArgumentException expected) { assertTrue(expected.getMessage().contains("必须为 JDBC Catalog")); }
         assertTrue(f.sourceSql.isEmpty());
@@ -528,6 +658,24 @@ public class StarRocksCatalogFullImportTest {
     private static void assertFailure(Fixture fixture, String message) throws Exception {
         try { fixture.prepare(50, "YEAR"); fail("Expected " + message); }
         catch (IllegalArgumentException expected) { assertTrue(expected.getMessage(), expected.getMessage().contains(message)); }
+    }
+
+    private static SQLException sensitiveDriverFailure() {
+        SQLException failure = new SQLException("driver-private-marker", "HY000", 900);
+        failure.initCause(new IllegalStateException("driver-private-marker-cause"));
+        failure.setNextException(new SQLException("driver-private-marker-next"));
+        failure.addSuppressed(new SQLException("driver-private-marker-suppressed"));
+        return failure;
+    }
+
+    private static void assertNoDriverDetails(Throwable failure) {
+        StringWriter output = new StringWriter();
+        failure.printStackTrace(new PrintWriter(output));
+        assertFalse(output.toString(), output.toString().contains("driver-private-marker"));
+        assertFalse(output.toString(), output.toString().contains("secret-in-driver"));
+        assertNull(failure.getCause());
+        assertEquals(0, failure.getSuppressed().length);
+        if (failure instanceof SQLException) assertNull(((SQLException) failure).getNextException());
     }
 
     private static final class Fixture {
@@ -550,6 +698,13 @@ public class StarRocksCatalogFullImportTest {
         boolean failExplain;
         boolean failWindowProbe;
         boolean failClusterProbe;
+        String identityFailureMethod;
+        SQLException countCloseFailure;
+        SQLException scanCloseFailure;
+        SQLException scanStatementCloseFailure;
+        SQLException insertStatementCloseFailure;
+        boolean stopCatalogScan;
+        long insertAffected = 17;
         long sourceClusterId = 1234;
         long targetClusterId = 5678;
         boolean catalogSeesRows = true;
@@ -585,6 +740,7 @@ public class StarRocksCatalogFullImportTest {
         List<String> columns() { return jsonColumn ? Arrays.asList("id", "time_stamp", "payload") : Arrays.asList("id", "time_stamp"); }
         Connection source() {
             return proxy(Connection.class, (method, args) -> {
+                if (method.equals(identityFailureMethod)) throw sensitiveDriverFailure();
                 if (method.equals("getCatalog")) return "erp_base";
                 if (method.equals("getMetaData")) return proxy(DatabaseMetaData.class, (name, values) -> {
                     if (name.equals("getURL")) return metadataUrl == null ? datasource.getJdbcUrl() : metadataUrl;
@@ -612,7 +768,7 @@ public class StarRocksCatalogFullImportTest {
                                     new String[]{nativeIdType, timestampTypeName, nativeJsonType});
                             return rows(new Object[0][], timestampType, timestampTypeName);
                         }
-                        if (sql.startsWith("SELECT COUNT")) return rows(new Object[][]{jsonColumn ? new Object[]{count, jsonBytes} : new Object[]{count}}, Types.BIGINT, "BIGINT");
+                        if (sql.startsWith("SELECT COUNT")) return rows(new Object[][]{jsonColumn ? new Object[]{count, jsonBytes} : new Object[]{count}}, Types.BIGINT, "BIGINT", countCloseFailure);
                         if (sql.startsWith("SELECT MIN")) return rows(new Object[][]{{min, max}}, Types.TIMESTAMP, "DATETIME");
                         if (sql.equals("SELECT @@session.time_zone, @@global.time_zone, @@system_time_zone")) {
                             return rows(new Object[][]{{"SYSTEM", "SYSTEM", "Asia/Shanghai"}}, Types.VARCHAR, "VARCHAR");
@@ -632,13 +788,16 @@ public class StarRocksCatalogFullImportTest {
                 });
                 if (method.equals("getAutoCommit")) return false;
                 if (method.equals("commit")) { commits++; return null; }
-                if (method.equals("createStatement")) return proxy(Statement.class, (name, values) -> {
+                if (method.equals("createStatement")) {
+                    String[] lastSql = {null};
+                    return proxy(Statement.class, (name, values) -> {
                     if (name.equals("execute") || name.equals("executeQuery") || name.equals("executeLargeUpdate")) {
                         String sql = (String) values[0];
+                        lastSql[0] = sql;
                         targetSql.add(sql);
                         if (sql.equals("SHOW FRONTENDS")) return rows(new Object[][]{{targetClusterId}}, Types.BIGINT, "BIGINT");
                         if (name.equals("execute")) return true;
-                        if (name.equals("executeLargeUpdate")) { inserts.add(sql); return 17L; }
+                        if (name.equals("executeLargeUpdate")) { inserts.add(sql); return insertAffected; }
                         if (sql.startsWith("SHOW CREATE")) return rows(new Object[][]{{"src_mysql", "CREATE EXTERNAL CATALOG src_mysql PROPERTIES (\"type\" = \"" + catalogType + "\", \"jdbc_uri\" = \"" + catalogUrl + "\", \"user\" = \"" + catalogUser + "\", \"password\" = \"secret-in-driver\")"}}, Types.VARCHAR, "VARCHAR");
                         if (sql.startsWith("DESCRIBE")) {
                             List<Object[]> fields = new ArrayList<>();
@@ -655,25 +814,44 @@ public class StarRocksCatalogFullImportTest {
                         }
                         if (sql.equals(StarRocksExternalFullImport.JSON_CONVERSION_PROBE_SQL)) return rows(new Object[][]{jsonProbe}, Types.VARCHAR, "VARCHAR");
                         if (failWindowProbe && sql.startsWith("SELECT ") && sql.contains(" >= ")) throw new SQLException("NLS_DATE_FORMAT secret-in-driver", "HY000", 1861);
+                        if (stopCatalogScan && sql.startsWith("SELECT")) return proxy(ResultSet.class, (operation, columns) -> {
+                            if (operation.equals("next")) throw new DataSyncCancellation.SyncStoppedException();
+                            if (operation.equals("close") && scanCloseFailure != null) throw scanCloseFailure;
+                            return null;
+                        });
                         if (sql.startsWith("SELECT")) return rows(count == 0 || !catalogSeesRows ? new Object[0][]
-                                : new Object[][]{jsonColumn ? new Object[]{1L, max, "{}"} : new Object[]{1L, max}}, Types.BIGINT, "BIGINT");
+                                : new Object[][]{jsonColumn ? new Object[]{1L, max, "{}"} : new Object[]{1L, max}}, Types.BIGINT, "BIGINT", scanCloseFailure);
                         throw new AssertionError(sql);
                     }
+                    if (name.equals("close") && scanStatementCloseFailure != null
+                            && lastSql[0] != null && lastSql[0].startsWith("SELECT ")) throw scanStatementCloseFailure;
+                    if (name.equals("close") && insertStatementCloseFailure != null
+                            && lastSql[0] != null && lastSql[0].startsWith("INSERT ")) throw insertStatementCloseFailure;
                     return null;
                 });
+                }
                 return null;
             });
         }
     }
 
     private static ResultSet rows(Object[][] data, int type, String typeName) {
-        return rows(data, new int[]{type}, new String[]{typeName});
+        return rows(data, type, typeName, null);
+    }
+
+    private static ResultSet rows(Object[][] data, int type, String typeName, SQLException closeFailure) {
+        return rows(data, new int[]{type}, new String[]{typeName}, closeFailure);
     }
 
     private static ResultSet rows(Object[][] data, int[] types, String[] typeNames) {
+        return rows(data, types, typeNames, null);
+    }
+
+    private static ResultSet rows(Object[][] data, int[] types, String[] typeNames, SQLException closeFailure) {
         int[] index = {-1};
         boolean[] wasNull = {false};
         return proxy(ResultSet.class, (method, args) -> {
+            if (method.equals("close") && closeFailure != null) throw closeFailure;
             if (method.equals("next")) return ++index[0] < data.length;
             if (method.equals("wasNull")) return wasNull[0];
             if (method.equals("getMetaData")) return proxy(ResultSetMetaData.class, (name, values) -> {

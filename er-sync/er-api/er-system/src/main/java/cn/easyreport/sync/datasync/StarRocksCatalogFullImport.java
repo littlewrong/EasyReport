@@ -85,18 +85,18 @@ final class StarRocksCatalogFullImport implements AutoCloseable {
         int threshold = thresholdWan == null ? 50 : thresholdWan;
         if (threshold < 1) throw new IllegalArgumentException("Catalog 整批导入阈值必须为正整数，单位为万条");
         WindowUnit unit = WindowUnit.of(windowUnit);
-        String scope = dialect.scope(source, datasource, schema);
-        String actualTable = dialect == Dialect.ORACLE ? table.toUpperCase(Locale.ROOT) : table;
-        String sourceTable = dialect.sourceTable(source, datasource, schema, scope, actualTable);
-        String catalogTable = quote(catalog) + "." + quote(scope) + "." + quote(actualTable);
-        String timestampColumn = null;
-        if (timestampField != null && !timestampField.trim().isEmpty()) {
-            for (String column : sourceColumns) {
-                if (column.equalsIgnoreCase(timestampField.trim())) timestampColumn = column;
-            }
-            if (timestampColumn == null) throw new IllegalArgumentException("配置的时间戳字段不在源表字段中");
-        }
         try {
+            String scope = dialect.scope(source, datasource, schema);
+            String actualTable = dialect == Dialect.ORACLE ? table.toUpperCase(Locale.ROOT) : table;
+            String sourceTable = dialect.sourceTable(source, datasource, schema, scope, actualTable);
+            String catalogTable = quote(catalog) + "." + quote(scope) + "." + quote(actualTable);
+            String timestampColumn = null;
+            if (timestampField != null && !timestampField.trim().isEmpty()) {
+                for (String column : sourceColumns) {
+                    if (column.equalsIgnoreCase(timestampField.trim())) timestampColumn = column;
+                }
+                if (timestampColumn == null) throw new IllegalArgumentException("配置的时间戳字段不在源表字段中");
+            }
             // The application and StarRocks may reach the same source through public/private
             // endpoints. Validate the logical mapping before any destructive work.
             Map<String, String> catalogProperties = verifyCatalog(target, source, datasource, dialect, catalog, schema, cancellation);
@@ -180,8 +180,11 @@ final class StarRocksCatalogFullImport implements AutoCloseable {
             return importer;
         } catch (SQLException failure) {
             stopped(cancellation);
-            if (failure instanceof CatalogSQLException) throw failure;
+            // A pre-sanitized exception can acquire a raw close failure while unwinding an outer resource.
+            if (failure instanceof CatalogSQLException) throw new CatalogSQLException((CatalogSQLException) failure);
             throw safe("Catalog 导入预校验失败，尚未清空目标表；请检查 Catalog、版本支持、权限、驱动和字段类型", failure);
+        } catch (IllegalArgumentException | IllegalStateException failure) {
+            throw StarRocksExternalFullImport.safeValidationException(failure);
         }
     }
 
@@ -424,6 +427,8 @@ final class StarRocksCatalogFullImport implements AutoCloseable {
         } catch (SQLException failure) {
             stopped(cancellation);
             throw safe("Catalog INSERT SELECT 失败，同步进度未推进", failure);
+        } catch (IllegalArgumentException | IllegalStateException failure) {
+            throw StarRocksExternalFullImport.safeValidationException(failure);
         }
     }
 
@@ -570,12 +575,16 @@ final class StarRocksCatalogFullImport implements AutoCloseable {
     }
 
     private static SQLException safe(String operation, SQLException failure) {
-        if (failure instanceof DataSyncCancellation.SyncStoppedException) return failure;
+        if (failure instanceof DataSyncCancellation.SyncStoppedException) return new DataSyncCancellation.SyncStoppedException();
         // Neither SHOW CREATE's JDBC properties nor driver messages may leak credentials to task logs.
         return new CatalogSQLException(operation, failure);
     }
 
     private static final class CatalogSQLException extends SQLException {
+        CatalogSQLException(CatalogSQLException failure) {
+            super(failure.getMessage(), failure.getSQLState(), failure.getErrorCode());
+        }
+
         CatalogSQLException(String operation, SQLException failure) {
             super(operation + "（SQLState=" + failure.getSQLState() + ", errorCode=" + failure.getErrorCode()
                     + "）", failure.getSQLState(), failure.getErrorCode());

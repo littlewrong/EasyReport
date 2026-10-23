@@ -31,7 +31,11 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
         if (task == null || !"0".equals(task.getSyncMode()) || !"1".equals(task.getExternalTableEnabled())) {
             return null;
         }
-        if (task.getCatalogName() != null && !task.getCatalogName().trim().isEmpty()) {
+        String method = task.resolveDirectImportMethod();
+        if (ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(method)) {
+            if (task.getCatalogName() == null || task.getCatalogName().trim().isEmpty()) {
+                throw new IllegalArgumentException("Catalog 导入必须填写已有的 JDBC Catalog 名称，尚未清空目标表");
+            }
             checkStopped();
             final StarRocksCatalogFullImport catalogImport = StarRocksCatalogFullImport.prepare(
                     sourceDs, sourceConn, targetConn, task.getCatalogName().trim(), schema, table,
@@ -48,12 +52,17 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
                 @Override public void close() { catalogImport.close(); }
             };
         }
-        // Persisted tasks without a Catalog keep their original MYSQL external-table behavior.
+        if (!ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE.equals(method)) {
+            throw new IllegalArgumentException("未知的数据湖导入方式，尚未清空目标表");
+        }
         boolean supportedSource = sourceDs != null
                 && (("TIDB".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof TiDbDataSyncExtractor)
                     || ("MYSQL".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof MySqlDataSyncExtractor));
-        if (task == null || !"0".equals(task.getSyncMode())
-                || !"1".equals(task.getExternalTableEnabled()) || !supportedSource) {
+        if (!supportedSource) {
+            if (task.getDirectImportMethod() != null) {
+                throw new IllegalArgumentException("外部表导入仅支持 MySQL/TiDB 源，尚未清空目标表");
+            }
+            // Preserve the JDBC behavior of legacy records which have no explicit method.
             return null;
         }
         checkStopped();

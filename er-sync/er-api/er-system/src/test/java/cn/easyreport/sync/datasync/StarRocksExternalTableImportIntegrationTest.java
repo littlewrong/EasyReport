@@ -284,6 +284,68 @@ public class StarRocksExternalTableImportIntegrationTest {
     }
 
     @Test
+    public void explicitExternalTableIgnoresLeftoverCatalogAndKeepsMysqlEnginePath() throws Exception {
+        for (String type : Arrays.asList("MYSQL", "TIDB")) {
+            Fixture f = new Fixture();
+            f.enableRealHelper(type);
+            f.task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+            f.task.setCatalogName("leftover_catalog");
+            f.sourceCount = 17;
+            f.directCounts = new long[]{17};
+
+            f.run();
+
+            String create = f.directSql.stream().filter(sql -> sql.startsWith("CREATE EXTERNAL TABLE "))
+                    .findFirst().orElseThrow(() -> new AssertionError("The external-table route must create its owned table"));
+            assertTrue(create, create.contains("ENGINE=MYSQL"));
+            assertTrue(create, create.contains("\"database\"=\"erp_01\""));
+            assertFalse(f.directSql.toString(), f.directSql.stream().anyMatch(sql -> {
+                String normalized = sql.toUpperCase(java.util.Locale.ROOT);
+                return normalized.contains("CATALOG") || normalized.contains("PARTITIONS");
+            }));
+            assertBefore(f.events, "count", "create-external");
+            assertBefore(f.events, "create-external", "json-scan-preflight");
+            assertBefore(f.events, "json-scan-preflight", "truncate");
+            assertBefore(f.events, "truncate", "insert-select");
+            assertBefore(f.events, "insert-select", "drop-external");
+            assertBefore(f.events, "drop-external", "checkpoint");
+            assertEquals(1, f.directInserts);
+            assertEquals(0, f.sourceReads);
+            assertEquals(1, f.checkpoints.size());
+        }
+    }
+
+    @Test
+    public void explicitExternalTableRejectsUnsupportedSourceWithoutJdbcFallback() throws Exception {
+        for (String type : Arrays.asList("POSTGRESQL", "ORACLE", "SQLSERVER", "STARROCKS")) {
+            ErDataTransfer task = externalTableTask("1", "0");
+            task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+            task.setCatalogName("leftover_catalog");
+            Connection unused = proxy(Connection.class, (method, args) -> {
+                throw new AssertionError("Unsupported explicit external-table source must fail before JDBC: " + method.getName());
+            });
+            StarRocksDataSyncExecutor executor = new StarRocksDataSyncExecutor(null, null, null);
+            List<String> messages = new ArrayList<>();
+            try {
+                executor.prepareDirectFullImport(task, tlsSource(type), "db", "orders", "`warehouse`.`orders`",
+                        COLUMNS, COLUMNS, new FallbackExtractor(), unused, unused, "time_stamp",
+                        (current, total, message) -> messages.add(message));
+                fail("An explicitly selected external-table route must reject " + type);
+            } catch (IllegalArgumentException expected) {
+                assertTrue(expected.getMessage(), expected.getMessage().contains("MySQL"));
+                assertTrue(expected.getMessage(), expected.getMessage().contains("TiDB"));
+            }
+            assertTrue("Unsupported source selection must not be reported as a JDBC configuration fallback", messages.isEmpty());
+        }
+    }
+
+    @Test
+    public void explicitExternalTableTlsConfigurationStillReportsExistingJdbcFallback() throws Exception {
+        assertTlsFallbackReportsJdbcPath("MYSQL", new MySqlDataSyncExtractor(), ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+        assertTlsFallbackReportsJdbcPath("TIDB", new TiDbDataSyncExtractor(), ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+    }
+
+    @Test
     public void stoppedExternalImportCannotFallBackToJdbcOrReportProgress() throws Exception {
         for (String type : Arrays.asList("MYSQL", "TIDB")) {
             StarRocksDataSyncExecutor executor = new StarRocksDataSyncExecutor(
@@ -533,11 +595,18 @@ public class StarRocksExternalTableImportIntegrationTest {
 
     private static void assertTlsFallbackReportsJdbcPath(String type, DataSyncExtractor extractor)
             throws Exception {
+        assertTlsFallbackReportsJdbcPath(type, extractor, null);
+    }
+
+    private static void assertTlsFallbackReportsJdbcPath(String type, DataSyncExtractor extractor,
+            String directImportMethod) throws Exception {
         StarRocksDataSyncExecutor executor = new StarRocksDataSyncExecutor(
                 unusedMapper(ErDataTransferMapper.class), unusedMapper(ErDataTransferLogMapper.class),
                 unusedMapper(ErDataTransferProgressMapper.class));
         ErDatasource source = tlsSource(type);
         ErDataTransfer task = externalTableTask("1", "0");
+        task.setDirectImportMethod(directImportMethod);
+        if (directImportMethod != null) task.setCatalogName("leftover_catalog");
         List<String> messages = new ArrayList<>();
         Connection unusedConnection = proxy(Connection.class, (method, args) -> {
             throw new AssertionError("TLS fallback must precede JDBC/DDL: " + method.getName());

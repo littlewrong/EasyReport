@@ -1,6 +1,6 @@
 -- 在 EasyReport 配置库执行，先 USE 你的配置库；请勿在源业务库或 StarRocks 执行。
 -- MySQL 5.7/8.0：可重复执行，仅增加 catalog_name，不修改旧外部表开关或导入策略。
--- 已有任务保留 NULL，继续兼容旧外部表路径；编辑后启用 Catalog 导入须填写名称。
+-- 已有任务保留 NULL，继续兼容旧外部表路径；选择 Catalog 导入时须填写名称。
 -- ALTER TABLE 会隐式提交。无选定库或任务表不存在时，PREPARE 会报错且不执行 DDL。
 SET @er_catalog_db = DATABASE();
 SET @er_catalog_ddl = CASE

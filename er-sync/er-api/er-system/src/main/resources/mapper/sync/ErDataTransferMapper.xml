@@ -16,6 +16,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="targetDatasourceName" column="target_datasource_name"/>
         <result property="syncMode"             column="sync_mode"             />
         <result property="externalTableEnabled" column="external_table_enabled"/>
+        <result property="directImportMethod"    column="direct_import_method"/>
         <result property="catalogName"          column="catalog_name"/>
         <result property="externalTableThresholdWan" column="external_table_threshold_wan"/>
         <result property="externalTableWindowUnit" column="external_table_window_unit"/>
@@ -44,7 +45,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         SELECT t.transfer_id, t.transfer_name, t.transfer_code, t.source_datasource_id,
                s.datasource_name AS source_datasource_name, t.source_schema_pattern, t.source_table,
                t.target_datasource_id, d.datasource_name AS target_datasource_name,
-               t.sync_mode, t.external_table_enabled, t.catalog_name, t.external_table_threshold_wan, t.external_table_window_unit,
+               t.sync_mode, t.external_table_enabled, t.direct_import_method, t.catalog_name, t.external_table_threshold_wan, t.external_table_window_unit,
                t.timestamp_field, t.sync_insert, t.sync_update,
                t.sync_delete, t.delete_window_years, t.batch_size, t.sync_status, t.sync_progress, t.last_sync_time, t.last_sync_value,
                t.last_sync_result, t.cron_expression, t.job_id, t.status,
@@ -102,6 +103,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="targetDatasourceId != null">target_datasource_id,</if>
             <if test="syncMode != null">sync_mode,</if>
             <if test="externalTableEnabled != null">external_table_enabled,</if>
+            <if test="directImportMethod != null">direct_import_method,</if>
             <if test="catalogName != null">catalog_name,</if>
             <if test="externalTableThresholdWan != null">external_table_threshold_wan,</if>
             <if test="externalTableWindowUnit != null">external_table_window_unit,</if>
@@ -131,6 +133,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="targetDatasourceId != null">#{targetDatasourceId},</if>
             <if test="syncMode != null">#{syncMode},</if>
             <if test="externalTableEnabled != null">#{externalTableEnabled},</if>
+            <if test="directImportMethod != null">#{directImportMethod},</if>
             <if test="catalogName != null">#{catalogName},</if>
             <if test="externalTableThresholdWan != null">#{externalTableThresholdWan},</if>
             <if test="externalTableWindowUnit != null">#{externalTableWindowUnit},</if>
@@ -164,6 +167,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="targetDatasourceId != null">target_datasource_id = #{targetDatasourceId},</if>
             <if test="syncMode != null">sync_mode = #{syncMode},</if>
             <if test="externalTableEnabled != null">external_table_enabled = #{externalTableEnabled},</if>
+            <if test="directImportMethod != null">direct_import_method = #{directImportMethod},</if>
             <if test="catalogName != null">catalog_name = #{catalogName},</if>
             <if test="externalTableThresholdWan != null">external_table_threshold_wan = #{externalTableThresholdWan},</if>
             <if test="externalTableWindowUnit != null">external_table_window_unit = #{externalTableWindowUnit},</if>
