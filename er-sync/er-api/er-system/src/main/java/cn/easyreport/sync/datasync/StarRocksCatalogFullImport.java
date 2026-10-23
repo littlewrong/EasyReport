@@ -452,14 +452,8 @@ final class StarRocksCatalogFullImport implements AutoCloseable {
         if (!"jdbc".equalsIgnoreCase(properties.get("type"))) {
             throw new IllegalArgumentException("指定的 Catalog 必须为 JDBC Catalog，尚未清空目标表");
         }
-        String sourceUser = first(datasource.getUsername(), source.getMetaData().getUserName());
-        String catalogUser = properties.get("user");
-        boolean sameUser = sourceUser != null && catalogUser != null
-                && ((dialect == Dialect.ORACLE || dialect == Dialect.SQLSERVER)
-                    ? sourceUser.equalsIgnoreCase(catalogUser) : sourceUser.equals(catalogUser));
-        if (!sameUser) {
-            throw new IllegalArgumentException("Catalog 连接账号与源数据源账号不一致；为保证源端统计和 Catalog 导入的数据可见范围一致，请配置相同账号，尚未清空目标表");
-        }
+        // Source statistics and Catalog scans may use independent credentials. The configured
+        // accounts must each have access to the intended tables and rows; verify readability below.
         JdbcIdentity configured = JdbcIdentity.parse(datasource.getJdbcUrl(), dialect);
         JdbcIdentity external = JdbcIdentity.parse(properties.get("jdbc_uri"), dialect);
         // These URLs belong to different network environments. Host names and ports can differ

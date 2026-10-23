@@ -22,6 +22,8 @@ import java.util.Set;
 /** Checks settings which can make source statistics and Catalog scans see different rows or dates. */
 final class StarRocksCatalogSessionSettings {
     private static final String TIMEZONE = "connectiontimezone";
+    private static final Set<String> CREDENTIAL_SETTINGS = new HashSet<>(Arrays.asList(
+            "user", "username", "password", "password1", "password2", "password3"));
     private static final Set<String> SENSITIVE_SETTINGS = new HashSet<>(Arrays.asList(
             "sessionvariables", "forceconnectiontimezonetosession", TIMEZONE, "preserveinstants",
             "connectioninitsql", "connectioninitsqls", "initsql", "initsqls", "init_sql", "initializationsql",
@@ -41,6 +43,9 @@ final class StarRocksCatalogSessionSettings {
         stopped(cancellation);
         Settings settings = settings(source, datasource, catalogProperties, cancellation);
         for (String name : SENSITIVE_SETTINGS) {
+            // Each connection owns its credentials. Still compare configured versus actual
+            // source credentials in settings(), but do not require the Catalog account to match.
+            if (CREDENTIAL_SETTINGS.contains(name)) continue;
             String sourceValue = value(settings.source, name);
             String catalogValue = value(settings.catalog, name);
             // Driver timezone labels alone do not identify a MySQL session's effective timezone.

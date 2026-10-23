@@ -376,11 +376,22 @@ public class StarRocksCatalogFullImportTest {
         assertFalse(f.targetSql.stream().anyMatch(sql -> sql.startsWith("TRUNCATE") || sql.startsWith("DROP")));
     }
 
-    @Test public void differentCatalogAccountIsRejectedBeforeSourceCount() throws Exception {
+    @Test public void differentCatalogAccountStillCountsAndChecksCatalogReadabilityAndPlan() throws Exception {
         Fixture f = new Fixture();
         f.catalogUser = "another_user";
-        assertFailure(f, "连接账号与源数据源账号不一致");
-        assertTrue(f.sourceSql.isEmpty());
+        try (StarRocksCatalogFullImport importer = f.prepare(50, "YEAR")) { importer.execute(); }
+        assertTrue(f.sourceSql.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
+        assertTrue(f.targetSql.stream().anyMatch(sql -> sql.startsWith("SELECT ") && sql.endsWith("LIMIT 1")));
+        assertTrue(f.targetSql.stream().anyMatch(sql -> sql.startsWith("EXPLAIN INSERT")));
+        assertEquals(1, f.inserts.size());
+
+        Fixture invisible = new Fixture();
+        invisible.catalogUser = "another_user";
+        invisible.catalogSeesRows = false;
+        try { invisible.prepare(50, "YEAR"); fail("Unreadable Catalog must still fail before clear"); }
+        catch (IllegalStateException expected) { assertTrue(expected.getMessage().contains("Catalog 未读取到数据")); }
+        assertTrue(invisible.inserts.isEmpty());
+        assertFalse(invisible.targetSql.stream().anyMatch(sql -> sql.startsWith("TRUNCATE")));
     }
 
     @Test public void catalogTextToJsonUsesTypedScalarProjectionAndSourceBytePreflight() throws Exception {

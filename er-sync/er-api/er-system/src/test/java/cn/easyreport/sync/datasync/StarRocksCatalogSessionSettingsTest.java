@@ -200,14 +200,25 @@ public class StarRocksCatalogSessionSettingsTest {
         reject(preserve, "preserveinstants");
     }
 
-    @Test public void identityOverridesAreComparedWithoutPrintingValues() throws Exception {
+    @Test public void independentUrlCredentialsAreAllowedWithoutComparingConnections() throws Exception {
         Fixture f = new Fixture();
-        f.sourceUrl += "?password=source-secret";
-        f.catalogUrl += "?password=catalog-secret";
-        try { f.verify(); fail("Expected override mismatch"); }
+        f.sourceUrl += "?user=statistics_user&password=source-secret&password1=source-secret1";
+        f.catalogUrl += "?username=import_user&password=catalog-secret&password2=catalog-secret2&password3=catalog-secret3";
+        f.verify();
+        assertTrue(f.sql.isEmpty());
+    }
+
+    @Test public void actualSourceCredentialsMustStillMatchConfiguredCredentialsWithoutPrintingValues() throws Exception {
+        Fixture f = new Fixture();
+        f.sourceUrl += "?user=statistics_user&password=source-secret";
+        f.catalogUrl += "?user=import_user&password=catalog-secret";
+        f.actualUrl = "jdbc:mysql://source:3306/erp?user=statistics_user&password=actual-secret";
+        try { f.verify(); fail("Expected source configuration mismatch"); }
         catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("实际连接设置与配置不一致"));
             assertFalse(expected.getMessage().contains("source-secret"));
             assertFalse(expected.getMessage().contains("catalog-secret"));
+            assertFalse(expected.getMessage().contains("actual-secret"));
             assertTrue(expected.getMessage().contains("尚未清空目标表"));
         }
     }
@@ -221,7 +232,7 @@ public class StarRocksCatalogSessionSettingsTest {
         Fixture sqlServer = new Fixture();
         sqlServer.datasource.setDatasourceType("SQLSERVER");
         sqlServer.sourceUrl = "jdbc:sqlserver://source:1433;databaseName=erp;password={a;b}}c};encrypt=true";
-        sqlServer.catalogUrl = "jdbc:sqlserver://source:1433;databaseName=erp;password={a;b}}c};encrypt=false";
+        sqlServer.catalogUrl = "jdbc:sqlserver://source:1433;databaseName=erp;user=catalog_user;password={other;secret}}};encrypt=false";
         sqlServer.verify();
         assertTrue(sqlServer.sql.isEmpty());
     }

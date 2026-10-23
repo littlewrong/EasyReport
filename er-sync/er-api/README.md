@@ -19,6 +19,7 @@
 - 配置了时间戳字段时，初始化跳过该字段为 NULL 的记录。
 - Catalog 导入隐藏普通批次大小，关闭后恢复原值。关闭开关或使用增量同步时，继续走原 JDBC 路径。
 - 源、Catalog 和目标映射会在清空目标表前预检；显式配置 Catalog 的任务失败时直接报错，不自动切换导入方式。
+- 源数据源与 Catalog 可以使用不同账号和独立密码；由使用者保证两端账号对所需表及行的读取权限和数据可见范围一致。实际读取、字段映射和插入计划仍会预检，不会完整比对两账号可见的全部数据。
 - 停止任务先显示“停止中”，后台取消 JDBC 查询/写入并结束后显示“已停止”；未完成表不推进断点。此前已提交的窗口不会整体回滚。
 
 目标 StarRocks 必须自身支持所选源的 JDBC Catalog：MySQL / PostgreSQL 从 3.0 开始，Oracle / SQL Server 在 3.2.9、3.3.1 对应版本线引入，3.1.x 不能使用后两类 Catalog。StarRocks 源使用 MySQL 兼容 JDBC，连接源 FE 的查询端口（通常显式填写 `:9030`）；ARRAY、MAP、STRUCT、HLL、BITMAP 等复杂字段暂不支持。Oracle 日期时间映射、时区和精度会额外校验；日期时间作为文本映射时仅支持安全的整批转换，分窗需要 Catalog 提供合适的 DATETIME 映射。详见 [StarRocks JDBC Catalog](https://docs.starrocks.io/docs/data_source/catalog/jdbc_catalog/)。
