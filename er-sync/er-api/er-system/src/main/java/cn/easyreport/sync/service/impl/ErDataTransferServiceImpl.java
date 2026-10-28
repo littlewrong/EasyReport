@@ -302,35 +302,79 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         }
         if (task.getExternalTableThresholdWan() != null && task.getExternalTableThresholdWan() <= 0)
         {
-            throw new ServiceException("外部表模式导入整批阈值必须为1至2147483647的整数，单位为万条");
+            throw new ServiceException("数据湖导入整批阈值必须为1至2147483647的整数，单位为万条");
         }
         String windowUnit = task.getExternalTableWindowUnit();
         if (windowUnit != null && !"YEAR".equals(windowUnit) && !"MONTH".equals(windowUnit)
                 && !"DAY".equals(windowUnit))
         {
-            throw new ServiceException("外部表模式导入时间分片单位仅允许YEAR、MONTH或DAY");
+            throw new ServiceException("数据湖导入时间分片单位仅允许YEAR、MONTH或DAY");
         }
         String enabled = task.getExternalTableEnabled();
         if (enabled != null && !"0".equals(enabled) && !"1".equals(enabled))
         {
-            throw new ServiceException("外部表模式导入开关仅允许0或1");
+            throw new ServiceException("数据湖导入开关仅允许0或1");
+        }
+        String submittedMethod = task.getDirectImportMethod();
+        if (submittedMethod != null)
+        {
+            submittedMethod = submittedMethod.trim();
+            task.setDirectImportMethod(submittedMethod);
+        }
+        if (submittedMethod != null
+                && !ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE.equals(submittedMethod)
+                && !ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(submittedMethod))
+        {
+            throw new ServiceException("数据湖导入方式仅允许EXTERNAL_TABLE或JDBC_CATALOG");
+        }
+        if (task.getCatalogName() != null)
+        {
+            task.setCatalogName(task.getCatalogName().trim());
+        }
+        if (oldTask == null && submittedMethod == null)
+        {
+            // Older clients identify their import route by the presence of a Catalog name.
+            task.setDirectImportMethod(task.resolveDirectImportMethod());
         }
         if (enabled == null && oldTask == null)
         {
             task.setExternalTableEnabled("0");
             return;
         }
+        boolean bindingChanged = oldTask != null && (task.getSyncMode() != null
+                || task.getSourceDatasourceId() != null || task.getTargetDatasourceId() != null
+                || task.getCatalogName() != null || submittedMethod != null);
+        if (bindingChanged && submittedMethod == null
+                && ("0".equals(enabled) || (enabled == null && !"1".equals(oldTask.getExternalTableEnabled()))))
+        {
+            // Preserve the route of disabled legacy records before their inactive parameters change.
+            String originalMethod = oldTask.resolveDirectImportMethod();
+            if (!ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE.equals(originalMethod)
+                    && !ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(originalMethod))
+            {
+                throw new ServiceException("数据湖导入方式仅允许EXTERNAL_TABLE或JDBC_CATALOG");
+            }
+            task.setDirectImportMethod(originalMethod);
+        }
         if ("0".equals(enabled))
         {
             return;
         }
-        boolean bindingChanged = oldTask != null && (task.getSyncMode() != null
-                || task.getSourceDatasourceId() != null || task.getTargetDatasourceId() != null);
         if (enabled == null && (!bindingChanged || !"1".equals(oldTask.getExternalTableEnabled())))
         {
             return;
         }
 
+        // A sparse edit cannot switch a saved Catalog task to external tables by clearing its name.
+        String importMethod = submittedMethod != null ? submittedMethod
+                : oldTask != null ? oldTask.resolveDirectImportMethod() : task.resolveDirectImportMethod();
+        if (!ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE.equals(importMethod)
+                && !ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(importMethod))
+        {
+            throw new ServiceException("数据湖导入方式仅允许EXTERNAL_TABLE或JDBC_CATALOG");
+        }
+        task.setDirectImportMethod(importMethod);
+        boolean catalogImport = ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(importMethod);
         String syncMode = task.getSyncMode() != null ? task.getSyncMode()
                 : oldTask != null ? oldTask.getSyncMode() : "0";
         Long sourceId = task.getSourceDatasourceId() != null ? task.getSourceDatasourceId()
@@ -341,18 +385,35 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         ErDatasource target = targetId != null ? erDatasourceMapper.selectErDatasourceByDatasourceId(targetId) : null;
         String sourceType = source != null ? source.getDatasourceType() : null;
         String targetType = target != null ? target.getDatasourceType() : null;
-        boolean supported = "0".equals(syncMode)
-                && ("MYSQL".equalsIgnoreCase(sourceType) || "TIDB".equalsIgnoreCase(sourceType))
+        boolean supportedSource = "MYSQL".equalsIgnoreCase(sourceType) || "TIDB".equalsIgnoreCase(sourceType)
+                || (catalogImport && ("POSTGRESQL".equalsIgnoreCase(sourceType) || "ORACLE".equalsIgnoreCase(sourceType)
+                    || "SQLSERVER".equalsIgnoreCase(sourceType) || "STARROCKS".equalsIgnoreCase(sourceType)));
+        boolean supported = "0".equals(syncMode) && supportedSource
                 && "STARROCKS".equalsIgnoreCase(targetType);
         if (!supported)
         {
-            // 兼容回退前已启用Catalog的任务；不支持原生外部表的组合恢复普通JDBC。
-            boolean previouslyEnabled = oldTask != null && "1".equals(oldTask.getExternalTableEnabled());
-            if ("1".equals(enabled) && !previouslyEnabled)
+            if ("1".equals(enabled) || submittedMethod != null)
             {
-                throw new ServiceException("外部表模式导入仅支持MySQL/TiDB到StarRocks的初始化同步");
+                throw new ServiceException(catalogImport
+                        ? "Catalog导入仅支持MySQL/TiDB/PostgreSQL/Oracle/SQLServer/StarRocks到StarRocks的初始化同步"
+                        : "外部表导入仅支持MySQL/TiDB到StarRocks的初始化同步");
             }
             task.setExternalTableEnabled("0");
+            return;
+        }
+        if (!catalogImport)
+        {
+            return;
+        }
+        String catalogName = task.getCatalogName() != null ? task.getCatalogName()
+                : oldTask != null ? oldTask.getCatalogName() : null;
+        if (catalogName == null || catalogName.isEmpty())
+        {
+            throw new ServiceException("启用Catalog导入时必须填写Catalog名称");
+        }
+        if (catalogName.length() > 1023 || !catalogName.matches("[a-zA-Z][a-zA-Z0-9_]*"))
+        {
+            throw new ServiceException("Catalog导入名称须以字母开头，仅包含字母、数字、下划线，且不超过1023个字符");
         }
     }
 

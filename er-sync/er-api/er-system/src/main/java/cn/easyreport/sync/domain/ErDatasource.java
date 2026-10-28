@@ -221,29 +221,19 @@ public class ErDatasource extends BaseEntity
         return testTime;
     }
 
+    /** Connection settings and free text can contain credentials; keep diagnostics to metadata. */
     @Override
     public String toString() {
         return new ToStringBuilder(this,ToStringStyle.MULTI_LINE_STYLE)
             .append("datasourceId", getDatasourceId())
             .append("datasourceName", getDatasourceName())
             .append("datasourceType", getDatasourceType())
-            .append("host", getHost())
-            .append("port", getPort())
-            .append("databaseName", getDatabaseName())
-            .append("username", getUsername())
-            .append("password", getPassword())
             .append("driverClass", getDriverClass())
-            .append("jdbcUrl", getJdbcUrl())
-            .append("connectionParams", getConnectionParams())
             .append("status", getStatus())
             .append("testStatus", getTestStatus())
-            .append("testMessage", getTestMessage())
             .append("testTime", getTestTime())
-            .append("createBy", getCreateBy())
             .append("createTime", getCreateTime())
-            .append("updateBy", getUpdateBy())
             .append("updateTime", getUpdateTime())
-            .append("remark", getRemark())
             .toString();
     }
 }
