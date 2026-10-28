@@ -13,16 +13,16 @@
 
 架构同步提供“分片库架构共用”开关：按库名或 Schema 名排序，读取第一个匹配范围的结构并用于全部匹配范围。预览和执行使用相同模板选择规则；结构不同的库应拆成不同任务。MySQL / TiDB 的结构采集按表分批读取元数据，减少多库同构表的重复查询。
 
-初始化到 StarRocks 时，可手动开启 **Catalog 导入**，并填写必填的已有 JDBC Catalog 名称。支持 MySQL、TiDB、PostgreSQL、Oracle、SQL Server、StarRocks 源；每种源都需预先配置对应 Catalog。应用通过源 JDBC 直接统计有效行数和时间范围，然后由目标 StarRocks 执行 `INSERT INTO ... SELECT ... FROM Catalog.Schema.Table`，不会创建或删除共享 Catalog。
+MySQL / TiDB 初始化到 StarRocks 时，可手动开启 **外部表导入**。应用直接在源库统计有效行数和时间范围，在目标 StarRocks 的 `easyreport_import_tmp` 专用库中创建本次运行独占的 `ENGINE=MYSQL` 临时外部表，再执行 `INSERT INTO ... SELECT ...`；完成、失败或停止后清理本次临时表，保留专用库供后续任务使用。
 
 - 有效数据少于指定阈值时整批导入，否则按自然年、月或日串行导入；默认 **50 万条、年**。
 - 配置了时间戳字段时，初始化跳过该字段为 NULL 的记录。
-- Catalog 导入隐藏普通批次大小，关闭后恢复原值。关闭开关或使用增量同步时，继续走原 JDBC 路径。
-- 源、Catalog 和目标映射会在清空目标表前预检；显式配置 Catalog 的任务失败时直接报错，不自动切换导入方式。
-- 源数据源与 Catalog 可以使用不同账号和独立密码；由使用者保证两端账号对所需表及行的读取权限和数据可见范围一致。实际读取、字段映射和插入计划仍会预检，不会完整比对两账号可见的全部数据。
-- 停止任务先显示“停止中”，后台取消 JDBC 查询/写入并结束后显示“已停止”；未完成表不推进断点。此前已提交的窗口不会整体回滚。
+- 外部表导入隐藏普通批次大小，关闭后恢复原值；源配置不支持外部表时，按原批次大小回退普通 JDBC。
+- 源端统计、外部表读取和目标插入计划在清空目标表前预检；失败时保留尚未清空的目标数据。
+- MySQL / TiDB JSON 字段通过文本承接；目标为 JSON 时显式解析，保留对象、数组、字符串、数字、布尔值、JSON `null` 与 SQL NULL 的区别，并在清空目标前检查容量，避免截断。
+- 停止任务先显示“停止中”，后台取消 JDBC 查询/写入、清理临时表并结束后显示“已停止”；未完成表不推进断点。此前已提交的窗口不会整体回滚。
 
-目标 StarRocks 必须自身支持所选源的 JDBC Catalog：MySQL / PostgreSQL 从 3.0 开始，Oracle / SQL Server 在 3.2.9、3.3.1 对应版本线引入，3.1.x 不能使用后两类 Catalog。StarRocks 源使用 MySQL 兼容 JDBC，连接源 FE 的查询端口（通常显式填写 `:9030`）；ARRAY、MAP、STRUCT、HLL、BITMAP 等复杂字段暂不支持。Oracle 日期时间映射、时区和精度会额外校验；日期时间作为文本映射时仅支持安全的整批转换，分窗需要 Catalog 提供合适的 DATETIME 映射。详见 [StarRocks JDBC Catalog](https://docs.starrocks.io/docs/data_source/catalog/jdbc_catalog/)。
+外部表使用 **EasyReport 源数据源中保存的地址和端口**，StarRocks BE 各读取节点必须能够访问；原 Catalog 的内网连接地址不会继续生效。目标账号需具备专用库及外部表创建、读取、删除和目标表写入、清空权限，源账号需具备读取权限。不需要预建 Catalog，也不依赖 BE 的 `JAVA_HOME` 或 JDBC 驱动。Oracle、PostgreSQL、SQL Server、StarRocks 等其他源以及增量同步继续使用普通 JDBC。
 
 ### 数据库安装与升级
 
@@ -34,9 +34,10 @@
 | `upgrade_20261020_data_transfer_progress.sql` | 将任务进度字段扩容为 MEDIUMTEXT |
 | `upgrade_20261022_data_transfer_external_table.sql` | 增加导入开关；新任务默认关闭 |
 | `upgrade_20261023_data_transfer_external_policy.sql` | 增加整批阈值和年/月/日策略，默认 50 万条、年 |
-| `upgrade_20261023_data_transfer_catalog.sql` | 增加已有 Catalog 的名称字段 `catalog_name` |
 
-先备份配置库并停止同步任务和后端，在 **EasyReport 配置库**执行所需脚本，再更新后端与前端。Catalog、开关和策略脚本会检查列是否已存在；正常升级不执行 `rollback_*.sql`。回滚脚本只供恢复兼容旧后端时使用，会删除相应配置字段，不能代替升级脚本。
+先备份配置库并停止同步任务和后端，在 **EasyReport 配置库**执行所需脚本，再更新后端与前端。开关和策略脚本会检查列是否已存在；已经具备所需字段时无需重复执行。正常更新不执行 `rollback_*.sql`，回滚脚本会删除相应配置字段，不能代替升级脚本。
+
+本次恢复外部表导入不需要新增或删除配置字段：已增加的 `catalog_name` 可以保留，当前程序不再使用，也不会自动删除已有 StarRocks Catalog。`upgrade_20261023_data_transfer_catalog.sql` 和 `rollback_20261023_data_transfer_catalog.sql` 仅保留为历史 Catalog 版本迁移记录，本次两个脚本均无需执行。
 
 ### 公开配置与验证
 

@@ -28,27 +28,6 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
             String schema, String table, String targetTable, List<String> sourceCols,
             List<String> targetCols, DataSyncExtractor extractor, Connection sourceConn,
             Connection targetConn, String tsField, SyncProgressCallback callback) throws Exception {
-        if (task == null || !"0".equals(task.getSyncMode()) || !"1".equals(task.getExternalTableEnabled())) {
-            return null;
-        }
-        if (task.getCatalogName() != null && !task.getCatalogName().trim().isEmpty()) {
-            checkStopped();
-            final StarRocksCatalogFullImport catalogImport = StarRocksCatalogFullImport.prepare(
-                    sourceDs, sourceConn, targetConn, task.getCatalogName().trim(), schema, table,
-                    targetTable, sourceCols, targetCols, tsField, task.getExternalTableThresholdWan(),
-                    task.getExternalTableWindowUnit(), callback, cancellationContext());
-            return new DirectFullImport() {
-                @Override public FullSyncStats execute() throws Exception {
-                    StarRocksCatalogFullImport.Result result = catalogImport.execute();
-                    FullSyncStats stats = new FullSyncStats();
-                    stats.processed = result.processed;
-                    stats.maxTs = result.maxTs;
-                    return stats;
-                }
-                @Override public void close() { catalogImport.close(); }
-            };
-        }
-        // Persisted tasks without a Catalog keep their original MYSQL external-table behavior.
         boolean supportedSource = sourceDs != null
                 && (("TIDB".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof TiDbDataSyncExtractor)
                     || ("MYSQL".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof MySqlDataSyncExtractor));

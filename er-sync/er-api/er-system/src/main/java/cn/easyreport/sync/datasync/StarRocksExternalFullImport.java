@@ -366,7 +366,7 @@ final class StarRocksExternalFullImport implements AutoCloseable {
         return String.join(", ", expressions);
     }
 
-    static String jsonProjection(String rawSql) {
+    private static String jsonProjection(String rawSql) {
         // SR 3.1/3.2 PARSE_JSON treats top-level numeric/bool/null tokens as strings. Parsing an array
         // and extracting its first element preserves their JSON types, including JSON null vs SQL NULL.
         String parsed = "JSON_QUERY(PARSE_JSON(CONCAT('[', " + rawSql + ", ']')), '$[0]')";
@@ -376,7 +376,7 @@ final class StarRocksExternalFullImport implements AutoCloseable {
                 + JSON_CONVERSION_ERROR + "'), " + parsed + ", NULL)";
     }
 
-    static void verifyJsonProjection(Connection targetConn, DataSyncCancellation cancellation) throws SQLException {
+    private static void verifyJsonProjection(Connection targetConn, DataSyncCancellation cancellation) throws SQLException {
         checkStopped(cancellation);
         try (Statement statement = targetConn.createStatement();
                 ResultSet rows = statement.executeQuery(JSON_CONVERSION_PROBE_SQL)) {

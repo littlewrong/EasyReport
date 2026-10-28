@@ -302,22 +302,18 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         }
         if (task.getExternalTableThresholdWan() != null && task.getExternalTableThresholdWan() <= 0)
         {
-            throw new ServiceException("Catalog导入整批阈值必须为1至2147483647的整数，单位为万条");
+            throw new ServiceException("外部表模式导入整批阈值必须为1至2147483647的整数，单位为万条");
         }
         String windowUnit = task.getExternalTableWindowUnit();
         if (windowUnit != null && !"YEAR".equals(windowUnit) && !"MONTH".equals(windowUnit)
                 && !"DAY".equals(windowUnit))
         {
-            throw new ServiceException("Catalog导入时间分片单位仅允许YEAR、MONTH或DAY");
+            throw new ServiceException("外部表模式导入时间分片单位仅允许YEAR、MONTH或DAY");
         }
         String enabled = task.getExternalTableEnabled();
         if (enabled != null && !"0".equals(enabled) && !"1".equals(enabled))
         {
-            throw new ServiceException("Catalog导入开关仅允许0或1");
-        }
-        if (task.getCatalogName() != null)
-        {
-            task.setCatalogName(task.getCatalogName().trim());
+            throw new ServiceException("外部表模式导入开关仅允许0或1");
         }
         if (enabled == null && oldTask == null)
         {
@@ -329,8 +325,7 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
             return;
         }
         boolean bindingChanged = oldTask != null && (task.getSyncMode() != null
-                || task.getSourceDatasourceId() != null || task.getTargetDatasourceId() != null
-                || task.getCatalogName() != null);
+                || task.getSourceDatasourceId() != null || task.getTargetDatasourceId() != null);
         if (enabled == null && (!bindingChanged || !"1".equals(oldTask.getExternalTableEnabled())))
         {
             return;
@@ -347,28 +342,17 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         String sourceType = source != null ? source.getDatasourceType() : null;
         String targetType = target != null ? target.getDatasourceType() : null;
         boolean supported = "0".equals(syncMode)
-                && ("MYSQL".equalsIgnoreCase(sourceType) || "TIDB".equalsIgnoreCase(sourceType)
-                    || "POSTGRESQL".equalsIgnoreCase(sourceType) || "ORACLE".equalsIgnoreCase(sourceType)
-                    || "SQLSERVER".equalsIgnoreCase(sourceType) || "STARROCKS".equalsIgnoreCase(sourceType))
+                && ("MYSQL".equalsIgnoreCase(sourceType) || "TIDB".equalsIgnoreCase(sourceType))
                 && "STARROCKS".equalsIgnoreCase(targetType);
         if (!supported)
         {
-            if ("1".equals(enabled))
+            // 兼容回退前已启用Catalog的任务；不支持原生外部表的组合恢复普通JDBC。
+            boolean previouslyEnabled = oldTask != null && "1".equals(oldTask.getExternalTableEnabled());
+            if ("1".equals(enabled) && !previouslyEnabled)
             {
-                throw new ServiceException("Catalog导入仅支持MySQL/TiDB/PostgreSQL/Oracle/SQLServer/StarRocks到StarRocks的初始化同步");
+                throw new ServiceException("外部表模式导入仅支持MySQL/TiDB到StarRocks的初始化同步");
             }
             task.setExternalTableEnabled("0");
-            return;
-        }
-        String catalogName = task.getCatalogName() != null ? task.getCatalogName()
-                : oldTask != null ? oldTask.getCatalogName() : null;
-        if (catalogName == null || catalogName.isEmpty())
-        {
-            throw new ServiceException("启用Catalog导入时必须填写Catalog名称");
-        }
-        if (catalogName.length() > 1023 || !catalogName.matches("[a-zA-Z][a-zA-Z0-9_]*"))
-        {
-            throw new ServiceException("Catalog导入名称须以字母开头，仅包含字母、数字、下划线，且不超过1023个字符");
         }
     }
 

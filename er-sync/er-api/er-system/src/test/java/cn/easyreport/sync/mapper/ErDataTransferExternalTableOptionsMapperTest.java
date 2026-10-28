@@ -102,9 +102,9 @@ public class ErDataTransferExternalTableOptionsMapperTest
                     .collect(Collectors.toMap(ResultMapping::getProperty, ResultMapping::getColumn));
 
             assertTrue(sql(select.getBoundSql(parameter)).contains("t.external_table_enabled"));
+            assertFalse(sql(select.getBoundSql(parameter)).contains("catalog_name"));
+            assertFalse(columns.containsKey("catalogName"));
             assertEquals("external_table_enabled", columns.get("externalTableEnabled"));
-            assertTrue(sql(select.getBoundSql(parameter)).contains("t.catalog_name"));
-            assertEquals("catalog_name", columns.get("catalogName"));
             assertTrue(sql(select.getBoundSql(parameter)).contains("t.external_table_threshold_wan"));
             assertEquals("external_table_threshold_wan", columns.get("externalTableThresholdWan"));
             assertTrue(sql(select.getBoundSql(parameter)).contains("t.external_table_window_unit"));
@@ -123,6 +123,7 @@ public class ErDataTransferExternalTableOptionsMapperTest
         BoundSql bound = statement("insertErDataTransfer", task);
 
         assertTrue(sql(bound).contains("external_table_threshold_wan, external_table_window_unit, batch_size"));
+        assertFalse(sql(bound).contains("catalog_name"));
         assertEquals(Arrays.asList("externalTableThresholdWan", "externalTableWindowUnit", "batchSize"), properties(bound));
     }
 
@@ -148,23 +149,6 @@ public class ErDataTransferExternalTableOptionsMapperTest
         assertTrue(sql(bound).contains("external_table_window_unit = ?"));
         assertFalse(sql(bound).contains("external_table_threshold_wan"));
         assertEquals(Arrays.asList("externalTableWindowUnit", "transferId"), properties(bound));
-    }
-
-    @Test
-    public void catalogInsertAndUpdateUseBoundParameters()
-    {
-        ErDataTransfer task = new ErDataTransfer();
-        task.setCatalogName("src_mysql");
-        BoundSql bound = statement("insertErDataTransfer", task);
-        assertTrue(sql(bound).contains("catalog_name"));
-        assertFalse(sql(bound).contains("src_mysql"));
-        assertEquals(Arrays.asList("catalogName"), properties(bound));
-
-        task.setTransferId(7L);
-        bound = statement("updateErDataTransfer", task);
-        assertTrue(sql(bound).contains("catalog_name = ?"));
-        assertFalse(sql(bound).contains("external_table_enabled"));
-        assertEquals(Arrays.asList("catalogName", "transferId"), properties(bound));
     }
 
     private BoundSql statement(String name, ErDataTransfer task)

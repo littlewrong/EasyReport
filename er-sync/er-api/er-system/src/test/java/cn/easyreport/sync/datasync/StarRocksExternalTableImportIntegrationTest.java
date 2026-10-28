@@ -368,6 +368,10 @@ public class StarRocksExternalTableImportIntegrationTest {
                 assertBefore(f.events, "truncate", "insert-select");
                 assertBefore(f.events, "drop-external", "checkpoint");
                 assertEquals(1, Collections.frequency(f.events, "drop-external"));
+                assertTrue(f.directSql.stream().anyMatch(sql -> sql.startsWith("CREATE EXTERNAL TABLE")
+                        && sql.contains("ENGINE=MYSQL")));
+                assertFalse(f.directSql.stream().anyMatch(sql -> sql.contains("CATALOG")
+                        || sql.contains("INFORMATION_SCHEMA.PARTITIONS")));
                 assertTrue(f.directSql.stream().filter(sql -> sql.startsWith("INSERT INTO"))
                         .allMatch(sql -> sql.contains("JSON_QUERY(PARSE_JSON(CONCAT('[', `payload`, ']')), '$[0]')")));
             }

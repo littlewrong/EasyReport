@@ -1,3 +1,5 @@
+-- 历史 Catalog 版本专用迁移记录；本次恢复原生外部表导入无需执行。
+-- 已有 catalog_name 列可保留，程序不再使用；无需为本次回退删列，不会自动删除 StarRocks Catalog。
 -- 先停止当前后端和同步任务，再在 EasyReport 配置库执行；先 USE 你的配置库。
 -- 仅配合回退到不引用 catalog_name 的旧版后端；正常升级不需要执行本回滚脚本。
 -- MySQL 5.7/8.0：可重复执行，仅删除 catalog_name，丢弃已保存的 Catalog 名称配置。

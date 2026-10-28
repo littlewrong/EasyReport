@@ -1,3 +1,5 @@
+-- 历史 Catalog 版本专用迁移记录；本次恢复原生外部表导入无需执行。
+-- 已有 catalog_name 列可保留，程序不再使用；无需为本次回退删列，不会自动删除 StarRocks Catalog。
 -- 在 EasyReport 配置库执行，先 USE 你的配置库；请勿在源业务库或 StarRocks 执行。
 -- MySQL 5.7/8.0：可重复执行，仅增加 catalog_name，不修改旧外部表开关或导入策略。
 -- 已有任务保留 NULL，继续兼容旧外部表路径；编辑后启用 Catalog 导入须填写名称。

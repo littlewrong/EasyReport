@@ -137,9 +137,9 @@ public class ErDataTransferExternalTableOptionsTest
     }
 
     @Test
-    public void explicitlyEnablesSupportedCatalogSources() throws Exception
+    public void explicitlyEnablesMysqlAndTidbFullImports() throws Exception
     {
-        for (String sourceType : new String[] {"MYSQL", "TIDB", "mysql", "tidb", "POSTGRESQL", "ORACLE", "SQLSERVER", "STARROCKS", "starrocks"})
+        for (String sourceType : new String[] {"MYSQL", "TIDB", "mysql", "tidb"})
         {
             Fixture fixture = new Fixture(sourceType, "STARROCKS");
             ErDataTransfer task = fixture.task();
@@ -149,124 +149,6 @@ public class ErDataTransferExternalTableOptionsTest
 
             assertEquals("1", fixture.saved.getExternalTableEnabled());
             assertEquals(2, fixture.datasourceReads);
-        }
-    }
-
-    @Test
-    public void starRocksAndOracleSaveTheirCatalogImportPolicy() throws Exception
-    {
-        for (String sourceType : new String[] {"STARROCKS", "ORACLE"})
-        {
-            Fixture fixture = new Fixture(sourceType, "STARROCKS");
-            ErDataTransfer task = fixture.task();
-            task.setExternalTableEnabled("1");
-            task.setCatalogName("src_" + sourceType.toLowerCase(java.util.Locale.ROOT));
-            task.setExternalTableThresholdWan(75);
-            task.setExternalTableWindowUnit("MONTH");
-            task.setBatchSize(3000);
-
-            fixture.service.insertErDataTransfer(task);
-
-            assertEquals("1", fixture.saved.getExternalTableEnabled());
-            assertEquals(task.getCatalogName(), fixture.saved.getCatalogName());
-            assertEquals(Integer.valueOf(75), fixture.saved.getExternalTableThresholdWan());
-            assertEquals("MONTH", fixture.saved.getExternalTableWindowUnit());
-            assertEquals(Integer.valueOf(3000), fixture.saved.getBatchSize());
-        }
-    }
-
-    @Test
-    public void starRocksAndOracleRequireCatalogWhenExplicitlyEnabled() throws Exception
-    {
-        for (String sourceType : new String[] {"STARROCKS", "ORACLE"})
-        {
-            for (String name : new String[] {null, "", "  "})
-            {
-                Fixture fixture = new Fixture(sourceType, "STARROCKS");
-                fixture.oldTask.setCatalogName(null);
-                ErDataTransfer task = fixture.task();
-                task.setExternalTableEnabled("1");
-                task.setCatalogName(name);
-
-                expectRejected(fixture, task, false);
-                expectRejected(fixture, task, true);
-            }
-        }
-    }
-
-    @Test
-    public void starRocksAndOracleCannotEnableCatalogForAnotherTargetOrIncrementalMode() throws Exception
-    {
-        for (String sourceType : new String[] {"STARROCKS", "ORACLE"})
-        {
-            Fixture anotherTarget = new Fixture(sourceType, "MYSQL");
-            ErDataTransfer task = anotherTarget.task();
-            task.setExternalTableEnabled("1");
-            expectRejected(anotherTarget, task, false);
-
-            Fixture incremental = new Fixture(sourceType, "STARROCKS");
-            task = incremental.task();
-            task.setSyncMode("1");
-            task.setExternalTableEnabled("1");
-            expectRejected(incremental, task, false);
-        }
-    }
-
-    @Test
-    public void starRocksAndOracleBindingChangesDisableCatalogWithoutExplicitEnable() throws Exception
-    {
-        for (String sourceType : new String[] {"STARROCKS", "ORACLE"})
-        {
-            for (boolean changeTarget : new boolean[] {false, true})
-            {
-                Fixture fixture = new Fixture(sourceType, "STARROCKS");
-                fixture.oldTask.setExternalTableEnabled("1");
-                ErDataTransfer patch = new ErDataTransfer();
-                patch.setTransferId(7L);
-                if (changeTarget)
-                {
-                    ErDatasource anotherTarget = new ErDatasource();
-                    anotherTarget.setDatasourceType("MYSQL");
-                    fixture.sources.put(3L, anotherTarget);
-                    patch.setTargetDatasourceId(3L);
-                }
-                else
-                {
-                    patch.setSyncMode("1");
-                }
-
-                fixture.service.updateErDataTransfer(patch);
-
-                assertEquals("0", fixture.saved.getExternalTableEnabled());
-                assertNull(fixture.saved.getCatalogName());
-                assertNull(fixture.saved.getExternalTableThresholdWan());
-                assertNull(fixture.saved.getExternalTableWindowUnit());
-            }
-        }
-    }
-
-    @Test
-    public void starRocksAndOracleStatusPatchesPreserveCatalogOptionsWithoutDatasourceReads() throws Exception
-    {
-        for (String sourceType : new String[] {"STARROCKS", "ORACLE"})
-        {
-            Fixture fixture = new Fixture(sourceType, "STARROCKS");
-            fixture.oldTask.setExternalTableEnabled("1");
-            fixture.oldTask.setCatalogName("src_existing");
-            fixture.oldTask.setExternalTableThresholdWan(75);
-            fixture.oldTask.setExternalTableWindowUnit("MONTH");
-            ErDataTransfer patch = new ErDataTransfer();
-            patch.setTransferId(7L);
-            patch.setSyncStatus("1");
-            patch.setSyncProgress("{\"current\":1}");
-
-            fixture.service.updateErDataTransfer(patch);
-
-            assertNull(fixture.saved.getExternalTableEnabled());
-            assertNull(fixture.saved.getCatalogName());
-            assertNull(fixture.saved.getExternalTableThresholdWan());
-            assertNull(fixture.saved.getExternalTableWindowUnit());
-            assertEquals(0, fixture.datasourceReads);
         }
     }
 
@@ -298,7 +180,8 @@ public class ErDataTransferExternalTableOptionsTest
     @Test
     public void rejectsExplicitEnableForUnsupportedBindings() throws Exception
     {
-        for (String[] types : new String[][] {{"DORIS", "STARROCKS"}, {"TIDB", "MYSQL"}})
+        for (String[] types : new String[][] {{"POSTGRESQL", "STARROCKS"}, {"ORACLE", "STARROCKS"},
+                {"SQLSERVER", "STARROCKS"}, {"STARROCKS", "STARROCKS"}, {"TIDB", "MYSQL"}})
         {
             Fixture fixture = new Fixture(types[0], types[1]);
             ErDataTransfer task = fixture.task();
@@ -386,7 +269,7 @@ public class ErDataTransferExternalTableOptionsTest
         Fixture fixture = new Fixture("MYSQL", "STARROCKS");
         fixture.oldTask.setExternalTableEnabled("1");
         ErDatasource unsupported = new ErDatasource();
-        unsupported.setDatasourceType("DORIS");
+        unsupported.setDatasourceType("POSTGRESQL");
         fixture.sources.put(3L, unsupported);
         ErDataTransfer patch = new ErDataTransfer();
         patch.setTransferId(7L);
@@ -411,111 +294,73 @@ public class ErDataTransferExternalTableOptionsTest
     }
 
     @Test
-    public void catalogNameHasNoJavaDefaultAndIsTrimmedWhenSaved() throws Exception
+    public void editingPreviouslyEnabledCatalogSourcesRestoresJdbc() throws Exception
     {
-        assertNull(new ErDataTransfer().getCatalogName());
-        Fixture fixture = new Fixture("MYSQL", "STARROCKS");
-        ErDataTransfer task = fixture.task();
-        task.setExternalTableEnabled("1");
-        task.setCatalogName("  src_mysql_2  ");
-
-        fixture.service.insertErDataTransfer(task);
-
-        assertEquals("src_mysql_2", fixture.saved.getCatalogName());
-    }
-
-    @Test
-    public void rejectsEnabledTaskWithMissingOrUnsafeCatalogName() throws Exception
-    {
-        for (String name : new String[] {null, "", "  ", "1src", "_src", "src.db", "src-name", "src`name", "src;DROP", "数据源", repeat('a', 1024)})
+        for (String sourceType : new String[] {"POSTGRESQL", "ORACLE", "SQLSERVER", "STARROCKS"})
         {
-            Fixture fixture = new Fixture("MYSQL", "STARROCKS");
-            fixture.oldTask.setCatalogName(null);
-            ErDataTransfer task = fixture.task();
-            task.setExternalTableEnabled("1");
-            task.setCatalogName(name);
-            expectRejected(fixture, task, false);
-            expectRejected(fixture, task, true);
+            for (boolean sparse : new boolean[] {false, true})
+            {
+                Fixture fixture = new Fixture(sourceType, "STARROCKS");
+                fixture.oldTask.setExternalTableEnabled("1");
+                ErDataTransfer patch = sparse ? new ErDataTransfer() : fixture.task();
+                patch.setTransferId(7L);
+                patch.setExternalTableEnabled("1");
+
+                fixture.service.updateErDataTransfer(patch);
+
+                assertEquals("0", fixture.saved.getExternalTableEnabled());
+                assertNull(fixture.saved.getExternalTableThresholdWan());
+                assertNull(fixture.saved.getExternalTableWindowUnit());
+                assertNull(fixture.saved.getBatchSize());
+            }
         }
     }
 
     @Test
-    public void acceptsCatalogNameAtIdentifierLengthLimit() throws Exception
+    public void implicitEditOfPreviouslyEnabledCatalogSourceRestoresJdbc() throws Exception
     {
-        Fixture fixture = new Fixture("POSTGRESQL", "STARROCKS");
-        ErDataTransfer task = fixture.task();
-        task.setExternalTableEnabled("1");
-        task.setCatalogName(repeat('a', 1023));
+        for (String sourceType : new String[] {"POSTGRESQL", "ORACLE", "SQLSERVER", "STARROCKS"})
+        {
+            Fixture fixture = new Fixture(sourceType, "STARROCKS");
+            fixture.oldTask.setExternalTableEnabled("1");
 
-        fixture.service.insertErDataTransfer(task);
+            fixture.service.updateErDataTransfer(fixture.task());
 
-        assertEquals(1023, fixture.saved.getCatalogName().length());
+            assertEquals("0", fixture.saved.getExternalTableEnabled());
+        }
     }
 
     @Test
-    public void legacyProgressAndStatusPatchesDoNotRequireOrWriteCatalog() throws Exception
+    public void progressOnlyPatchOfPreviouslyEnabledCatalogSourceRemainsSparse() throws Exception
     {
-        Fixture fixture = new Fixture("MYSQL", "STARROCKS");
-        fixture.oldTask.setExternalTableEnabled("1");
-        fixture.oldTask.setCatalogName(null);
-        ErDataTransfer patch = new ErDataTransfer();
-        patch.setTransferId(7L);
-        patch.setSyncStatus("1");
-        patch.setSyncProgress("{\"current\":5}");
-        patch.setStatus("0");
+        for (String sourceType : new String[] {"POSTGRESQL", "ORACLE", "SQLSERVER", "STARROCKS"})
+        {
+            Fixture fixture = new Fixture(sourceType, "STARROCKS");
+            fixture.oldTask.setExternalTableEnabled("1");
+            ErDataTransfer patch = new ErDataTransfer();
+            patch.setTransferId(7L);
+            patch.setSyncStatus("1");
+            patch.setSyncProgress("{\"current\":1}");
 
-        fixture.service.updateErDataTransfer(patch);
+            fixture.service.updateErDataTransfer(patch);
 
-        assertNull(fixture.saved.getCatalogName());
-        assertNull(fixture.saved.getExternalTableEnabled());
-        assertNull(fixture.saved.getExternalTableThresholdWan());
-        assertNull(fixture.saved.getExternalTableWindowUnit());
-        assertEquals(0, fixture.datasourceReads);
+            assertNull(fixture.saved.getExternalTableEnabled());
+            assertEquals(0, fixture.datasourceReads);
+        }
     }
 
     @Test
-    public void editingEnabledLegacyConfigurationRequiresCatalog() throws Exception
+    public void existingDisabledTaskCannotExplicitlyEnableUnsupportedExternalTable() throws Exception
     {
-        Fixture fixture = new Fixture("MYSQL", "STARROCKS");
-        fixture.oldTask.setExternalTableEnabled("1");
-        fixture.oldTask.setCatalogName(null);
-        ErDataTransfer patch = fixture.task();
-        patch.setCatalogName(null);
+        for (String sourceType : new String[] {"POSTGRESQL", "ORACLE", "SQLSERVER", "STARROCKS"})
+        {
+            Fixture fixture = new Fixture(sourceType, "STARROCKS");
+            fixture.oldTask.setExternalTableEnabled("0");
+            ErDataTransfer patch = fixture.task();
+            patch.setExternalTableEnabled("1");
 
-        expectRejected(fixture, patch, true);
-    }
-
-    @Test
-    public void enabledCatalogCannotBeExplicitlyClearedWithSparsePatch() throws Exception
-    {
-        Fixture fixture = new Fixture("MYSQL", "STARROCKS");
-        fixture.oldTask.setExternalTableEnabled("1");
-        ErDataTransfer patch = new ErDataTransfer();
-        patch.setTransferId(7L);
-        patch.setCatalogName("  ");
-
-        expectRejected(fixture, patch, true);
-    }
-
-    @Test
-    public void switchOnlyPatchCanReuseSavedCatalogWithoutOverwritingIt() throws Exception
-    {
-        Fixture fixture = new Fixture("SQLSERVER", "STARROCKS");
-        ErDataTransfer patch = new ErDataTransfer();
-        patch.setTransferId(7L);
-        patch.setExternalTableEnabled("1");
-
-        fixture.service.updateErDataTransfer(patch);
-
-        assertEquals("1", fixture.saved.getExternalTableEnabled());
-        assertNull(fixture.saved.getCatalogName());
-    }
-
-    private String repeat(char value, int count)
-    {
-        char[] characters = new char[count];
-        java.util.Arrays.fill(characters, value);
-        return new String(characters);
+            expectRejected(fixture, patch, true);
+        }
     }
 
     private void expectRejected(Fixture fixture, ErDataTransfer task, boolean update)
@@ -528,7 +373,7 @@ public class ErDataTransferExternalTableOptionsTest
         }
         catch (ServiceException expected)
         {
-            assertTrue(expected.getMessage().contains("Catalog导入"));
+            assertTrue(expected.getMessage().contains("外部表模式导入"));
             assertNull(fixture.saved);
         }
     }
@@ -577,7 +422,6 @@ public class ErDataTransferExternalTableOptionsTest
             task.setSourceDatasourceId(1L);
             task.setTargetDatasourceId(2L);
             task.setSyncMode("0");
-            task.setCatalogName("src_mysql");
             return task;
         }
 

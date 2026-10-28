@@ -1,0 +1,238 @@
+
+> ruoyi@3.9.1 build:prod C:\EasyReport\er-sync\er-ui
+> vue-cli-service build
+
+'vue-cli-service' 不是内部或外部命令，也不是可运行的程序
+或批处理文件。
+npm ERR! code ELIFECYCLE
+npm ERR! errno 1
+npm ERR! ruoyi@3.9.1 build:prod: `vue-cli-service build`
+npm ERR! Exit status 1
+npm ERR! 
+npm ERR! Failed at the ruoyi@3.9.1 build:prod script.
+npm ERR! This is probably not a problem with npm. There is likely additional logging output above.
+
+npm ERR! A complete log of this run can be found in:
+npm ERR!     C:\Users\28467\AppData\Roaming\npm-cache\_logs\2026-10-28T03_17_41_274Z-debug.log
+EXIT=1
+
+> ruoyi@3.9.1 build:prod C:\EasyReport\er-sync\er-ui
+> vue-cli-service build
+
+
+-  Building for production...
+ WARNING  Compiled with 2 warnings11:25:14
+
+ warning  
+
+asset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  static/img/login-background.f9f49138.jpg (509 KiB)
+  static/css/app.3aff4316.css (268 KiB)
+  static/js/app.09333a7d.js (250 KiB)
+  static/js/chunk-1d7d97ec.4ac1fa59.js (1.02 MiB)
+  static/js/chunk-elementUI.eb1392d6.js (751 KiB)
+  static/js/chunk-libs.12f83ed2.js (619 KiB)
+  favicon.ico (1.38 MiB)
+  static/js/chunk-1d7d97ec.4ac1fa59.js.gz (332 KiB)
+
+ warning  
+
+entrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  app (1.88 MiB)
+      static/js/chunk-elementUI.eb1392d6.js
+      static/css/chunk-libs.20020923.css
+      static/js/chunk-libs.12f83ed2.js
+      static/css/app.3aff4316.css
+      static/js/app.09333a7d.js
+
+
+  File                                      Size             Gzipped
+
+  dist\static\js\chunk-1d7d97ec.4ac1fa59    1045.34 KiB      332.77 KiB
+  .js
+  dist\static\js\chunk-elementUI.eb1392d    751.24 KiB       192.43 KiB
+  6.js
+  dist\static\js\chunk-libs.12f83ed2.js     619.37 KiB       196.11 KiB
+  dist\static\js\app.09333a7d.js            249.95 KiB       78.83 KiB
+  dist\static\js\chunk-60006966.d211ec0e    137.55 KiB       31.22 KiB
+  .js
+  dist\static\js\chunk-5bb73842.dfe38031    64.04 KiB        17.50 KiB
+  .js
+  dist\static\js\chunk-227085f2.32ac26b2    55.05 KiB        10.90 KiB
+  .js
+  dist\static\js\chunk-2d0b2b28.9e271da6    53.59 KiB        16.07 KiB
+  .js
+  dist\static\js\chunk-3339808c.42cda531    49.48 KiB        10.77 KiB
+  .js
+  dist\static\js\chunk-5f611eda.ad59632e    46.72 KiB        9.65 KiB
+  .js
+  dist\static\js\chunk-7aad1943.b27ddc23    46.59 KiB        13.52 KiB
+  .js
+  dist\static\js\chunk-6bfd9619.48af9cc2    37.95 KiB        7.69 KiB
+  .js
+  dist\static\js\chunk-f10b32d4.8919ea33    36.24 KiB        8.07 KiB
+  .js
+  dist\static\js\chunk-e3b15924.cf2e68ce    35.23 KiB        9.82 KiB
+  .js
+  dist\static\js\chunk-93d1cd2c.39604b74    34.12 KiB        9.77 KiB
+  .js
+  dist\static\js\chunk-7abff893.47a38855    33.90 KiB        11.81 KiB
+  .js
+  dist\static\js\chunk-5885ca9b.aef2d579    33.46 KiB        13.41 KiB
+  .js
+  dist\static\js\chunk-3a083b9c.94750067    23.77 KiB        5.65 KiB
+  .js
+  dist\static\js\chunk-3b69bc00.5a0fb090    19.36 KiB        4.74 KiB
+  .js
+  dist\static\js\chunk-55113006.5e087ea9    17.68 KiB        4.30 KiB
+  .js
+  dist\static\js\chunk-25ccdf6b.39987194    16.61 KiB        4.55 KiB
+  .js
+  dist\static\js\chunk-27d58c84.29fae409    16.53 KiB        4.04 KiB
+  .js
+  dist\static\js\chunk-372e775c.c210f2e0    14.68 KiB        4.34 KiB
+  .js
+  dist\static\js\chunk-0e410955.6e9ce4f7    14.04 KiB        4.60 KiB
+  .js
+  dist\static\js\chunk-9f8a6494.eeafe5f2    13.42 KiB        4.67 KiB
+  .js
+  dist\static\js\chunk-6a438376.aee3bc34    13.38 KiB        4.72 KiB
+  .js
+  dist\static\js\chunk-469ba5ae.2a68eeab    13.08 KiB        4.54 KiB
+  .js
+  dist\static\js\chunk-67d2aed9.65ae3b40    12.94 KiB        4.56 KiB
+  .js
+  dist\static\js\chunk-6a189a5c.b79f323e    12.83 KiB        3.51 KiB
+  .js
+  dist\static\js\chunk-7e203972.c23fa83b    12.41 KiB        3.81 KiB
+  .js
+  dist\static\js\chunk-d19c1a98.3778590d    12.04 KiB        3.29 KiB
+  .js
+  dist\static\js\chunk-8ee3fc10.28b0688e    11.65 KiB        2.73 KiB
+  .js
+  dist\static\js\chunk-e69ed224.15cd5685    11.12 KiB        3.91 KiB
+  .js
+  dist\static\js\chunk-582b2a7a.ee93491c    10.65 KiB        2.96 KiB
+  .js
+  dist\static\js\chunk-2d22252c.3d9e5c0d    10.11 KiB        2.79 KiB
+  .js
+  dist\static\js\chunk-2d0bce05.0735d6d5    9.81 KiB         1.49 KiB
+  .js
+  dist\static\js\chunk-68702101.aa30a134    9.78 KiB         2.85 KiB
+  .js
+  dist\static\js\chunk-ecddd398.77afe2e9    9.77 KiB         3.26 KiB
+  .js
+  dist\static\js\chunk-04621586.b08aea57    9.63 KiB         3.29 KiB
+  .js
+  dist\static\js\chunk-2d0d38ff.bfbc98cf    9.38 KiB         2.90 KiB
+  .js
+  dist\static\js\chunk-2d0de3b1.319964da    9.37 KiB         2.22 KiB
+  .js
+  dist\static\js\chunk-2d0c8e18.14ea3aff    9.27 KiB         2.65 KiB
+  .js
+  dist\static\js\chunk-2d0b1626.6eccf095    9.10 KiB         2.59 KiB
+  .js
+  dist\static\js\chunk-0d5b0085.a730a0c6    8.23 KiB         3.17 KiB
+  .js
+  dist\static\js\chunk-4f55a4ac.271b1b9e    7.80 KiB         2.27 KiB
+  .js
+  dist\static\js\chunk-698a5ba1.5c940b16    7.64 KiB         2.67 KiB
+  .js
+  dist\static\js\chunk-15fcd217.b8d60c59    7.21 KiB         2.16 KiB
+  .js
+  dist\static\js\chunk-31eae13f.a082fa28    6.85 KiB         2.80 KiB
+  .js
+  dist\static\js\chunk-2b02de32.77416189    6.33 KiB         1.68 KiB
+  .js
+  dist\static\js\chunk-e1a6d904.3ac609c5    6.30 KiB         1.69 KiB
+  .js
+  dist\static\js\chunk-8579d4da.69026726    5.75 KiB         1.88 KiB
+  .js
+  dist\static\js\chunk-2727631f.d0e8a9f1    5.45 KiB         1.86 KiB
+  .js
+  dist\static\js\chunk-0abfe318.a9f6e1c3    5.14 KiB         2.25 KiB
+  .js
+  dist\static\js\chunk-ded2fcbe.3c6664e5    4.79 KiB         1.71 KiB
+  .js
+  dist\static\js\chunk-6746b265.8e35f0aa    4.77 KiB         2.15 KiB
+  .js
+  dist\static\js\chunk-005cb0c7.465725cb    4.70 KiB         1.61 KiB
+  .js
+  dist\static\js\chunk-2d0da2ea.952cdfa6    4.18 KiB         1.58 KiB
+  .js
+  dist\static\js\chunk-3a08d90c.bb9a1588    4.15 KiB         1.38 KiB
+  .js
+  dist\static\js\chunk-39413ce8.9bb6c900    4.11 KiB         1.35 KiB
+  .js
+  dist\static\js\chunk-0238e9b0.caec758e    2.38 KiB         0.94 KiB
+  .js
+  dist\static\js\chunk-2d20955d.7a46713d    2.11 KiB         1.07 KiB
+  .js
+  dist\static\js\chunk-2d230898.8f2f577c    2.04 KiB         0.70 KiB
+  .js
+  dist\static\js\chunk-46f2cf5c.14efa0d2    1.54 KiB         0.78 KiB
+  .js
+  dist\static\js\chunk-e648d5fe.4afeb643    1.30 KiB         0.80 KiB
+  .js
+  dist\static\js\chunk-210ce324.2c6be6b5    1.15 KiB         0.59 KiB
+  .js
+  dist\static\js\chunk-210ca3e9.19ce80b0    1.14 KiB         0.58 KiB
+  .js
+  dist\static\js\chunk-2d0f012d.ddeb06bb    0.37 KiB         0.27 KiB
+  .js
+  dist\static\css\app.3aff4316.css          268.49 KiB       41.31 KiB
+  dist\styles\theme-chalk\index.css         234.22 KiB       35.81 KiB
+  dist\static\css\chunk-libs.20020923.cs    39.78 KiB        5.22 KiB
+  s
+  dist\static\css\chunk-5bb73842.84f9840    26.10 KiB        4.87 KiB
+  9.css
+  dist\static\css\chunk-e3b15924.c5292c0    6.41 KiB         1.65 KiB
+  0.css
+  dist\static\css\chunk-46f2cf5c.17fbdb6    4.64 KiB         0.83 KiB
+  b.css
+  dist\static\css\chunk-93d1cd2c.3ee89ce    3.40 KiB         0.69 KiB
+  5.css
+  dist\static\css\chunk-6a189a5c.7449620    2.24 KiB         0.63 KiB
+  2.css
+  dist\static\css\chunk-3339808c.6dfe926    2.24 KiB         0.78 KiB
+  d.css
+  dist\static\css\chunk-5f611eda.bea502c    2.01 KiB         0.59 KiB
+  2.css
+  dist\static\css\chunk-4f55a4ac.5a402cd    1.96 KiB         0.55 KiB
+  2.css
+  dist\static\css\chunk-15fcd217.0111ebb    1.68 KiB         0.53 KiB
+  f.css
+  dist\static\css\chunk-25ccdf6b.ecea2c5    1.28 KiB         0.39 KiB
+  f.css
+  dist\static\css\chunk-ded2fcbe.a1a509a    1.11 KiB         0.47 KiB
+  8.css
+  dist\static\css\chunk-0abfe318.2880390    1.09 KiB         0.47 KiB
+  6.css
+  dist\static\css\chunk-6746b265.3e10cd5    0.99 KiB         0.41 KiB
+  9.css
+  dist\static\css\chunk-227085f2.3f5ce03    0.97 KiB         0.40 KiB
+  c.css
+  dist\static\css\chunk-e648d5fe.bbc9fa9    0.73 KiB         0.29 KiB
+  5.css
+  dist\static\css\chunk-5885ca9b.ce2a239    0.70 KiB         0.33 KiB
+  4.css
+  dist\static\css\chunk-6bfd9619.86375c5    0.62 KiB         0.25 KiB
+  e.css
+  dist\static\css\chunk-f10b32d4.72481be    0.51 KiB         0.18 KiB
+  f.css
+  dist\static\css\chunk-372e775c.f2078e2    0.37 KiB         0.26 KiB
+  8.css
+  dist\static\css\chunk-698a5ba1.f2078e2    0.37 KiB         0.26 KiB
+  8.css
+  dist\static\css\chunk-55113006.dbcc011    0.08 KiB         0.09 KiB
+  8.css
+
+  Images and other types of assets omitted.
+
+ DONE  Build complete. The dist directory is ready to be deployed.
+ INFO  Check out deployment instructions at https://cli.vuejs.org/guide/deployment.html
+      
+EXIT=0
