@@ -57,13 +57,22 @@ public class ErDataTransfer extends BaseEntity
     @Excel(name = "同步模式", readConverterExp = "0=初始化同步,1=增量同步")
     private String syncMode;
 
-    /** 外部表模式导入（0关闭 1开启，仅MySQL/TiDB到StarRocks初始化同步） */
+    public static final String DIRECT_IMPORT_EXTERNAL_TABLE = "EXTERNAL_TABLE";
+    public static final String DIRECT_IMPORT_JDBC_CATALOG = "JDBC_CATALOG";
+
+    /** 数据湖导入（0关闭 1开启，仅支持到StarRocks的初始化同步） */
     private String externalTableEnabled;
 
-    /** 外部表整批导入阈值（万条，少于该值时整批导入） */
+    /** 导入方式；旧记录为空时沿用 Catalog 名称有无决定的原路径 */
+    private String directImportMethod;
+
+    /** 已在目标StarRocks创建的JDBC Catalog名称；旧外部表任务可为空 */
+    private String catalogName;
+
+    /** 数据湖整批导入阈值（万条，少于该值时整批导入） */
     private Integer externalTableThresholdWan;
 
-    /** 外部表时间分片单位（YEAR年 MONTH月 DAY日） */
+    /** 数据湖时间分片单位（YEAR年 MONTH月 DAY日） */
     private String externalTableWindowUnit;
 
     /** 时间戳字段 */
@@ -230,6 +239,34 @@ public class ErDataTransfer extends BaseEntity
     public String getExternalTableEnabled()
     {
         return externalTableEnabled;
+    }
+
+    public void setDirectImportMethod(String directImportMethod)
+    {
+        this.directImportMethod = directImportMethod;
+    }
+
+    public String getDirectImportMethod()
+    {
+        return directImportMethod;
+    }
+
+    /** Explicit choices take precedence, including when an inactive Catalog name is retained. */
+    public String resolveDirectImportMethod()
+    {
+        if (directImportMethod != null) return directImportMethod;
+        return catalogName != null && !catalogName.trim().isEmpty()
+                ? DIRECT_IMPORT_JDBC_CATALOG : DIRECT_IMPORT_EXTERNAL_TABLE;
+    }
+
+    public void setCatalogName(String catalogName)
+    {
+        this.catalogName = catalogName;
+    }
+
+    public String getCatalogName()
+    {
+        return catalogName;
     }
 
     public void setExternalTableThresholdWan(Integer externalTableThresholdWan)
@@ -404,6 +441,8 @@ public class ErDataTransfer extends BaseEntity
             .append("targetDatasourceId", getTargetDatasourceId())
             .append("syncMode", getSyncMode())
             .append("externalTableEnabled", getExternalTableEnabled())
+            .append("directImportMethod", getDirectImportMethod())
+            .append("catalogName", getCatalogName())
             .append("externalTableThresholdWan", getExternalTableThresholdWan())
             .append("externalTableWindowUnit", getExternalTableWindowUnit())
             .append("timestampField", getTimestampField())

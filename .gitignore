@@ -1,0 +1,3 @@
+# 构建日志与 IDE 编译输出
+/build_logs/
+er-report/easyreport-core/bin/

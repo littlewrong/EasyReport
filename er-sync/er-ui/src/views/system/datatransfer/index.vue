@@ -305,16 +305,28 @@
 
         <el-form-item
           v-if="canUseExternalTableImport"
-          label="外部表导入"
+          label="数据湖导入"
           prop="externalTableEnabled"
           class="external-table-import-item">
           <div class="external-table-import-option">
             <el-switch v-model="form.externalTableEnabled" active-value="1" inactive-value="0" />
-            <span class="external-table-import-tip">使用临时外部表直接导入 StarRocks</span>
+            <span class="external-table-import-tip">由 StarRocks 直接读取源数据</span>
           </div>
         </el-form-item>
 
-        <!-- 外部表导入策略紧接导入开关 -->
+        <el-form-item v-if="isExternalTableImportEnabled" label="导入方式" prop="directImportMethod" :required="true">
+          <el-radio-group v-model="form.directImportMethod" @change="handleDirectImportMethodChange">
+            <el-radio v-if="canUseMysqlExternalTable" label="EXTERNAL_TABLE">外部表</el-radio>
+            <el-radio label="JDBC_CATALOG">JDBC Catalog</el-radio>
+          </el-radio-group>
+          <div class="external-table-import-tip">{{ directImportTip }}</div>
+        </el-form-item>
+
+        <el-form-item v-if="isCatalogImportEnabled" label="Catalog 名称" prop="catalogName" :required="true">
+          <el-input v-model="form.catalogName" placeholder="例如：src_mysql" :maxlength="1023" clearable class="catalog-name-input" />
+        </el-form-item>
+
+        <!-- 两种数据湖导入方式共享导入策略 -->
         <el-form-item v-if="isExternalTableImportEnabled" label="导入策略" class="external-table-policy-item">
           <div class="external-table-policy-controls">
             <div class="external-table-policy-clause">
@@ -722,6 +734,7 @@ export default {
       dataTransferList: [],
       // 数据源选项
       datasourceOptions: [],
+      datasourceOptionsLoaded: false,
       // 弹出层标题
       title: "",
       // 是否显示弹出层
@@ -795,6 +808,12 @@ export default {
         targetDatasourceId: [
           { required: true, message: "请选择目标数据源", trigger: "change" }
         ],
+        directImportMethod: [
+          { validator: (rule, value, callback) => this.validateDirectImportMethod(rule, value, callback), trigger: "change" }
+        ],
+        catalogName: [
+          { validator: (rule, value, callback) => this.validateCatalogName(rule, value, callback), trigger: ["blur", "change"] }
+        ],
         externalTableThresholdWan: [
           { validator: (rule, value, callback) => this.validateExternalTableThreshold(rule, value, callback), trigger: ["blur", "change"] }
         ],
@@ -805,18 +824,47 @@ export default {
     };
   },
   computed: {
-    /** 仅 MySQL/TiDB 到 StarRocks 的初始化任务提供外部表开关。 */
-    canUseExternalTableImport() {
+    catalogImportSourceType() {
       const source = this.datasourceOptions.find(item => String(item.datasourceId) === String(this.form.sourceDatasourceId));
+      return source ? String(source.datasourceType).toUpperCase() : '';
+    },
+    directImportTargetType() {
       const target = this.datasourceOptions.find(item => String(item.datasourceId) === String(this.form.targetDatasourceId));
-      const sourceType = source ? String(source.datasourceType).toUpperCase() : '';
-      const targetType = target ? String(target.datasourceType).toUpperCase() : '';
+      return target ? String(target.datasourceType).toUpperCase() : '';
+    },
+    directImportBindingResolved() {
+      return this.datasourceOptionsLoaded && !!this.catalogImportSourceType && !!this.directImportTargetType;
+    },
+    /** 支持的源到 StarRocks 的初始化任务提供数据湖导入开关。 */
+    canUseExternalTableImport() {
       return this.form.syncMode === '0'
-        && (sourceType === 'MYSQL' || sourceType === 'TIDB')
-        && targetType === 'STARROCKS';
+        && ['MYSQL', 'TIDB', 'POSTGRESQL', 'ORACLE', 'SQLSERVER', 'STARROCKS'].includes(this.catalogImportSourceType)
+        && this.directImportTargetType === 'STARROCKS';
+    },
+    canUseMysqlExternalTable() {
+      return this.canUseExternalTableImport && ['MYSQL', 'TIDB'].includes(this.catalogImportSourceType);
+    },
+    directImportTip() {
+      if (this.form.directImportMethod === 'EXTERNAL_TABLE') {
+        return '自动创建并清理临时外部表，无需 Catalog。StarRocks 各读取节点须能访问当前源数据源的主机和端口。';
+      }
+      return this.catalogImportTip;
+    },
+    catalogImportTip() {
+      if (this.catalogImportSourceType === 'ORACLE' || this.catalogImportSourceType === 'SQLSERVER') {
+        const sourceName = this.catalogImportSourceType === 'ORACLE' ? 'Oracle' : 'SQL Server';
+        return `请先创建连接源 ${sourceName} 的 JDBC Catalog；目标 StarRocks 需支持对应 JDBC Catalog（3.2.9 / 3.3.1 对应版本线及以上）。`;
+      }
+      if (this.catalogImportSourceType === 'STARROCKS') {
+        return '请先创建连接源 StarRocks FE 查询端口（默认 9030）的 MySQL 兼容 JDBC Catalog；JSON、ARRAY、MAP 等复杂类型需验证。';
+      }
+      return '请先在目标 StarRocks 创建连接当前源数据源的 JDBC Catalog。';
     },
     isExternalTableImportEnabled() {
       return this.canUseExternalTableImport && this.form.externalTableEnabled === '1';
+    },
+    isCatalogImportEnabled() {
+      return this.isExternalTableImportEnabled && this.form.directImportMethod === 'JDBC_CATALOG';
     },
     /** 解析同步进度信息 */
     syncProgressInfo() {
@@ -842,9 +890,10 @@ export default {
     }
   },
   watch: {
-    canUseExternalTableImport(available) {
-      if (!available) this.$set(this.form, 'externalTableEnabled', '0');
-    }
+    'form.sourceDatasourceId': 'reconcileDirectImportBinding',
+    'form.targetDatasourceId': 'reconcileDirectImportBinding',
+    'form.syncMode': 'reconcileDirectImportBinding',
+    'form.externalTableEnabled': 'reconcileDirectImportBinding'
   },
   created() {
     this.getList();
@@ -900,9 +949,8 @@ export default {
     getDatasourceOptions() {
       getDatasourceOptions().then(response => {
         this.datasourceOptions = response.data || [];
-        if (this.form.sourceDatasourceId != null && !this.canUseExternalTableImport) {
-          this.$set(this.form, 'externalTableEnabled', '0');
-        }
+        this.datasourceOptionsLoaded = true;
+        this.reconcileDirectImportBinding();
       });
     },
     /** 取消按钮 */
@@ -922,6 +970,8 @@ export default {
         targetDatasourceId: null,
         syncMode: "0",
         externalTableEnabled: "0",
+        directImportMethod: "JDBC_CATALOG",
+        catalogName: "",
         externalTableThresholdWan: 50,
         externalTableWindowUnit: "YEAR",
         timestampField: "time_stamp",
@@ -997,18 +1047,70 @@ export default {
         this.title = "复制同步任务";
       });
     },
-    /** 兼容旧任务缺少导入策略字段的响应；复制任务保留原策略。 */
+    /** 旧任务按 Catalog 名称推断原方式；编辑和复制不改变已保存的方案。 */
     normalizeExternalTableForm(data) {
-      const source = this.datasourceOptions.find(item => String(item.datasourceId) === String(data.sourceDatasourceId));
-      const target = this.datasourceOptions.find(item => String(item.datasourceId) === String(data.targetDatasourceId));
-      const sourceSupported = !source || ['MYSQL', 'TIDB'].includes(String(source.datasourceType).toUpperCase());
-      const targetSupported = !target || String(target.datasourceType).toUpperCase() === 'STARROCKS';
+      const catalogName = typeof data.catalogName === 'string' ? data.catalogName.trim() : '';
+      const directImportMethod = data.directImportMethod == null
+        ? (catalogName ? 'JDBC_CATALOG' : 'EXTERNAL_TABLE')
+        : typeof data.directImportMethod === 'string' ? data.directImportMethod.trim() : data.directImportMethod;
       return {
         ...data,
-        externalTableEnabled: data.syncMode === '0' && sourceSupported && targetSupported && data.externalTableEnabled === '1' ? '1' : '0',
+        externalTableEnabled: data.externalTableEnabled === '1' ? '1' : '0',
+        directImportMethod,
+        catalogName,
         externalTableThresholdWan: data.externalTableThresholdWan == null ? 50 : Number(data.externalTableThresholdWan),
         externalTableWindowUnit: data.externalTableWindowUnit || 'YEAR'
       };
+    },
+    reconcileDirectImportBinding() {
+      // 数据源异步加载及表单重置过程中，不改写已有任务的导入配置。
+      if (!this.directImportBindingResolved || this.form.externalTableEnabled !== '1') return;
+      if (!this.canUseExternalTableImport) {
+        this.$set(this.form, 'externalTableEnabled', '0');
+        return;
+      }
+      if (!this.canUseMysqlExternalTable && this.form.directImportMethod === 'EXTERNAL_TABLE') {
+        this.$set(this.form, 'directImportMethod', 'JDBC_CATALOG');
+        this.$modal.msgWarning('当前源仅支持 JDBC Catalog，已切换导入方式，请确认 Catalog 名称后保存');
+        this.handleDirectImportMethodChange();
+      }
+    },
+    handleDirectImportMethodChange() {
+      // 切换方式保留 Catalog 名称和原 JDBC 批次大小，只清理过期的校验提示。
+      this.$nextTick(() => {
+        if (this.$refs.form) this.$refs.form.clearValidate(['directImportMethod', 'catalogName']);
+      });
+    },
+    validateDirectImportMethod(rule, value, callback) {
+      if (this.form.externalTableEnabled !== '1') {
+        callback();
+        return;
+      }
+      if (!['EXTERNAL_TABLE', 'JDBC_CATALOG'].includes(value)) {
+        callback(new Error('请选择外部表或 JDBC Catalog'));
+        return;
+      }
+      if (value === 'EXTERNAL_TABLE' && !this.canUseMysqlExternalTable) {
+        callback(new Error('外部表仅支持 MySQL / TiDB 到 StarRocks 的初始化同步'));
+        return;
+      }
+      callback();
+    },
+    validateCatalogName(rule, value, callback) {
+      if (!this.isCatalogImportEnabled) {
+        callback();
+        return;
+      }
+      const catalogName = typeof value === 'string' ? value.trim() : '';
+      if (!catalogName) {
+        callback(new Error('请输入已在目标 StarRocks 创建的 Catalog 名称'));
+        return;
+      }
+      if (!/^[A-Za-z][A-Za-z0-9_]{0,1022}$/.test(catalogName)) {
+        callback(new Error('Catalog 名称须以字母开头，仅含字母、数字和下划线，最多 1023 个字符'));
+        return;
+      }
+      callback();
     },
     validateExternalTableThreshold(rule, value, callback) {
       if (this.isExternalTableImportEnabled && (!Number.isInteger(value) || value < 1 || value > 2147483647)) {
@@ -1026,6 +1128,14 @@ export default {
     },
     /** 提交按钮 */
     submitForm() {
+      if (this.form.externalTableEnabled === '1' && !this.directImportBindingResolved) {
+        this.$modal.msgError('尚未获取完整的数据源信息，请刷新数据源选项后重试');
+        return;
+      }
+      if (this.form.externalTableEnabled === '1' && !this.canUseExternalTableImport) {
+        this.$modal.msgError('数据湖导入仅支持所列源数据源到 StarRocks 的初始化同步');
+        return;
+      }
       this.$refs["form"].validate(valid => {
         if (valid) {
           // 检查源和目标数据源不能相同
@@ -1037,7 +1147,8 @@ export default {
         this.form.syncInsert = this.syncOperations.insert ? '1' : '0';
         this.form.syncUpdate = this.syncOperations.update ? '1' : '0';
         this.form.syncDelete = this.syncOperations.delete ? '1' : '0';
-        this.form.externalTableEnabled = this.canUseExternalTableImport && this.form.externalTableEnabled === '1' ? '1' : '0';
+        this.form.externalTableEnabled = this.form.externalTableEnabled === '1' ? '1' : '0';
+        this.form.catalogName = typeof this.form.catalogName === 'string' ? this.form.catalogName.trim() : '';
         // deleteWindowYears 已绑定在 form 上，直接提交
 
           if (this.form.transferId != null) {
@@ -1406,9 +1517,12 @@ export default {
 .external-table-import-option .el-switch {
   flex-shrink: 0;
 }
+.catalog-name-input {
+  width: 384px;
+  max-width: 100%;
+}
 .external-table-import-tip {
-  flex: 1;
-  min-width: 200px;
+  margin-top: 6px;
   color: #909399;
   font-size: 12px;
   line-height: 20px;
