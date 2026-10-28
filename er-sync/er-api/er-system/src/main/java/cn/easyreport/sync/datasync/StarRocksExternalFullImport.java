@@ -98,6 +98,19 @@ final class StarRocksExternalFullImport implements AutoCloseable {
             List<String> sourceCols, List<String> targetCols, String tsField, Long transferId,
             Integer thresholdWan, String unit, SyncProgressCallback callback,
             DataSyncCancellation cancellation) throws Exception {
+        try {
+            return prepareImport(sourceDs, sourceConn, targetConn, schema, sourceTable, targetTableSql,
+                    sourceCols, targetCols, tsField, transferId, thresholdWan, unit, callback, cancellation);
+        } catch (IllegalArgumentException | IllegalStateException failure) {
+            throw safeValidationException(failure);
+        }
+    }
+
+    private static StarRocksExternalFullImport prepareImport(ErDatasource sourceDs, Connection sourceConn,
+            Connection targetConn, String schema, String sourceTable, String targetTableSql,
+            List<String> sourceCols, List<String> targetCols, String tsField, Long transferId,
+            Integer thresholdWan, String unit, SyncProgressCallback callback,
+            DataSyncCancellation cancellation) throws Exception {
         checkStopped(cancellation);
         int effectiveThresholdWan = thresholdWan == null ? DEFAULT_THRESHOLD_WAN : thresholdWan;
         if (effectiveThresholdWan <= 0) {
@@ -286,6 +299,9 @@ final class StarRocksExternalFullImport implements AutoCloseable {
             }
             return importer;
         } catch (Exception failure) {
+            if (failure instanceof IllegalArgumentException || failure instanceof IllegalStateException) {
+                failure = safeValidationException((RuntimeException) failure);
+            }
             try {
                 importer.close();
             } catch (Exception cleanupFailure) {
@@ -366,7 +382,7 @@ final class StarRocksExternalFullImport implements AutoCloseable {
         return String.join(", ", expressions);
     }
 
-    private static String jsonProjection(String rawSql) {
+    static String jsonProjection(String rawSql) {
         // SR 3.1/3.2 PARSE_JSON treats top-level numeric/bool/null tokens as strings. Parsing an array
         // and extracting its first element preserves their JSON types, including JSON null vs SQL NULL.
         String parsed = "JSON_QUERY(PARSE_JSON(CONCAT('[', " + rawSql + ", ']')), '$[0]')";
@@ -376,7 +392,7 @@ final class StarRocksExternalFullImport implements AutoCloseable {
                 + JSON_CONVERSION_ERROR + "'), " + parsed + ", NULL)";
     }
 
-    private static void verifyJsonProjection(Connection targetConn, DataSyncCancellation cancellation) throws SQLException {
+    static void verifyJsonProjection(Connection targetConn, DataSyncCancellation cancellation) throws SQLException {
         checkStopped(cancellation);
         try (Statement statement = targetConn.createStatement();
                 ResultSet rows = statement.executeQuery(JSON_CONVERSION_PROBE_SQL)) {
@@ -395,6 +411,8 @@ final class StarRocksExternalFullImport implements AutoCloseable {
         } catch (SQLException ex) {
             checkStopped(cancellation);
             throw safeSqlException("StarRocks JSON 导入表达式预校验失败，尚未清空目标表", ex);
+        } catch (IllegalArgumentException | IllegalStateException failure) {
+            throw safeValidationException(failure);
         }
         checkStopped(cancellation);
     }
@@ -447,6 +465,8 @@ final class StarRocksExternalFullImport implements AutoCloseable {
         } catch (SQLException ex) {
             checkStopped();
             throw safeSqlException("StarRocks INSERT SELECT 导入失败，同步进度未推进", ex);
+        } catch (IllegalArgumentException | IllegalStateException failure) {
+            throw safeValidationException(failure);
         }
     }
 
@@ -721,10 +741,32 @@ final class StarRocksExternalFullImport implements AutoCloseable {
     }
 
     private static SQLException safeSqlException(String operation, SQLException original) {
-        if (original instanceof DataSyncCancellation.SyncStoppedException) return original;
+        if (original instanceof DataSyncCancellation.SyncStoppedException) return new DataSyncCancellation.SyncStoppedException();
         // Deliberately do not retain message, cause, nextException or suppressed driver exceptions.
-        return new SQLException(operation + "（SQLState=" + original.getSQLState()
-                + ", errorCode=" + original.getErrorCode() + "）", original.getSQLState(), original.getErrorCode());
+        return new ImportSQLException(operation + "（SQLState=" + original.getSQLState()
+                + ", errorCode=" + original.getErrorCode() + "）", original);
+    }
+
+    /** Validation messages are ours; close failures attached by JDBC resources are not. */
+    static RuntimeException safeValidationException(RuntimeException failure) {
+        RuntimeException safe;
+        if (failure instanceof UnsupportedImportException) safe = new UnsupportedImportException(failure.getMessage());
+        else if (failure instanceof IllegalArgumentException) safe = new IllegalArgumentException(failure.getMessage());
+        else if (failure instanceof IllegalStateException) safe = new IllegalStateException(failure.getMessage());
+        else throw new IllegalArgumentException("Unsupported validation exception type");
+        for (Throwable suppressed : failure.getSuppressed()) {
+            // Keep the owned-table cleanup hint, but never retain a driver's exception object or chain.
+            if (suppressed instanceof ImportSQLException) {
+                safe.addSuppressed(new ImportSQLException(suppressed.getMessage(), (SQLException) suppressed));
+            }
+        }
+        return safe;
+    }
+
+    private static final class ImportSQLException extends SQLException {
+        ImportSQLException(String message, SQLException original) {
+            super(message, original.getSQLState(), original.getErrorCode());
+        }
     }
 
     static final class Endpoint {

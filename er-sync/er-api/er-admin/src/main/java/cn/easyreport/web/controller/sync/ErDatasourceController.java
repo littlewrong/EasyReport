@@ -1,6 +1,9 @@
 package cn.easyreport.web.controller.sync;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -122,7 +125,16 @@ public class ErDatasourceController extends BaseController
         ErDatasource query = new ErDatasource();
         query.setStatus("0");
         List<ErDatasource> list = erDatasourceService.selectErDatasourceList(query);
-        return success(list);
+        List<Map<String, Object>> options = new ArrayList<>();
+        for (ErDatasource datasource : list)
+        {
+            Map<String, Object> option = new LinkedHashMap<>();
+            option.put("datasourceId", datasource.getDatasourceId());
+            option.put("datasourceName", datasource.getDatasourceName());
+            option.put("datasourceType", datasource.getDatasourceType());
+            options.add(option);
+        }
+        return success(options);
     }
 
     /**

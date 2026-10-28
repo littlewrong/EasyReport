@@ -411,6 +411,68 @@ public class StarRocksExternalFullImportTest {
     }
 
     @Test
+    public void validationCloseFailuresDoNotExposeDriverChainsOrBecomeJdbcFallbacks() throws Exception {
+        Fixture count = new Fixture();
+        count.sourceCount = -1L;
+        count.countCloseFailure = sensitiveDriverFailure();
+        try { count.prepare("times_tamp", null); fail("Invalid source count must remain a validation failure"); }
+        catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("COUNT 查询返回无效行数"));
+            assertNoDriverDetails(expected);
+        }
+        assertTrue(count.targetSql.isEmpty());
+
+        Fixture bounds = new Fixture();
+        bounds.min = null;
+        bounds.boundsCloseFailure = sensitiveDriverFailure();
+        try { bounds.prepare("times_tamp", null); fail("Invalid source bounds must remain a validation failure"); }
+        catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("未获取有效时间戳范围"));
+            assertNoDriverDetails(expected);
+        }
+        assertTrue(bounds.targetSql.isEmpty());
+
+        Fixture json = new Fixture();
+        json.jsonColumn = true;
+        json.jsonProbeValues = new String[]{"123", "true", null, null};
+        json.jsonProbeCloseFailure = sensitiveDriverFailure();
+        try { json.prepare("times_tamp", null); fail("JSON semantics must still be validated before creating an external table"); }
+        catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("JSON null"));
+            assertNoDriverDetails(expected);
+        }
+        assertFalse(json.targetSql.stream().anyMatch(sql -> sql.startsWith("CREATE EXTERNAL TABLE")));
+
+        Fixture strict = new Fixture();
+        strict.strictInsertEnabled = false;
+        strict.strictCloseFailure = sensitiveDriverFailure();
+        try { strict.prepare("times_tamp", null); fail("Strict mode validation must remain an error"); }
+        catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("严格导入模式未启用"));
+            assertNoDriverDetails(expected);
+        }
+        assertFalse(strict.targetSql.stream().anyMatch(sql -> sql.startsWith("CREATE EXTERNAL TABLE")));
+    }
+
+    @Test
+    public void stoppedJsonProbeDiscardsCloseFailuresAndKeepsStopType() throws Exception {
+        Connection connection = proxy(Connection.class, (object, method, args) -> {
+            if ("createStatement".equals(method.getName())) return proxy(Statement.class, (statement, operation, values) -> {
+                if ("executeQuery".equals(operation.getName())) return proxy(ResultSet.class, (rows, access, columns) -> {
+                    if ("next".equals(access.getName())) throw new DataSyncCancellation.SyncStoppedException();
+                    if ("close".equals(access.getName())) throw sensitiveDriverFailure();
+                    return null;
+                });
+                if ("close".equals(operation.getName())) throw sensitiveDriverFailure();
+                return null;
+            });
+            return null;
+        });
+        try { StarRocksExternalFullImport.verifyJsonProjection(connection, null); fail("Stop must propagate"); }
+        catch (DataSyncCancellation.SyncStoppedException expected) { assertNoDriverDetails(expected); }
+    }
+
+    @Test
     public void explainFailureCleansExternalTableBeforeAnyDestinationWrite() throws Exception {
         Fixture f = new Fixture();
         f.failExplain = true;
@@ -924,6 +986,23 @@ public class StarRocksExternalFullImportTest {
                 + " 00:00:00' AND `times_tamp` < '" + end + " 00:00:00'"));
     }
 
+    private static SQLException sensitiveDriverFailure() {
+        SQLException failure = new SQLException("driver-private-marker", "HY000", 900);
+        failure.initCause(new IllegalArgumentException("driver-private-marker-cause"));
+        failure.setNextException(new SQLException("driver-private-marker-next"));
+        failure.addSuppressed(new SQLException("driver-private-marker-suppressed"));
+        return failure;
+    }
+
+    private static void assertNoDriverDetails(Throwable failure) {
+        StringWriter output = new StringWriter();
+        failure.printStackTrace(new PrintWriter(output));
+        assertFalse(output.toString(), output.toString().contains("driver-private-marker"));
+        assertNull(failure.getCause());
+        assertEquals(0, failure.getSuppressed().length);
+        if (failure instanceof SQLException) assertNull(((SQLException) failure).getNextException());
+    }
+
     private static final class Fixture {
         final ErDatasource ds = new ErDatasource();
         final DataSyncCancellation cancellation = new DataSyncCancellation();
@@ -962,6 +1041,11 @@ public class StarRocksExternalFullImportTest {
         boolean nullable = true;
         boolean failPreflight;
         boolean failExplain;
+        SQLException countCloseFailure;
+        SQLException boundsCloseFailure;
+        SQLException jsonProbeCloseFailure;
+        boolean strictInsertEnabled = true;
+        SQLException strictCloseFailure;
         long queryTimeout = 300;
         String idType = "bigint";
 
@@ -1018,13 +1102,13 @@ public class StarRocksExternalFullImportTest {
                                 }
                                 if (failCount) throw new SQLException("source count failed", "HY000", 321);
                                 return rows(countHasRow ? Collections.singletonList(jsonColumn
-                                        ? indexed(sourceCount, jsonMaxBytes) : indexed(sourceCount)) : Collections.emptyList());
+                                        ? indexed(sourceCount, jsonMaxBytes) : indexed(sourceCount)) : Collections.emptyList(), countCloseFailure);
                             }
                             if (sql.contains("MIN(")) {
                                 Map<Object, Object> row = indexed(min, max);
                                 if (rawMin != null) row.put("raw:1", rawMin);
                                 if (rawMax != null) row.put("raw:2", rawMax);
-                                return rows(boundsHasRow ? Collections.singletonList(row) : Collections.emptyList());
+                                return rows(boundsHasRow ? Collections.singletonList(row) : Collections.emptyList(), boundsCloseFailure);
                             }
                             return rows(Collections.singletonList(indexed(1)));
                         }
@@ -1063,9 +1147,9 @@ public class StarRocksExternalFullImportTest {
                             }
                             if (jsonColumn && sql.equals(StarRocksExternalFullImport.JSON_CONVERSION_PROBE_SQL)) {
                                 if (failJsonProbe) throw new SQLException("JSON probe unavailable", "HY000", 456);
-                                return rows(Collections.singletonList(indexed((Object[]) jsonProbeValues)));
+                                return rows(Collections.singletonList(indexed((Object[]) jsonProbeValues)), jsonProbeCloseFailure);
                             }
-                            if (sql.equals("SHOW VARIABLES LIKE 'enable_insert_strict'")) return rows(Collections.singletonList(indexed("enable_insert_strict", "true")));
+                            if (sql.equals("SHOW VARIABLES LIKE 'enable_insert_strict'")) return rows(Collections.singletonList(indexed("enable_insert_strict", String.valueOf(strictInsertEnabled))), strictCloseFailure);
                             if (sql.equals("SHOW VARIABLES LIKE 'query_timeout'")) return rows(Collections.singletonList(indexed("query_timeout", queryTimeout)));
                             if (sql.startsWith("EXPLAIN")) {
                                 if (failExplain) throw new SQLException("target column mismatch", "HY000", 124);
@@ -1123,10 +1207,15 @@ public class StarRocksExternalFullImportTest {
     }
 
     private static ResultSet rows(List<Map<Object, Object>> rows) {
+        return rows(rows, null);
+    }
+
+    private static ResultSet rows(List<Map<Object, Object>> rows, SQLException closeFailure) {
         int[] index = {-1};
         boolean[] wasNull = {false};
         return proxy(ResultSet.class, (object, method, args) -> {
             String name = method.getName();
+            if ("close".equals(name) && closeFailure != null) throw closeFailure;
             if ("next".equals(name)) return ++index[0] < rows.size();
             if ("wasNull".equals(name)) return wasNull[0];
             if ("getMetaData".equals(name)) throw new AssertionError("JSON target types must come from DESCRIBE, not MySQL protocol metadata");
