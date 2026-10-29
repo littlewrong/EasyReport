@@ -66,6 +66,10 @@ export function buildNewCellDef(rowNumber,columnNumber){
     return cellDef;
 };
 
+function buildCdata(value){
+    return '<![CDATA['+String(value).replace(/]]>/g,']]]]><![CDATA[>')+']]>';
+}
+
 export function tableToXml(context){
     const hot=context.hot;
     const countRows=hot.countRows(),countCols=hot.countCols();
@@ -115,6 +119,9 @@ export function tableToXml(context){
             }
             let cellName=context.getCellName(i,j);
             cellXml+=`<cell expand="${cellDef.expand}" name="${cellName}" row="${(i+1)}" col="${(j+1)}"`;
+            if(cellDef.html===true && (cellDef.value.type==='simple' || cellDef.value.type==='expression')){
+                cellXml+=' html="true"';
+            }
             if(cellDef.leftParentCellName && cellDef.leftParentCellName!==''){
                 cellXml+=` left-cell="${cellDef.leftParentCellName}"`;
             }
@@ -230,11 +237,11 @@ export function tableToXml(context){
                     throw msg;
                 }
                 cellXml+=`<expression-value>`;
-                cellXml+=`<![CDATA[${value.value}]]>`;
+                cellXml+=buildCdata(value.value);
                 cellXml+=`</expression-value>`;
             }else if(value.type==='simple'){
                 cellXml+=`<simple-value>`;
-                cellXml+=`<![CDATA[${value.value || ''}]]>`;
+                cellXml+=buildCdata(value.value || '');
                 cellXml+=`</simple-value>`;
             }else if(value.type==='image'){
                 cellXml+=`<image-value source="${value.source}"`;

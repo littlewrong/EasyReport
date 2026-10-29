@@ -94,6 +94,15 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>2.4</version>
+                <configuration>
+                    <!-- Rebuild the thin jar before Boot repackages updated reactor dependencies. -->
+                    <forceCreation>true</forceCreation>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring-boot.version}</version>

@@ -540,6 +540,8 @@
       "none":"None"
     },
     "base":{
+      "htmlRendering":"Render as HTML",
+      "htmlRenderingTip":"Common text formatting is supported. View the result in Preview.",
       "fillBlank":"Fill Rows：",
       "open":"On",
       "close":"Off",

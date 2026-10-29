@@ -543,6 +543,8 @@
       "none":"无"
     },
     "base":{
+      "htmlRendering":"按 HTML 渲染",
+      "htmlRenderingTip":"支持常见文字格式，效果请在预览中查看",
       "fillBlank":"补充空白行：",
       "open":"打开",
       "close":"关闭",

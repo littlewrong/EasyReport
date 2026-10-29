@@ -21,6 +21,9 @@ import java.io.OutputStream;
 import java.math.BigInteger;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -47,6 +50,12 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTShd;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcBorders;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTVerticalJc;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTHeight;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblWidth;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STHeightRule;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblLayoutType;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBorder;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STMerge;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.STPageOrientation;
@@ -55,6 +64,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.STVerticalJc;
 import cn.easyreport.build.paging.Page;
 import cn.easyreport.chart.ChartData;
 import cn.easyreport.definition.Alignment;
+import cn.easyreport.definition.Band;
 import cn.easyreport.definition.Border;
 import cn.easyreport.definition.BorderStyle;
 import cn.easyreport.definition.CellStyle;
@@ -62,6 +72,7 @@ import cn.easyreport.definition.Orientation;
 import cn.easyreport.definition.Paper;
 import cn.easyreport.exception.ReportComputeException;
 import cn.easyreport.export.Producer;
+import cn.easyreport.export.richtext.RichTextDocument;
 import cn.easyreport.export.word.DxaUtils;
 import cn.easyreport.model.Cell;
 import cn.easyreport.model.Column;
@@ -88,15 +99,16 @@ public class WordProducer implements Producer{
 			}
 			CTPageSz pageSize = sectpr.getPgSz();
 			Paper paper=report.getPaper();
+			boolean flowing=RichTextDocument.hasHtml(report) && !paper.isColumnEnabled();
 			Orientation orientation=paper.getOrientation();
 			if(orientation.equals(Orientation.landscape)){
 				pageSize.setOrient(STPageOrientation.LANDSCAPE);
-				pageSize.setH(BigInteger.valueOf(DxaUtils.points2dxa(paper.getWidth())));
-				pageSize.setW(BigInteger.valueOf(DxaUtils.points2dxa(paper.getHeight())));
+				pageSize.setH(BigInteger.valueOf(documentTwips(paper.getWidth(),flowing)));
+				pageSize.setW(BigInteger.valueOf(documentTwips(paper.getHeight(),flowing)));
 			}else{
 				pageSize.setOrient(STPageOrientation.PORTRAIT);
-				pageSize.setW(BigInteger.valueOf(DxaUtils.points2dxa(paper.getWidth())));
-				pageSize.setH(BigInteger.valueOf(DxaUtils.points2dxa(paper.getHeight())));
+				pageSize.setW(BigInteger.valueOf(documentTwips(paper.getWidth(),flowing)));
+				pageSize.setH(BigInteger.valueOf(documentTwips(paper.getHeight(),flowing)));
 			}
 			int columnCount=paper.getColumnCount();
 			if(paper.isColumnEnabled() && columnCount>0){
@@ -107,13 +119,18 @@ public class WordProducer implements Producer{
 				sectpr.setCols(cols);
 			}
 			CTPageMar pageMar = sectpr.addNewPgMar();
-			pageMar.setLeft(BigInteger.valueOf(DxaUtils.points2dxa(paper.getLeftMargin())));
-			pageMar.setRight(BigInteger.valueOf(DxaUtils.points2dxa(paper.getRightMargin())));
-			pageMar.setTop(BigInteger.valueOf(DxaUtils.points2dxa(paper.getTopMargin())));
-			pageMar.setBottom(BigInteger.valueOf(DxaUtils.points2dxa(paper.getBottomMargin())));
+			pageMar.setLeft(BigInteger.valueOf(documentTwips(paper.getLeftMargin(),flowing)));
+			pageMar.setRight(BigInteger.valueOf(documentTwips(paper.getRightMargin(),flowing)));
+			pageMar.setTop(BigInteger.valueOf(documentTwips(paper.getTopMargin(),flowing)));
+			pageMar.setBottom(BigInteger.valueOf(documentTwips(paper.getBottomMargin(),flowing)));
 			List<Column> columns=report.getColumns();
 			int intArr[]=buildColumnSizeAndTotalWidth(columns);
 			int totalColumn=intArr[0],tableWidth=intArr[1];
+			if(flowing){
+				buildFlowingTables(document,report,totalColumn,tableWidth);
+				document.write(outputStream);
+				return;
+			}
 			List<Page> pages=report.getPages();
 			Map<Row,Map<Column,Cell>> cellMap=report.getRowColCellMap();
 			int totalPages=pages.size();
@@ -147,7 +164,7 @@ public class WordProducer implements Producer{
 							continue;
 						}
 						tableCell.getCTTc().addNewTcPr().addNewTcW().setW(BigInteger.valueOf(DxaUtils.points2dxa(width)));
-						buildTableCellStyle(table,tableCell,cell,rowNumber,colNumber);
+						buildTableCellStyle(table,tableCell,cell,rowNumber,colNumber,false);
 					}
 				}
 				if(pageIndex<totalPages){					
@@ -169,6 +186,135 @@ public class WordProducer implements Producer{
 			}
 		}
 	}
+
+	/** Let Word paginate long HTML paragraphs instead of repeating page clones. */
+	private void buildFlowingTables(XWPFDocument document,Report report,int columnCount,int tableWidth){
+		List<Row> rows=new ArrayList<Row>();
+		for(Row row:report.getRows()){
+			if(!row.isForPaging() && !row.isHide() && row.getRealHeight()>0){
+				rows.add(row);
+			}
+		}
+		Map<Row,Map<Column,Cell>> cells=new IdentityHashMap<Row,Map<Column,Cell>>();
+		// Pagination can replace an anchor in rowColCellMap with a continuation.
+		// cellsMap retains the actual computed cells and their original row spans.
+		for(List<Cell> namedCells:report.getCellsMap().values()){
+			for(Cell cell:namedCells){
+				if(cell.isForPaging())continue;
+				Map<Column,Cell> rowCells=cells.get(cell.getRow());
+				if(rowCells==null){
+					rowCells=new LinkedHashMap<Column,Cell>();
+					cells.put(cell.getRow(),rowCells);
+				}
+				rowCells.put(cell.getColumn(),cell);
+			}
+		}
+		for(Row row:rows){
+			Map<Column,Cell> stored=report.getRowColCellMap().get(row);
+			if(stored==null)continue;
+			Map<Column,Cell> rowCells=cells.get(row);
+			if(rowCells==null){
+				rowCells=new LinkedHashMap<Column,Cell>();
+				cells.put(row,rowCells);
+			}
+			for(Map.Entry<Column,Cell> entry:stored.entrySet()){
+				if(!entry.getValue().isForPaging() && !rowCells.containsKey(entry.getKey())){
+					rowCells.put(entry.getKey(),entry.getValue());
+				}
+			}
+		}
+		int first=0;
+		for(int index=0;index<rows.size();index++){
+			boolean end=index==rows.size()-1;
+			boolean explicitBreak=rows.get(index).isPageBreak() && !crossesMerge(rows,cells,index);
+			// Repeat headers must lead a Word table, after any one-time title rows.
+			boolean afterTitle=!end && rows.get(index).getBand()==Band.title
+					&& rows.get(index+1).getBand()==Band.headerrepeat && !crossesMerge(rows,cells,index);
+			if(end || explicitBreak || afterTitle){
+				buildFlowingTable(document,report,rows.subList(first,index+1),cells,columnCount,tableWidth);
+				if(explicitBreak && !end){
+					XWPFParagraph pageBreak=document.createParagraph();
+					pageBreak.setSpacingBefore(0);
+					pageBreak.setSpacingAfter(0);
+					pageBreak.createRun().addBreak(BreakType.PAGE);
+				}
+				first=index+1;
+			}
+		}
+	}
+
+	private boolean crossesMerge(List<Row> rows,Map<Row,Map<Column,Cell>> cells,int lastRow){
+		for(int index=0;index<=lastRow;index++){
+			Map<Column,Cell> rowCells=cells.get(rows.get(index));
+			if(rowCells==null)continue;
+			for(Cell cell:rowCells.values()){
+				if(index+Math.max(1,cell.getRowSpan())-1>lastRow)return true;
+			}
+		}
+		return false;
+	}
+
+	private void buildFlowingTable(XWPFDocument document,Report report,List<Row> rows,
+			Map<Row,Map<Column,Cell>> cells,int columnCount,int tableWidth){
+		if(rows.isEmpty() || columnCount<1)return;
+		XWPFTable table=document.createTable(rows.size(),columnCount);
+		table.getCTTbl().getTblPr().unsetTblBorders();
+		CTTblWidth width=table.getCTTbl().getTblPr().isSetTblW()
+				? table.getCTTbl().getTblPr().getTblW() : table.getCTTbl().getTblPr().addNewTblW();
+		width.setType(STTblWidth.DXA);
+		width.setW(BigInteger.valueOf(tableWidth*20L));
+		table.getCTTbl().getTblPr().addNewTblLayout().setType(STTblLayoutType.FIXED);
+		table.setCellMargins(0,0,0,0);
+		CTTblGrid grid=table.getCTTbl().getTblGrid();
+		if(grid==null)grid=table.getCTTbl().addNewTblGrid();
+		while(grid.sizeOfGridColArray()>0)grid.removeGridCol(0);
+		for(Column column:report.getColumns()){
+			if(column.getWidth()>0 && !column.isHide()){
+				grid.addNewGridCol().setW(BigInteger.valueOf(column.getWidth()*20L));
+			}
+		}
+		boolean headerPrefix=true;
+		for(int rowIndex=0;rowIndex<rows.size();rowIndex++){
+			Row row=rows.get(rowIndex);
+			XWPFTableRow tableRow=table.getRow(rowIndex);
+			tableRow.setCantSplitRow(false);
+			Map<Column,Cell> rowCells=cells.get(row);
+			boolean html=false;
+			if(rowCells!=null){
+				for(Cell cell:rowCells.values())html|=cell.isHtmlRender();
+			}
+			// The Swing estimate may span many pages. Only the template height is a
+			// minimum for HTML; Word calculates the actual height while flowing text.
+			int height=html ? row.getHeight() : row.getRealHeight();
+			tableRow.setHeight(Math.max(0,height)*20);
+			for(CTHeight rowHeight:tableRow.getCtRow().getTrPr().getTrHeightArray()){
+				rowHeight.setHRule(STHeightRule.AT_LEAST);
+			}
+			if(headerPrefix && row.getBand()==Band.headerrepeat){
+				tableRow.setRepeatHeader(true);
+			}else{
+				headerPrefix=false;
+			}
+			if(rowCells==null)continue;
+			int columnIndex=0;
+			for(Column column:report.getColumns()){
+				if(column.getWidth()<1 || column.isHide())continue;
+				XWPFTableCell tableCell=tableRow.getCell(columnIndex);
+				CTTcPr properties=tableCell.getCTTc().isSetTcPr() ? tableCell.getCTTc().getTcPr() : tableCell.getCTTc().addNewTcPr();
+				properties.addNewTcW().setW(BigInteger.valueOf(column.getWidth()*20L));
+				Cell cell=rowCells.get(column);
+				if(cell!=null){
+					buildTableCellStyle(table,tableCell,cell,rowIndex,columnIndex,true);
+				}
+				columnIndex++;
+			}
+		}
+	}
+
+	private long documentTwips(int points,boolean flowing){
+		// Preserve legacy report geometry; contracts use the actual 20 twips/pt.
+		return flowing ? points*20L : DxaUtils.points2dxa(points);
+	}
 	
 	private int[] buildColumnSizeAndTotalWidth(List<Column> columns){
 		int count=0,totalWidth=0;
@@ -184,12 +330,12 @@ public class WordProducer implements Producer{
 		return new int[]{count,totalWidth};
 	}
 	
-	private void buildTableCellStyle(XWPFTable table,XWPFTableCell tableCell,Cell cell,int rowNumber,int columnNumber){
+	private void buildTableCellStyle(XWPFTable table,XWPFTableCell tableCell,Cell cell,int rowNumber,int columnNumber,boolean flowing){
 		CellStyle style=cell.getCellStyle();
 		CellStyle customStyle=cell.getCustomCellStyle();
 		CellStyle rowStyle=cell.getRow().getCustomCellStyle();
 		CellStyle colStyle=cell.getColumn().getCustomCellStyle();
-		CTTcPr cellProperties = tableCell.getCTTc().addNewTcPr();
+		CTTcPr cellProperties = tableCell.getCTTc().isSetTcPr() ? tableCell.getCTTc().getTcPr() : tableCell.getCTTc().addNewTcPr();
 		Border leftBorder=style.getLeftBorder();
 		Border rightBorder=style.getRightBorder();
 		Border topBorder=style.getTopBorder();
@@ -208,8 +354,9 @@ public class WordProducer implements Producer{
 				bottomBorder=customStyle.getBottomBorder();
 			}
 		}
-		int rowSpan=cell.getPageRowSpan();
-		int colSpan=cell.getColSpan();
+		int rowSpan=flowing ? cell.getRowSpan() : cell.getPageRowSpan();
+		rowSpan=Math.min(rowSpan,table.getRows().size()-rowNumber);
+		int colSpan=Math.min(cell.getColSpan(),table.getRow(rowNumber).getTableCells().size()-columnNumber);
 		if(style.getLeftBorder()!=null){
 			if(rowSpan>0){
 				int start=rowNumber;
@@ -283,7 +430,9 @@ public class WordProducer implements Producer{
 			run=para.createRun();
 		}
 		Object value=cell.getFormatData();
-		if(value instanceof String){
+		if(cell.isHtmlRender()){
+			// Replaced with native paragraphs after cell-wide style setup below.
+		}else if(value instanceof String){
 			String text=value.toString();
 			if(text.contains("\n")){
 				String[] line=text.split("\n");
@@ -483,6 +632,9 @@ public class WordProducer implements Producer{
 				verticalAlign.setVal(STVerticalJc.BOTTOM);
 			}
 		}
+		if(cell.isHtmlRender()){
+			HtmlWordCellWriter.write(tableCell,cell);
+		}
 		int startCol=columnNumber;
 		int startRow=rowNumber;
 		int endRow=startRow,endCol=startCol;
@@ -515,10 +667,11 @@ public class WordProducer implements Producer{
 	private void mergeCellsHorizontal(XWPFTable table, int row, int startCol,int endCol) {
 		for (int cellIndex = startCol; cellIndex <= endCol; cellIndex++) {
 			XWPFTableCell cell = table.getRow(row).getCell(cellIndex);
+			CTTcPr properties=cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
 			if (cellIndex == startCol) {
-				cell.getCTTc().addNewTcPr().addNewHMerge().setVal(STMerge.RESTART);
+				properties.addNewHMerge().setVal(STMerge.RESTART);
 			} else {
-				cell.getCTTc().addNewTcPr().addNewHMerge().setVal(STMerge.CONTINUE);
+				properties.addNewHMerge().setVal(STMerge.CONTINUE);
 			}
 		}
 	}
@@ -526,11 +679,12 @@ public class WordProducer implements Producer{
 	private void mergeCellsVertically(XWPFTable table, int col, int fromRow,int toRow) {
 		for (int rowIndex = fromRow; rowIndex <= toRow; rowIndex++) {
 			XWPFTableCell cell = table.getRow(rowIndex).getCell(col);
+			CTTcPr properties=cell.getCTTc().isSetTcPr() ? cell.getCTTc().getTcPr() : cell.getCTTc().addNewTcPr();
 			if (rowIndex == fromRow) {
-				cell.getCTTc().addNewTcPr().addNewVMerge()
+				properties.addNewVMerge()
 						.setVal(STMerge.RESTART);
 			} else {
-				cell.getCTTc().addNewTcPr().addNewVMerge().setVal(STMerge.CONTINUE);
+				properties.addNewVMerge().setVal(STMerge.CONTINUE);
 			}
 		}
 	}	

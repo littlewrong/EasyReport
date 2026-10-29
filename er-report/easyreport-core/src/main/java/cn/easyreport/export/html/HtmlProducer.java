@@ -249,14 +249,26 @@ public class HtmlProducer{
 					sb.append("</div>");
 				}else{
 					String text=obj.toString();
-					text=StringEscapeUtils.escapeHtml4(text);
-					text=text.replaceAll("\r\n", "<br>");
-					text=text.replaceAll("\n", "<br>");
-					text=text.replaceAll(" ", "&nbsp;");
-					if(text.equals("")){
-						text="&nbsp;";
+					if(cell.isHtmlRender()){
+						int contentWidth=buildRichTextWidth(columns,j,colSpan);
+						float lineHeight=0;
+						for(CellStyle cellStyle:new CellStyle[]{cell.getCellStyle(),cell.getCustomCellStyle(),
+								cell.getRow().getCustomCellStyle(),cell.getColumn().getCustomCellStyle()}){
+							if(cellStyle!=null && cellStyle.getLineHeight()>0){
+								lineHeight=cellStyle.getLineHeight();
+							}
+						}
+						sb.append(HtmlCellContent.render(text,!hasLink,contentWidth,lineHeight));
+					}else{
+						text=StringEscapeUtils.escapeHtml4(text);
+						text=text.replaceAll("\r\n", "<br>");
+						text=text.replaceAll("\n", "<br>");
+						text=text.replaceAll(" ", "&nbsp;");
+						if(text.equals("")){
+							text="&nbsp;";
+						}
+						sb.append(text);
 					}
-					sb.append(text);					
 				}
 				if(hasLink){
 					sb.append("</a>");
@@ -269,6 +281,20 @@ public class HtmlProducer{
 		return sb;
 	}
 	
+	private int buildRichTextWidth(List<Column> columns,int colIndex,int colSpan){
+		long width=0;
+		int visibleSpan=Math.max(1,colSpan);
+		for(int i=colIndex,count=0;i<columns.size() && count<visibleSpan;i++){
+			Column column=columns.get(i);
+			if(column.isHide()){
+				continue;
+			}
+			count++;
+			width+=Math.max(0,column.getWidth());
+		}
+		return (int)Math.min(Integer.MAX_VALUE,width);
+	}
+
 	private int buildWidth(List<Column> columns,int colIndex,int colSpan){
 		int width=0;
 		int start=colIndex,end=colIndex+colSpan;
@@ -477,7 +503,7 @@ public class HtmlProducer{
 			// 合并列:累加所有列宽,跳过隐藏列
 			int colNumber=cell.getColumn().getColumnNumber()-1;
 			// System.out.println("合并列: 调用buildWidth(columns, "+colNumber+", "+colSpan+")");
-			colWidth=buildWidth(columns,colNumber,colSpan);
+			colWidth=cell.isHtmlRender() ? buildRichTextWidth(columns,colNumber,colSpan) : buildWidth(columns,colNumber,colSpan);
 			// System.out.println("buildWidth返回: "+colWidth);
 		}else{
 			// 单列:直接使用列宽

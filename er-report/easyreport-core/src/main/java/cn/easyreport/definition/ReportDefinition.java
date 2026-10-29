@@ -29,6 +29,7 @@ import cn.easyreport.definition.datasource.DatasourceDefinition;
 import cn.easyreport.definition.searchform.RenderContext;
 import cn.easyreport.definition.searchform.SearchForm;
 import cn.easyreport.export.html.SearchFormData;
+import cn.easyreport.export.html.HtmlCellContent;
 import cn.easyreport.model.Cell;
 import cn.easyreport.model.Column;
 import cn.easyreport.model.Report;
@@ -206,6 +207,7 @@ public class ReportDefinition implements Serializable{
 	private String buildStyle(){
 		// System.out.println(">>>>> buildStyle() 开始执行 <<<<<");
 		StringBuffer sb=new StringBuffer();
+		sb.append(HtmlCellContent.getStyle());
 		for(CellDefinition cell:cells){
 			CellStyle cellStyle=cell.getCellStyle();
 			sb.append("._"+cell.getName()+"{");

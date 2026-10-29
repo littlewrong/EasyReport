@@ -31,6 +31,7 @@ import java.util.Map;
 import javax.swing.JLabel;
 
 import org.apache.commons.lang3.StringUtils;
+import org.codehaus.jackson.annotate.JsonIgnore;
 
 import cn.easyreport.Range;
 import cn.easyreport.Utils;
@@ -49,7 +50,9 @@ import cn.easyreport.definition.PagingPosition;
 import cn.easyreport.definition.Scope;
 import cn.easyreport.definition.value.SimpleValue;
 import cn.easyreport.definition.value.Value;
+import cn.easyreport.definition.value.ValueType;
 import cn.easyreport.exception.ReportComputeException;
+import cn.easyreport.export.html.HtmlCellLayout;
 import cn.easyreport.expression.model.Condition;
 import cn.easyreport.expression.model.Expression;
 import cn.easyreport.expression.model.data.BindDataListExpressionData;
@@ -87,6 +90,7 @@ public class Cell implements ReportCell {
 	private CellStyle cellStyle;
 	private CellStyle customCellStyle;
 	private Value value;
+	private boolean html;
 	private Row row;
 	private Column column;
 	private Expand expand;
@@ -183,6 +187,7 @@ public class Cell implements ReportCell {
 		cell.setLeftParentCell(leftParentCell);
 		cell.setTopParentCell(topParentCell);
 		cell.setValue(value);
+		cell.setHtml(html);
 		cell.setRowSpan(rowSpan);
 		cell.setColSpan(colSpan);
 		cell.setExpand(expand);
@@ -565,6 +570,10 @@ public class Cell implements ReportCell {
 	}
 	
 	public void doDataWrapCompute(Context context){
+		if(isHtmlRender()){
+			HtmlCellLayout.computeHeight(this,context);
+			return;
+		}
 		Boolean wrapCompute=cellStyle.getWrapCompute();
 		if(wrapCompute==null || !wrapCompute){
 			return;
@@ -775,6 +784,19 @@ public class Cell implements ReportCell {
 
 	public void setValue(Value value) {
 		this.value = value;
+	}
+
+	public boolean isHtml() {
+		return html;
+	}
+
+	public void setHtml(boolean html) {
+		this.html = html;
+	}
+
+	@JsonIgnore
+	public boolean isHtmlRender() {
+		return html && value!=null && (value.getType()==ValueType.simple || value.getType()==ValueType.expression);
 	}
 
 	public String getRenderBean() {

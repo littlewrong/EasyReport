@@ -64,6 +64,7 @@ public class CellParser implements Parser<CellDefinition>{
 	public CellDefinition parse(Element element) {
 		CellDefinition cell=new CellDefinition();
 		cell.setName(element.attributeValue("name"));
+		cell.setHtml(Boolean.parseBoolean(element.attributeValue("html")));
 		cell.setColumnNumber(Integer.valueOf(element.attributeValue("col")));
 		cell.setRowNumber(Integer.valueOf(element.attributeValue("row")));
 		cell.setLeftParentCellName(element.attributeValue("left-cell"));
