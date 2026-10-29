@@ -2,9 +2,11 @@
  * Created by Jacky.Gao on 2017-02-07.
  */
 import {setDirty} from '../../Utils.js';
+import BaseValueEditor from './BaseValueEditor.js';
 
-export default class SimpleValueEditor{
+export default class SimpleValueEditor extends BaseValueEditor{
     constructor(parentContainer,context){
+        super();
         this.context=context;
         this.container=$(`<div></div>`);
         parentContainer.append(this.container);
@@ -13,6 +15,7 @@ export default class SimpleValueEditor{
     }
     init(){
         const _this=this;
+        this._buildHtmlRendering(this.container);
         this.container.append(this.buildLineHeight());
         this.container.append(`<div><label>${window.i18n.property.simple.content}</label></div>`);
         this.editor=$(`<textarea rows="5" cols="10" class="form-control"></textarea>`);
@@ -48,7 +51,10 @@ export default class SimpleValueEditor{
         this.cellDef=cellDef;
         this.rowIndex=rowIndex;
         this.colIndex=colIndex;
+        this.row2Index=row2Index;
+        this.col2Index=col2Index;
         this.container.show();
+        this._refreshHtmlRendering();
         this.editor.val(cellDef.value.value);
         this.lineHeightEditor.val(cellDef.cellStyle.lineHeight);
     }

@@ -14,6 +14,7 @@ export default class ExpressionValueEditor extends BaseValueEditor{
         this.context=context;
         this.container=$(`<div></div>`);
         parentContainer.append(this.container);
+        this._buildHtmlRendering(this.container);
         this._buildWrapCompute(this.container);
         this._buildExpand();
         this._buildFormat();
@@ -105,6 +106,7 @@ export default class ExpressionValueEditor extends BaseValueEditor{
         this.row2Index=row2Index;
         this.col2Index=col2Index;
         this.container.show();
+        this._refreshHtmlRendering();
         this.codeMirror.setValue(cellDef.value.value);
         this._refreshExpand();
         const cellStyle=cellDef.cellStyle;

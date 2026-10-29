@@ -17,9 +17,11 @@ package cn.easyreport.export.pdf;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
@@ -30,10 +32,12 @@ import cn.easyreport.definition.Alignment;
 import cn.easyreport.definition.CellStyle;
 import cn.easyreport.definition.Orientation;
 import cn.easyreport.definition.Paper;
+import cn.easyreport.definition.Band;
 import cn.easyreport.exception.ReportComputeException;
 import cn.easyreport.export.FullPageData;
 import cn.easyreport.export.PageBuilder;
 import cn.easyreport.export.Producer;
+import cn.easyreport.export.richtext.RichTextDocument;
 import cn.easyreport.model.Cell;
 import cn.easyreport.model.Column;
 import cn.easyreport.model.Image;
@@ -49,6 +53,7 @@ import com.itextpdf.text.RectangleReadOnly;
 import com.itextpdf.text.pdf.PdfPCell;
 import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfWriter;
+import com.itextpdf.text.pdf.PdfReader;
 
 /**
  * @author Jacky.gao
@@ -57,6 +62,10 @@ import com.itextpdf.text.pdf.PdfWriter;
 public class PdfProducer implements Producer {
 	@Override
 	public void produce(Report report,OutputStream outputStream) {
+		if(RichTextDocument.hasHtml(report) && !report.getPaper().isColumnEnabled()){
+			produceFlowingReport(report,outputStream);
+			return;
+		}
 		Paper paper=report.getPaper();
 		int width=paper.getWidth();
 		int height=paper.getHeight();
@@ -203,6 +212,129 @@ public class PdfProducer implements Producer {
 		}
 	}
 
+	/** HTML contracts use one table so the PDF engine can continue a cell on another page. */
+	private void produceFlowingReport(Report report,OutputStream outputStream){
+		try{
+			ByteArrayOutputStream measured=new ByteArrayOutputStream();
+			writeFlowingReport(report,measured,0);
+			PdfReader reader=new PdfReader(measured.toByteArray());
+			int totalPages;
+			try{
+				totalPages=reader.getNumberOfPages();
+			}finally{
+				reader.close();
+			}
+			writeFlowingReport(report,outputStream,totalPages);
+		}catch(Exception ex){
+			throw new ReportComputeException(ex);
+		}
+	}
+
+	private void writeFlowingReport(Report report,OutputStream outputStream,int totalPages) throws Exception{
+		Paper paper=report.getPaper();
+		Rectangle pageSize=new RectangleReadOnly(paper.getWidth(),paper.getHeight());
+		if(Orientation.landscape.equals(paper.getOrientation())) pageSize=pageSize.rotate();
+		Document document=new Document(pageSize,paper.getLeftMargin(),paper.getRightMargin(),
+				paper.getTopMargin(),paper.getBottomMargin());
+		try{
+			PdfWriter writer=PdfWriter.getInstance(document,outputStream);
+			writer.setCloseStream(false);
+			if(totalPages>0) writer.setPageEvent(new PageHeaderFooterEvent(report,true,totalPages));
+			document.open();
+			List<Column> columns=report.getColumns();
+			List<Integer> columnWidths=new ArrayList<Integer>();
+			int[] dimensions=buildColumnSizeAndTotalWidth(columns,columnWidths);
+			int[] widths=new int[columnWidths.size()];
+			for(int i=0;i<widths.length;i++) widths[i]=columnWidths.get(i);
+			List<Row> rows=new ArrayList<Row>();
+			for(Row row:report.getRows()){
+				if(!row.isForPaging() && !row.isHide() && row.getRealHeight()>0) rows.add(row);
+			}
+			List<Row> headers=new ArrayList<Row>();
+			for(Row row:rows){
+				if(!Band.headerrepeat.equals(row.getBand())) break;
+				headers.add(row);
+			}
+			if(headers.size()==rows.size()) headers.clear();
+			Map<Row,Map<Column,Cell>> originalCells=originalCellMap(report);
+			List<Row> segment=new ArrayList<Row>();
+			int spanEnd=-1;
+			for(int i=0;i<rows.size();i++){
+				Row row=rows.get(i);
+				segment.add(row);
+				Map<Column,Cell> cells=originalCells.get(row);
+				if(cells!=null){
+					for(Cell cell:cells.values()){
+						if(cell!=null && !cell.isForPaging()) spanEnd=Math.max(spanEnd,i+Math.max(1,cell.getRowSpan())-1);
+					}
+				}
+				if(row.isPageBreak() && i>=spanEnd && i+1<rows.size()){
+					document.add(flowingTable(originalCells,segment,columns,headers,widths,dimensions[1]));
+					document.newPage();
+					segment=new ArrayList<Row>(headers);
+				}
+			}
+			if(!segment.isEmpty()) document.add(flowingTable(originalCells,segment,columns,headers,widths,dimensions[1]));
+		}finally{
+			document.close();
+		}
+	}
+
+	private Map<Row,Map<Column,Cell>> originalCellMap(Report report){
+		Map<Row,Map<Column,Cell>> original=new HashMap<Row,Map<Column,Cell>>();
+		for(Row row:report.getRows()){
+			Map<Column,Cell> cells=new HashMap<Column,Cell>();
+			Map<Column,Cell> runtime=report.getRowColCellMap().get(row);
+			if(runtime!=null){
+				for(Cell cell:runtime.values()){
+					if(cell!=null && !cell.isForPaging() && cell.getRow()==row) cells.put(cell.getColumn(),cell);
+				}
+			}
+			original.put(row,cells);
+		}
+		for(List<Cell> instances:report.getCellsMap().values()){
+			for(Cell cell:instances){
+				if(!cell.isForPaging() && original.containsKey(cell.getRow())){
+					original.get(cell.getRow()).put(cell.getColumn(),cell);
+				}
+			}
+		}
+		return original;
+	}
+
+	private PdfPTable flowingTable(Map<Row,Map<Column,Cell>> originalCells,List<Row> rows,List<Column> columns,List<Row> headers,
+			int[] widths,int totalWidth) throws Exception{
+		PdfPTable table=new PdfPTable(widths.length);
+		table.setTotalWidth(totalWidth);
+		table.setWidths(widths);
+		table.setLockedWidth(true);
+		table.setHorizontalAlignment(Element.ALIGN_LEFT);
+		table.setSplitRows(true);
+		table.setSplitLate(false);
+		table.setHeaderRows(headers.size());
+		for(Row row:rows){
+			Map<Column,Cell> cells=originalCells.get(row);
+			if(cells==null) continue;
+			boolean htmlRow=false;
+			for(Cell source:cells.values()){
+				if(source!=null && !source.isForPaging() && source.isHtmlRender()) htmlRow=true;
+			}
+			for(Column column:columns){
+				if(column.isHide() || column.getWidth()<1) continue;
+				Cell source=cells.get(column);
+				if(source==null || source.isForPaging()) continue;
+				int height=htmlRow ? Math.max(0,row.getHeight()) : row.getRealHeight();
+				PdfPCell cell=buildPdfPCell(source,height,true);
+				if(htmlRow){
+					cell.setFixedHeight(0);
+					cell.setMinimumHeight(height);
+				}
+				table.addCell(cell);
+			}
+		}
+		return table;
+	}
+
 	
 	private int buildCellHeight(Cell cell,List<Row> rows){
 		int height=cell.getRow().getRealHeight();
@@ -218,6 +350,10 @@ public class PdfProducer implements Producer {
 	}
 	
 	private PdfPCell buildPdfPCell(Cell cellInfo,int cellHeight) throws Exception{
+		return buildPdfPCell(cellInfo,cellHeight,false);
+	}
+
+	private PdfPCell buildPdfPCell(Cell cellInfo,int cellHeight,boolean flowing) throws Exception{
 		CellStyle style=cellInfo.getCellStyle(); 
 		CellStyle customStyle=cellInfo.getCustomCellStyle();
 		CellStyle rowStyle=cellInfo.getRow().getCustomCellStyle();
@@ -226,7 +362,7 @@ public class PdfProducer implements Producer {
 		cell.setPadding(0);
 		cell.setBorder(PdfPCell.NO_BORDER);
 		cell.setCellEvent(new CellBorderEvent(style,customStyle));
-		int rowSpan=cellInfo.getPageRowSpan();
+		int rowSpan=flowing ? cellInfo.getRowSpan() : cellInfo.getPageRowSpan();
 		if(rowSpan>0){
 			cell.setRowspan(rowSpan);
 		}
@@ -307,7 +443,11 @@ public class PdfProducer implements Producer {
 	private PdfPCell newPdfCell(Cell cellInfo,int cellHeight) throws Exception{
 		PdfPCell cell=null;
 		Object cellData=cellInfo.getFormatData();
-		if(cellData instanceof Image){
+		if(cellInfo.isHtmlRender() && !(cellData instanceof Image) && !(cellData instanceof ChartData)){
+			cell=new PdfPCell();
+			PdfRichTextWriter.append(cell,cellInfo);
+			cell.setMinimumHeight(cellHeight);
+		}else if(cellData instanceof Image){
 			Image img=(Image)cellData;
 			cell=new PdfPCell(buildPdfImage(img.getBase64Data(), 0, 0));
 		}else if(cellData instanceof ChartData){
@@ -329,7 +469,7 @@ public class PdfProducer implements Producer {
 			cell.setFixedHeight(cellHeight);
 		}
 		CellStyle style=cellInfo.getCellStyle();
-		if(style!=null && style.getLineHeight()>0){
+		if(!cellInfo.isHtmlRender() && style!=null && style.getLineHeight()>0){
 			cell.setLeading(style.getLineHeight(), style.getLineHeight());			
 		}
 		return cell;

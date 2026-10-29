@@ -22,6 +22,7 @@ import org.apache.commons.lang.StringUtils;
 import org.springframework.util.Base64Utils;
 
 import cn.easyreport.build.paging.HeaderFooter;
+import cn.easyreport.build.Context;
 import cn.easyreport.build.paging.Page;
 import cn.easyreport.definition.Orientation;
 import cn.easyreport.definition.Paper;
@@ -51,13 +52,24 @@ public class PageHeaderFooterEvent extends PdfPageEventHelper {
 	private float bgBottom;
 	private float bgWidth;
 	private float bgHeight;
+	private final boolean flowing;
+	private final int physicalPageCount;
 	public PageHeaderFooterEvent(Report report) {
+		this(report,false,0);
+	}
+	public PageHeaderFooterEvent(Report report,boolean flowing,int physicalPageCount) {
 		this.report=report;
+		this.flowing=flowing;
+		this.physicalPageCount=physicalPageCount;
 		this.bgImage=buildBackgroundImage(report);
 	}
 	@Override
 	public void onEndPage(PdfWriter writer, Document document) {
 		drawBackgroundImage(writer);
+		if(flowing){
+			if(physicalPageCount>0) drawFlowingHeaderFooter(writer);
+			return;
+		}
 		List<Page> pages=report.getPages();
 		int pageNumber=writer.getPageNumber();
 		if(pageNumber>pages.size()){
@@ -71,6 +83,24 @@ public class PageHeaderFooterEvent extends PdfPageEventHelper {
 		}
 		if(footer!=null){
 			buildTable(writer,footer,false,report);
+		}
+	}
+	private void drawFlowingHeaderFooter(PdfWriter writer){
+		if(report.getHeader()==null && report.getFooter()==null) return;
+		Context context=report.getContext();
+		int oldIndex=context.getPageIndex(),oldTotal=context.getTotalPages();
+		try{
+			context.setTotalPages(physicalPageCount);
+			int index=writer.getPageNumber();
+			if(report.getHeader()!=null){
+				buildTable(writer,report.getHeader().buildHeaderFooter(index,context),true,report);
+			}
+			if(report.getFooter()!=null){
+				buildTable(writer,report.getFooter().buildHeaderFooter(index,context),false,report);
+			}
+		}finally{
+			context.setPageIndex(oldIndex);
+			context.setTotalPages(oldTotal);
 		}
 	}
 	private com.itextpdf.text.Image buildBackgroundImage(Report report){

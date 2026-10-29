@@ -41,6 +41,7 @@ public class CellDefinition implements Serializable{
 	private int colSpan;
 	private String name;
 	private Value value;
+	private boolean html;
 	private CellStyle cellStyle=new CellStyle();
 	
 	private String linkUrl;
@@ -101,6 +102,7 @@ public class CellDefinition implements Serializable{
 	protected Cell newCell(){
 		Cell cell=new Cell();
 		cell.setValue(value);
+		cell.setHtml(html);
 		cell.setName(name);
 		cell.setRowSpan(rowSpan);
 		cell.setColSpan(colSpan);
@@ -152,6 +154,14 @@ public class CellDefinition implements Serializable{
 		this.value = value;
 	}
 	
+	public boolean isHtml() {
+		return html;
+	}
+
+	public void setHtml(boolean html) {
+		this.html = html;
+	}
+
 	public int getRowSpan() {
 		return rowSpan;
 	}

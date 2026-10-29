@@ -26,7 +26,7 @@ export function afterRenderer(td,row,col,prop,value,cellProperties){
     }else if(valueType==='expression'){
         tip=cellValue.value || '';
         if($td.html()===''){
-            $td.html(tip);
+            $td.text(tip);
         }
     }else if(valueType==='image'){
         tip=`${window.i18n.table.render.image}`+cellValue.value;
@@ -60,13 +60,14 @@ export function afterRenderer(td,row,col,prop,value,cellProperties){
     }else{
         tip=cellValue.value || "";
         if($td.html()===''){
-            $td.html(tip);
+            $td.text(tip);
         }
     }
     $td.prop('title',tip);
     if(valueType==="simple"){
         let text=$td.text();
         if(text && text!==""){
+            text=text.replace(new RegExp('&','gm'),'&amp;');
             text=text.replace(new RegExp('<','gm'),'&lt;');
             text=text.replace(new RegExp('>','gm'),'&gt;');
             text=text.replace(new RegExp('\r\n','gm'),'<br>');

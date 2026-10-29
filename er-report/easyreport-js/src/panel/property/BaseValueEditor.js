@@ -5,6 +5,42 @@ import {setDirty} from '../../Utils.js';
 import PropertyConditionDialog from '../../dialog/PropertyConditionDialog.js';
 
 export default class BaseValueEditor{
+    _buildHtmlRendering(container){
+        const group=$(`<div class="form-group" style="margin-bottom: 10px"></div>`);
+        const label=$(`<label class="checkbox-inline"><input type="checkbox">${window.i18n.property.base.htmlRendering}</label>`);
+        this.htmlRenderingEditor=label.children('input');
+        group.append(label);
+        group.append($(`<div class="help-block" style="font-size: 12px;margin-bottom: 0">${window.i18n.property.base.htmlRenderingTip}</div>`));
+        (container || this.container).append(group);
+        const _this=this;
+        this.htmlRenderingEditor.change(function(){
+            _this._setHtmlRendering($(this).prop('checked'));
+        });
+    }
+
+    _setHtmlRendering(html){
+        const endRow=this.row2Index===undefined ? this.rowIndex : this.row2Index;
+        const endCol=this.col2Index===undefined ? this.colIndex : this.col2Index;
+        for(let row=Math.min(this.rowIndex,endRow);row<=Math.max(this.rowIndex,endRow);row++){
+            for(let col=Math.min(this.colIndex,endCol);col<=Math.max(this.colIndex,endCol);col++){
+                const cellDef=this.context.getCell(row,col);
+                if(cellDef && (cellDef.value.type==='simple' || cellDef.value.type==='expression')){
+                    cellDef.html=html===true;
+                }
+            }
+        }
+        this._refreshHtmlRendering();
+        setDirty();
+    }
+
+    _refreshHtmlRendering(){
+        const html=this.cellDef.html===true;
+        this.htmlRenderingEditor.prop('checked',html);
+        if(this.wrapGroup){
+            this.wrapGroup.toggle(!html);
+        }
+    }
+
     _buildFillBlankRows(container){
         this.fillGroup=$(`<div class="form-group" style="margin-bottom: 10px;height: 25px;"><label>${window.i18n.property.base.fillBlank}</label></div>`);
         this.enableFillRadio=$(`<label class="checkbox-inline" style="padding-left: 2px"><input type="radio" name="__fill_blank_row_radio" value="default">${window.i18n.property.base.open}</label>`);
