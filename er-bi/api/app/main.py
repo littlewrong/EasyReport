@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.core.exceptions import register_exception_handlers
 
-app = FastAPI(title="ER-BI API", docs_url="/api/docs", openapi_url="/api/openapi.json")
+app = FastAPI(title="ER-BI API", version="1.0.0", docs_url="/api/docs", openapi_url="/api/openapi.json")
 
 app.add_middleware(
     CORSMiddleware,
