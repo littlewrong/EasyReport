@@ -5,11 +5,12 @@
     <parent>
         <artifactId>EasyReport</artifactId>
         <groupId>cn.easyreport</groupId>
-        <version>3.9.1</version>
+        <version>2.0.0</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>er-common</artifactId>
+    <version>3.9.1</version>
 
     <description>
         common通用工具
