@@ -9,44 +9,48 @@ import org.owasp.html.PolicyFactory;
 
 /** The intentionally limited rich-text dialect shared by preview and printing. */
 public final class HtmlCellContent {
-	private static final String[] ELEMENTS={"b","strong","i","em","u","s","strike","del",
-			"sub","sup","span","br","p","div","ul","ol","li","blockquote",
-			"h1","h2","h3","h4","h5","h6","font"};
-	private static final CssSchema STYLES=CssSchema.withProperties(Arrays.asList(
-			"font-family","font-size","font-weight","font-style","color","background-color",
-			"text-decoration","text-align","vertical-align","line-height","text-indent",
-			"margin","margin-top","margin-bottom","margin-left","margin-right","rgb()","rgba()","hsl()","hsla()"));
-	private static final PolicyFactory WITH_LINKS=policy(true);
-	private static final PolicyFactory WITHOUT_LINKS=policy(false);
-
 	private HtmlCellContent() {
 	}
 
-	private static PolicyFactory policy(boolean allowLinks) {
-		HtmlPolicyBuilder builder=new HtmlPolicyBuilder()
-				.allowElements(ELEMENTS)
-				.allowWithoutAttributes("span","font")
-				.allowStyling(STYLES);
-		builder.allowAttributes("align").matching(true,"left","center","right","justify")
-				.onElements("p","div","h1","h2","h3","h4","h5","h6");
-		builder.allowAttributes("color").matching(Pattern.compile("#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,24}"))
-				.onElements("font");
-		builder.allowAttributes("size").matching(Pattern.compile("[1-7]"))
-				.onElements("font");
-		builder.allowAttributes("face").matching(Pattern.compile("[\\p{L}\\p{N} _,-]{1,100}"))
-				.onElements("font");
-		builder.allowAttributes("start").matching(Pattern.compile("[0-9]{1,6}"))
-				.onElements("ol");
-		if(allowLinks){
-			builder.allowElements("a").allowUrlProtocols("http","https","mailto")
-					.allowAttributes("href","title").onElements("a");
+	// Styles are used by every report. Load sanitizer dependencies only for HTML cells.
+	private static final class SanitizerPolicy {
+		private static final String[] ELEMENTS={"b","strong","i","em","u","s","strike","del",
+				"sub","sup","span","br","p","div","ul","ol","li","blockquote",
+				"h1","h2","h3","h4","h5","h6","font"};
+		private static final CssSchema STYLES=CssSchema.withProperties(Arrays.asList(
+				"font-family","font-size","font-weight","font-style","color","background-color",
+				"text-decoration","text-align","vertical-align","line-height","text-indent",
+				"margin","margin-top","margin-bottom","margin-left","margin-right","rgb()","rgba()","hsl()","hsla()"));
+		private static final PolicyFactory WITH_LINKS=policy(true);
+		private static final PolicyFactory WITHOUT_LINKS=policy(false);
+
+		private static PolicyFactory policy(boolean allowLinks) {
+			HtmlPolicyBuilder builder=new HtmlPolicyBuilder()
+					.allowElements(ELEMENTS)
+					.allowWithoutAttributes("span","font")
+					.allowStyling(STYLES);
+			builder.allowAttributes("align").matching(true,"left","center","right","justify")
+					.onElements("p","div","h1","h2","h3","h4","h5","h6");
+			builder.allowAttributes("color").matching(Pattern.compile("#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,24}"))
+					.onElements("font");
+			builder.allowAttributes("size").matching(Pattern.compile("[1-7]"))
+					.onElements("font");
+			builder.allowAttributes("face").matching(Pattern.compile("[\\p{L}\\p{N} _,-]{1,100}"))
+					.onElements("font");
+			builder.allowAttributes("start").matching(Pattern.compile("[0-9]{1,6}"))
+					.onElements("ol");
+			if(allowLinks){
+				builder.allowElements("a").allowUrlProtocols("http","https","mailto")
+						.allowAttributes("href","title").onElements("a");
+			}
+			return builder.toFactory();
 		}
-		return builder.toFactory();
 	}
 
 	/** No automatic entity decoding: encoded markup must remain literal text. */
 	public static String sanitize(String html,boolean allowLinks) {
-		return (allowLinks ? WITH_LINKS : WITHOUT_LINKS).sanitize(html==null ? "" : html);
+		return (allowLinks ? SanitizerPolicy.WITH_LINKS : SanitizerPolicy.WITHOUT_LINKS)
+				.sanitize(html==null ? "" : html);
 	}
 
 	public static String render(String html,boolean allowLinks) {
