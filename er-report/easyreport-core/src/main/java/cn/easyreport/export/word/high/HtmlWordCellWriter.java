@@ -2,6 +2,7 @@ package cn.easyreport.export.word.high;
 
 import java.math.BigInteger;
 
+import org.apache.poi.xwpf.usermodel.LineSpacingRule;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.UnderlinePatterns;
 import org.apache.poi.xwpf.usermodel.VerticalAlign;
@@ -78,7 +79,8 @@ final class HtmlWordCellWriter {
         } else {
             output.setIndentationFirstLine(twips(style.getFirstLineIndent()));
         }
-        output.setSpacingBetween(Math.max(1f, style.getLineHeight()));
+        output.setSpacingBetween(style.getLineHeight(),
+                style.isLineHeightFixed() ? LineSpacingRule.EXACT : LineSpacingRule.AUTO);
         CTPPr properties = output.getCTP().isSetPPr() ? output.getCTP().getPPr() : output.getCTP().addNewPPr();
         properties.addNewKeepNext().setVal(STOnOff.FALSE);
         properties.addNewKeepLines().setVal(STOnOff.FALSE);

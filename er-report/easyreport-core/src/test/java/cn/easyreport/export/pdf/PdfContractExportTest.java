@@ -6,8 +6,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import org.junit.Test;
 
@@ -29,7 +31,10 @@ import com.itextpdf.text.FontFactory;
 import com.itextpdf.text.Paragraph;
 import com.itextpdf.text.pdf.PdfPCell;
 import com.itextpdf.text.pdf.PdfReader;
+import com.itextpdf.text.pdf.parser.LocationTextExtractionStrategy;
 import com.itextpdf.text.pdf.parser.PdfTextExtractor;
+import com.itextpdf.text.pdf.parser.TextRenderInfo;
+import com.itextpdf.text.pdf.parser.Vector;
 
 public class PdfContractExportTest {
     @Test
@@ -59,6 +64,47 @@ public class PdfContractExportTest {
         assertTrue(chunks.get(1).getFont().isItalic());
         assertTrue((chunks.get(2).getFont().getStyle()&Font.STRIKETHRU)!=0);
         assertTrue(chunks.get(3).getTextRise()>0);
+    }
+
+    @Test
+    public void fixedLineHeightKeepsPointsAcrossInheritedAndInlineFontSizes() throws Exception {
+        Report report=ContractExportFixture.report("<div style='font-size:12pt;line-height:24px'>"
+                +"<p style='font-size:14pt'>固定行高<span style='font-size:18pt'>混合字号</span><br>第二行</p>"
+                +"<p style='font-size:16pt'>子段落继承固定行高</p>"
+                +"<p style='line-height:normal'>恢复默认行高</p></div>");
+        PdfPCell cell=new PdfPCell();
+        PdfRichTextWriter.append(cell,report.getRootCell());
+        assertEquals(3,cell.getCompositeElements().size());
+        Paragraph mixed=(Paragraph)cell.getCompositeElements().get(0);
+        assertEquals(18f,mixed.getLeading(),.01f);
+        assertEquals(0f,mixed.getMultipliedLeading(),.01f);
+        assertEquals(14f,mixed.getChunks().get(0).getFont().getSize(),.01f);
+        assertEquals(18f,mixed.getChunks().get(1).getFont().getSize(),.01f);
+        Paragraph inherited=(Paragraph)cell.getCompositeElements().get(1);
+        assertEquals(18f,inherited.getLeading(),.01f);
+        assertEquals(0f,inherited.getMultipliedLeading(),.01f);
+        Paragraph normal=(Paragraph)cell.getCompositeElements().get(2);
+        assertEquals(0f,normal.getLeading(),.01f);
+        assertEquals(1.2f,normal.getMultipliedLeading(),.01f);
+    }
+
+    @Test
+    public void fractionalAndWholeParagraphSpanLineHeightsAreWrittenWithoutChangingLocalSpans() throws Exception {
+        Report report=ContractExportFixture.report("<p style='line-height:0.8'>紧凑行距<br>第二行</p>"
+                +"<p><span style='line-height:2'>整段行高<strong>加粗</strong><br>第二行</span></p>"
+                +"<p><span style='line-height:2'>局部文字</span>普通文字</p>");
+        PdfPCell cell=new PdfPCell();
+        PdfRichTextWriter.append(cell,report.getRootCell());
+        assertEquals(3,cell.getCompositeElements().size());
+        Paragraph compact=(Paragraph)cell.getCompositeElements().get(0);
+        assertEquals(0f,compact.getLeading(),.01f);
+        assertEquals(.8f,compact.getMultipliedLeading(),.01f);
+        Paragraph uniform=(Paragraph)cell.getCompositeElements().get(1);
+        assertEquals(0f,uniform.getLeading(),.01f);
+        assertEquals(2f,uniform.getMultipliedLeading(),.01f);
+        assertTrue(uniform.getChunks().get(1).getFont().isBold());
+        Paragraph local=(Paragraph)cell.getCompositeElements().get(2);
+        assertEquals(1.5f,local.getMultipliedLeading(),.01f);
     }
 
     @Test
@@ -256,6 +302,44 @@ public class PdfContractExportTest {
         Files.createDirectories(Paths.get("target/contract-export-qa"));
         Files.write(Paths.get("target/contract-export-qa/contract.pdf"),pdf);
         assertTrue(pdf.length>1000);
+    }
+
+    @Test
+    public void createsLineHeightFixtureForVisualReview() throws Exception {
+        byte[] pdf=export(ContractExportFixture.report(ContractExportFixture.lineHeightSample()));
+        Files.createDirectories(Paths.get("target/line-height-qa"));
+        Files.write(Paths.get("target/line-height-qa/line-height.pdf"),pdf);
+        PdfReader reader=new PdfReader(pdf);
+        try{
+            assertEquals(1,reader.getNumberOfPages());
+            final String[] markers={"MULTIPLE_A","MULTIPLE_B","FIXED_A","FIXED_B",
+                    "INHERIT_A","INHERIT_B","NORMAL_A","NORMAL_B","SPAN_A","SPAN_B",
+                    "COMPACT_A","COMPACT_B","LINE_HEIGHT_SAMPLE_END"};
+            final Map<String,Float> baselines=new HashMap<String,Float>();
+            String text=PdfTextExtractor.getTextFromPage(reader,1,new LocationTextExtractionStrategy(){
+                @Override
+                public void renderText(TextRenderInfo info){
+                    super.renderText(info);
+                    for(String marker:markers){
+                        if(info.getText().contains(marker)){
+                            baselines.put(marker,info.getBaseline().getStartPoint().get(Vector.I2));
+                        }
+                    }
+                }
+            });
+            for(String marker:markers){
+                assertEquals(text,1,occurrences(text,marker));
+                assertNotNull("Missing baseline: "+marker,baselines.get(marker));
+            }
+            assertEquals(18f,baselines.get("MULTIPLE_A")-baselines.get("MULTIPLE_B"),.05f);
+            assertEquals(18f,baselines.get("FIXED_A")-baselines.get("FIXED_B"),.05f);
+            assertEquals(24f,baselines.get("INHERIT_A")-baselines.get("INHERIT_B"),.05f);
+            assertEquals(14.4f,baselines.get("NORMAL_A")-baselines.get("NORMAL_B"),.05f);
+            assertEquals(24f,baselines.get("SPAN_A")-baselines.get("SPAN_B"),.05f);
+            assertEquals(8f,baselines.get("COMPACT_A")-baselines.get("COMPACT_B"),.05f);
+        }finally{
+            reader.close();
+        }
     }
 
     private byte[] export(Report report){

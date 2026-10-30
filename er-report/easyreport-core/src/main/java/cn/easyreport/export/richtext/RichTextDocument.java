@@ -59,6 +59,8 @@ public final class RichTextDocument {
         if(builder.paragraphs.isEmpty()){
             builder.paragraphs.add(new Paragraph(base));
         }
+        // Resolve inline heights after enclosing blocks have applied their margins.
+        for(Paragraph paragraph:builder.paragraphs){ resolveUniformLineHeight(paragraph); }
         return new RichTextDocument(base,builder.paragraphs);
     }
 
@@ -86,12 +88,14 @@ public final class RichTextDocument {
     public static final class TextStyle {
         private String fontFamily="宋体",color="000000",backgroundColor,align="left",linkUrl;
         private float fontSize=12,lineHeight=1.2f,firstLineIndent,leftIndent,spaceBefore,spaceAfter;
+        private boolean lineHeightFixed;
         private boolean bold,italic,underline,strike;
         private int script;
         private TextStyle() { }
         private TextStyle(TextStyle other) {
             fontFamily=other.fontFamily; color=other.color; backgroundColor=other.backgroundColor;
             align=other.align; linkUrl=other.linkUrl; fontSize=other.fontSize; lineHeight=other.lineHeight;
+            lineHeightFixed=other.lineHeightFixed;
             firstLineIndent=other.firstLineIndent; leftIndent=other.leftIndent;
             spaceBefore=other.spaceBefore; spaceAfter=other.spaceAfter;
             bold=other.bold; italic=other.italic; underline=other.underline; strike=other.strike; script=other.script;
@@ -105,7 +109,9 @@ public final class RichTextDocument {
         public String getColor() { return color; }
         public String getBackgroundColor() { return backgroundColor; }
         public String getAlign() { return align; }
+        /** Points for a fixed height, otherwise a font-relative multiplier. */
         public float getLineHeight() { return lineHeight; }
+        public boolean isLineHeightFixed() { return lineHeightFixed; }
         public float getFirstLineIndent() { return firstLineIndent; }
         public float getLeftIndent() { return leftIndent; }
         public float getSpaceBefore() { return spaceBefore; }
@@ -228,6 +234,48 @@ public final class RichTextDocument {
         }
     }
 
+    /** Editors often store a whole paragraph's line height on its enclosing span. */
+    private static void resolveUniformLineHeight(Paragraph paragraph) {
+        boolean empty=true;
+        for(Run run:paragraph.runs){
+            if(hasVisibleText(run.text)){ empty=false; break; }
+        }
+        TextStyle uniform=null;
+        for(Run run:paragraph.runs){
+            if(!hasVisibleText(run.text) && !(empty && run.text.indexOf('\n')>=0)){ continue; }
+            if(uniform==null){ uniform=run.style; }
+            else if(!sameLineHeight(uniform,run.style)){ return; }
+        }
+        if(uniform!=null && !sameLineHeight(paragraph.style,uniform)){
+            float minimum=paragraph.style.lineHeightFixed ? paragraph.style.lineHeight
+                    : paragraph.style.lineHeight*paragraph.style.fontSize;
+            for(Run run:paragraph.runs){
+                if(!hasVisibleText(run.text) && !(empty && run.text.indexOf('\n')>=0)){ continue; }
+                float height=run.style.lineHeightFixed ? run.style.lineHeight
+                        : run.style.lineHeight*run.style.fontSize;
+                // A smaller inline box cannot shrink the enclosing block's line box.
+                if(height+.0001f<minimum){ return; }
+            }
+            TextStyle adjusted=new TextStyle(paragraph.style);
+            adjusted.lineHeight=uniform.lineHeight;
+            adjusted.lineHeightFixed=uniform.lineHeightFixed;
+            paragraph.style=adjusted;
+        }
+    }
+
+    private static boolean sameLineHeight(TextStyle left,TextStyle right) {
+        return left.lineHeightFixed==right.lineHeightFixed && Math.abs(left.lineHeight-right.lineHeight)<.0001f;
+    }
+
+    private static boolean hasVisibleText(String text) {
+        for(int index=0;index<text.length();){
+            int codePoint=text.codePointAt(index);
+            if(!Character.isWhitespace(codePoint) && !Character.isSpaceChar(codePoint)){ return true; }
+            index+=Character.charCount(codePoint);
+        }
+        return false;
+    }
+
     private static TextStyle elementStyle(Element element,TextStyle inherited) {
         TextStyle style=new TextStyle(inherited);
         String tag=element.normalName();
@@ -242,7 +290,7 @@ public final class RichTextDocument {
         }
         if(tag.matches("h[1-6]")){
             style.fontSize*=new float[]{2,1.5f,1.17f,1,.83f,.67f}[tag.charAt(1)-'1'];
-            style.bold=true; style.lineHeight=1.2f;
+            style.bold=true; style.lineHeight=1.2f; style.lineHeightFixed=false;
         }
         if("blockquote".equals(tag)){ style.leftIndent+=style.fontSize*2; }
         if("a".equals(tag)){
@@ -284,11 +332,28 @@ public final class RichTextDocument {
             style.script="sub".equals(align) ? -1 : "super".equals(align) ? 1 : 0;
         }
         if(css.containsKey("line-height")){
-            String height=css.get("line-height");
-            try {
-                style.lineHeight=positive(Float.parseFloat(height),style.lineHeight);
-            }catch(NumberFormatException ex){
-                style.lineHeight=positive(length(height,style.fontSize)/style.fontSize,style.lineHeight);
+            String height=css.get("line-height").toLowerCase(Locale.ROOT);
+            if("normal".equals(height) || "initial".equals(height)){
+                // Use the same normal-line approximation as the HTML preview baseline.
+                style.lineHeight=1.2f;
+                style.lineHeightFixed=false;
+            }else if("inherit".equals(height) || "unset".equals(height)){
+                style.lineHeight=inherited.lineHeight;
+                style.lineHeightFixed=inherited.lineHeightFixed;
+            }else{
+                float resolved;
+                boolean fixed=false;
+                try {
+                    resolved=Float.parseFloat(height);
+                }catch(NumberFormatException ex){
+                    // CSS lengths and percentages inherit as computed points, not multipliers.
+                    resolved=length(height,style.fontSize);
+                    fixed=true;
+                }
+                if(Float.isFinite(resolved) && resolved>0){
+                    style.lineHeight=resolved;
+                    style.lineHeightFixed=fixed;
+                }
             }
         }
         if(css.containsKey("text-indent")){ style.firstLineIndent=length(css.get("text-indent"),style.fontSize); }

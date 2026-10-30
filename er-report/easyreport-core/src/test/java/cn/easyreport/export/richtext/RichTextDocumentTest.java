@@ -39,7 +39,8 @@ public class RichTextDocumentTest {
         assertTrue(HtmlCellContent.sanitize(html,true).contains("text-indent:2em"));
         Paragraph p=parse(html).getParagraphs().get(0);
         assertEquals(24,p.getStyle().getFirstLineIndent(),.01);
-        assertEquals(1.5,p.getStyle().getLineHeight(),.01);
+        assertEquals(18,p.getStyle().getLineHeight(),.01);
+        assertTrue(p.getStyle().isLineHeightFixed());
         assertEquals(6,p.getStyle().getSpaceBefore(),.01);
         assertEquals(8,p.getStyle().getSpaceAfter(),.01);
         assertEquals("justify",p.getStyle().getAlign());
@@ -112,6 +113,123 @@ public class RichTextDocumentTest {
         assertEquals(0,first.getStyle().getSpaceAfter(),.01);
         assertEquals(0,last.getStyle().getSpaceBefore(),.01);
         assertEquals(20,last.getStyle().getSpaceAfter(),.01);
+    }
+
+    @Test
+    public void fixedLengthsAndPercentagesRetainTheirComputedHeightWhenFontSizeChanges() {
+        for(String height:new String[]{"24px","18pt","150%","1.5em"}){
+            RichTextDocument doc=parse("<div style='font-size:12pt;line-height:"+height+"'>"
+                    +"<p style='font-size:18pt'>继承固定行高</p><p style='line-height:2'>覆盖为倍数</p></div>");
+            Paragraph inherited=doc.getParagraphs().get(0),overridden=doc.getParagraphs().get(1);
+            assertTrue(height,inherited.getStyle().isLineHeightFixed());
+            assertEquals(height,18,inherited.getStyle().getLineHeight(),.01);
+            assertEquals(18,inherited.getStyle().getFontSize(),.01);
+            assertFalse(overridden.getStyle().isLineHeightFixed());
+            assertEquals(2,overridden.getStyle().getLineHeight(),.01);
+        }
+    }
+
+    @Test
+    public void normalResetsInheritedHeightWhileUnitlessMultipliersStayRelative() {
+        RichTextDocument doc=parse("<div style='line-height:2'>"
+                +"<p style='font-size:18pt'>继承倍数</p>"
+                +"<p style='line-height:normal'>恢复默认</p>"
+                +"<p style='line-height:0.8'>紧凑行距</p></div>");
+        assertEquals(2,doc.getParagraphs().get(0).getStyle().getLineHeight(),.01);
+        assertFalse(doc.getParagraphs().get(0).getStyle().isLineHeightFixed());
+        assertEquals(1.2,doc.getParagraphs().get(1).getStyle().getLineHeight(),.01);
+        assertFalse(doc.getParagraphs().get(1).getStyle().isLineHeightFixed());
+        assertEquals(.8,doc.getParagraphs().get(2).getStyle().getLineHeight(),.01);
+    }
+
+    @Test
+    public void explicitInheritanceOverridesHeadingDefaultsAndInitialResetsFixedHeight() {
+        RichTextDocument doc=parse("<div style='line-height:24pt'>"
+                +"<h2 style='line-height:inherit'>继承</h2><h2 style='line-height:unset'>继承</h2>"
+                +"<p style='line-height:initial'>默认</p><p style='line-height:normal'>默认</p></div>");
+        for(int index=0;index<2;index++){
+            assertTrue(doc.getParagraphs().get(index).getStyle().isLineHeightFixed());
+            assertEquals(24,doc.getParagraphs().get(index).getStyle().getLineHeight(),.01);
+        }
+        for(int index=2;index<4;index++){
+            assertFalse(doc.getParagraphs().get(index).getStyle().isLineHeightFixed());
+            assertEquals(1.2,doc.getParagraphs().get(index).getStyle().getLineHeight(),.01);
+        }
+    }
+
+    @Test
+    public void uniformInlineHeightAppliesToTheWholeParagraphWithoutReplacingOtherStyles() {
+        RichTextDocument doc=parse("<p style='text-indent:24pt;margin-bottom:6pt'> "
+                +"<span style='font-size:16pt;line-height:2'>甲<strong>乙</strong></span>"
+                +"<br><span style='line-height:2'>丙</span> </p>"
+                +"<span style='line-height:24px'>根节点<br><b>第二行</b></span>");
+        Paragraph first=doc.getParagraphs().get(0),second=doc.getParagraphs().get(1);
+        assertEquals(2,first.getStyle().getLineHeight(),.01);
+        assertFalse(first.getStyle().isLineHeightFixed());
+        assertEquals(12,first.getStyle().getFontSize(),.01);
+        assertEquals(24,first.getStyle().getFirstLineIndent(),.01);
+        assertEquals(6,first.getStyle().getSpaceAfter(),.01);
+        assertEquals("甲乙\n丙",first.getText());
+        assertTrue(second.getStyle().isLineHeightFixed());
+        assertEquals(18,second.getStyle().getLineHeight(),.01);
+    }
+
+    @Test
+    public void mixedLocalHeightsAreNotAppliedToUnrelatedTextOrFollowingParagraphs() {
+        RichTextDocument doc=parse("<p><span style='line-height:3'>局部</span>正文</p>"
+                +"<p><span style='line-height:2'>甲</span><span style='line-height:3'>乙</span></p>"
+                +"<p><span style='line-height:2'>整段</span></p><p>后续正文</p>");
+        assertEquals(1.2,doc.getParagraphs().get(0).getStyle().getLineHeight(),.01);
+        assertEquals(1.2,doc.getParagraphs().get(1).getStyle().getLineHeight(),.01);
+        assertEquals(2,doc.getParagraphs().get(2).getStyle().getLineHeight(),.01);
+        assertEquals(1.2,doc.getParagraphs().get(3).getStyle().getLineHeight(),.01);
+    }
+
+    @Test
+    public void uniformInlineHeightCannotShrinkTheEnclosingParagraphOrDuplicateItsMargins() {
+        RichTextDocument doc=parse("<p style='line-height:2'><span style='line-height:1'>甲<br>乙</span></p>"
+                +"<div style='margin-top:10pt;margin-bottom:20pt'>"
+                +"<p style='margin-top:6pt;margin-bottom:8pt'><span style='line-height:2'>正文</span></p></div>");
+        assertEquals(2,doc.getParagraphs().get(0).getStyle().getLineHeight(),.01);
+        Paragraph promoted=doc.getParagraphs().get(1);
+        assertEquals(2,promoted.getStyle().getLineHeight(),.01);
+        assertEquals(16,promoted.getStyle().getSpaceBefore(),.01);
+        assertEquals(28,promoted.getStyle().getSpaceAfter(),.01);
+    }
+
+    @Test
+    public void invalidOrNonPositiveHeightsKeepTheInheritedValue() {
+        for(String height:new String[]{"0","-2","bogus","calc(1em + 2px)"}){
+            Paragraph paragraph=parse("<div style='line-height:2'><p style='line-height:"+height+"'>正文</p></div>")
+                    .getParagraphs().get(0);
+            assertFalse(height,paragraph.getStyle().isLineHeightFixed());
+            assertEquals(height,2,paragraph.getStyle().getLineHeight(),.01);
+        }
+    }
+
+    @Test
+    public void emptyEditorParagraphsUseTheirUniformBreakHeight() {
+        RichTextDocument doc=parse("<p><span style='line-height:2'><br></span></p>"
+                +"<p><span style='line-height:24px'><br><br></span></p><p>正文</p>");
+        assertEquals(2,doc.getParagraphs().get(0).getStyle().getLineHeight(),.01);
+        assertTrue(doc.getParagraphs().get(1).getStyle().isLineHeightFixed());
+        assertEquals(18,doc.getParagraphs().get(1).getStyle().getLineHeight(),.01);
+        assertEquals(1.2,doc.getParagraphs().get(2).getStyle().getLineHeight(),.01);
+    }
+
+    @Test
+    public void listItemsInheritHeightsAndHeadingsKeepThePreviewDefaultUnlessOverridden() {
+        RichTextDocument doc=parse("<div style='line-height:24px'><ul>"
+                +"<li>甲</li><li style='line-height:normal'>乙</li></ul>"
+                +"<h2>标题</h2><h2 style='line-height:24pt'>指定标题</h2></div>");
+        assertTrue(doc.getParagraphs().get(0).getStyle().isLineHeightFixed());
+        assertEquals(18,doc.getParagraphs().get(0).getStyle().getLineHeight(),.01);
+        assertFalse(doc.getParagraphs().get(1).getStyle().isLineHeightFixed());
+        assertEquals(1.2,doc.getParagraphs().get(1).getStyle().getLineHeight(),.01);
+        assertFalse(doc.getParagraphs().get(2).getStyle().isLineHeightFixed());
+        assertEquals(1.2,doc.getParagraphs().get(2).getStyle().getLineHeight(),.01);
+        assertTrue(doc.getParagraphs().get(3).getStyle().isLineHeightFixed());
+        assertEquals(24,doc.getParagraphs().get(3).getStyle().getLineHeight(),.01);
     }
 
     private RichTextDocument parse(String html) { return RichTextDocument.from(cell(html)); }

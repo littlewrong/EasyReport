@@ -36,7 +36,11 @@ final class PdfRichTextWriter {
             paragraph.setIndentationLeft(style.getLeftIndent());
             paragraph.setSpacingBefore(style.getSpaceBefore());
             paragraph.setSpacingAfter(style.getSpaceAfter());
-            paragraph.setLeading(0, style.getLineHeight());
+            if (style.isLineHeightFixed()) {
+                paragraph.setLeading(style.getLineHeight(), 0);
+            } else {
+                paragraph.setLeading(0, style.getLineHeight());
+            }
             paragraph.setKeepTogether(false);
             for (Run run : source.getRuns()) {
                 TextStyle runStyle = run.getStyle();

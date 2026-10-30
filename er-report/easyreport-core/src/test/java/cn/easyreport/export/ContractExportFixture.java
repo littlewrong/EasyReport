@@ -150,4 +150,23 @@ public final class ContractExportFixture {
         }
         return html.append("<p style='text-align:right'>签署位置 END_OF_CONTRACT_060</p>").toString();
     }
+
+    public static String lineHeightSample() {
+        return "<h1 style='font-family:黑体;font-size:18pt;text-align:center;margin-bottom:10pt'>合同正文行高验证</h1>"
+                +"<p style='font-size:12pt;line-height:1.5;margin-bottom:8pt'>"
+                +"MULTIPLE_A 这是 1.5 倍行距的第一行<br>MULTIPLE_B 这是 1.5 倍行距的第二行</p>"
+                +"<p style='font-size:12pt;line-height:24px;margin-bottom:8pt'>"
+                +"FIXED_A 固定 18pt 行高，<span style='font-size:16pt'>混合字号</span>"
+                +"<br>FIXED_B 这一行字号恢复 12pt，行距保持固定</p>"
+                +"<div style='font-size:12pt;line-height:24pt'><p style='font-size:16pt;margin-bottom:8pt'>"
+                +"INHERIT_A 继承父级固定 24pt 行高<br>INHERIT_B 字号变大，固定行高保持不变</p></div>"
+                +"<div style='line-height:2'><p style='font-size:12pt;line-height:normal;margin-bottom:8pt'>"
+                +"NORMAL_A 覆盖父级两倍行距，恢复默认<br>NORMAL_B 默认采用 1.2 倍行距</p></div>"
+                +"<p style='font-size:12pt;margin-bottom:8pt'><span style='line-height:2'>"
+                +"SPAN_A 整段由 span 设置两倍行距，<strong>保留加粗</strong>"
+                +"<br>SPAN_B 这一行仍然采用两倍行距</span></p>"
+                +"<p style='font-size:10pt;line-height:0.8;margin-bottom:8pt'>"
+                +"COMPACT_A abc def ghi jkl mno<br>COMPACT_B pqr stu vwx yz</p>"
+                +"<p>行高验证结束 LINE_HEIGHT_SAMPLE_END</p>";
+    }
 }
