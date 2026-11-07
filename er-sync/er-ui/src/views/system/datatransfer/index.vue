@@ -375,6 +375,18 @@
               </el-input>
             </el-form-item>
           </el-col>
+          <el-col :span="12" v-if="form.syncMode === '0' && !isExternalTableImportEnabled && form.timestampField && form.timestampField.trim()">
+            <el-form-item label="分片粒度" prop="externalTableWindowUnit">
+              <el-select v-model="form.externalTableWindowUnit" aria-label="全量分片时间粒度">
+                <el-option label="年" value="YEAR" />
+                <el-option label="月" value="MONTH" />
+                <el-option label="日" value="DAY" />
+              </el-select>
+              <div style="color:#909399;font-size:12px;margin-top:4px;">
+                初始化时按所选时间粒度分片读取，时间戳字段建议建索引
+              </div>
+            </el-form-item>
+          </el-col>
         </el-row>
 
         <!-- 同步操作与原 JDBC 批次大小 -->

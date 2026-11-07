@@ -1,7 +1,6 @@
 package cn.easyreport.sync.datasync;
 
 import java.sql.Connection;
-import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -283,12 +282,15 @@ public abstract class DataSyncExecutor {
     // 源数据库和目标数据库策略（用于生成正确的表名引用）
     private cn.easyreport.sync.strategy.DatabaseStrategy sourceStrategy;
     private cn.easyreport.sync.strategy.DatabaseStrategy targetStrategy;
+    // 源库是否为 MySQL 协议（Connector/J），决定读取端是否用逐行流式 fetchSize
+    private boolean mysqlProtocolSource;
 
     public DataSyncResult execute(ErDataTransfer task, ErDatasource sourceDs, ErDatasource targetDs, SyncProgressCallback callback, StopChecker stopChecker) throws Exception {
         System.out.println("[DataSyncExecutor] 开始execute方法，taskId=" + task.getTransferId());
         // 保存源和目标数据库策略
         this.sourceStrategy = cn.easyreport.sync.strategy.DatabaseStrategyFactory.getStrategy(sourceDs.getDatasourceType());
         this.targetStrategy = cn.easyreport.sync.strategy.DatabaseStrategyFactory.getStrategy(targetDs.getDatasourceType());
+        this.mysqlProtocolSource = DataSyncConnectionInitializer.isMySqlProtocol(sourceDs.getDatasourceType());
 
         DataSyncResult result = new DataSyncResult();
         result.setSuccess(true);
@@ -659,7 +661,7 @@ public abstract class DataSyncExecutor {
                         if (shouldUseTimestampWindowFullSync(extractor, tsField)) {
                             stats = syncFullByTimestampWindow(schema, table, targetTable, sourceCols, targetCols, targetPk,
                                     sourcePk, extractor, sourceConn, targetConn, psIns, batchSize, tsField,
-                                    callback, tr.log.getSourceTable());
+                                    task.getExternalTableWindowUnit(), callback, tr.log.getSourceTable());
                         } else {
                             String selectSql = extractor.buildSelectFull(schema, table, tsField, sourcePk);
                             stats = syncFullQuery(selectSql, null, targetTable, sourceCols, targetCols, targetPk,
@@ -702,7 +704,7 @@ public abstract class DataSyncExecutor {
                                                     List<String> sourceCols, List<String> targetCols, List<String> targetPk,
                                                     List<String> sourcePk, DataSyncExtractor extractor,
                                                     Connection sourceConn, Connection targetConn, PreparedStatement psIns,
-                                                    int batchSize, String tsField, SyncProgressCallback callback,
+                                                    int batchSize, String tsField, String windowUnit, SyncProgressCallback callback,
                                                     String sourceTableName) throws Exception {
         TimestampBounds bounds = loadTimestampBounds(extractor, sourceConn, schema, table, tsField);
         if (bounds == null || bounds.minTs == null || bounds.maxTs == null) {
@@ -713,17 +715,17 @@ public abstract class DataSyncExecutor {
             return new FullSyncStats();
         }
 
-        System.out.println("[DataSyncExecutor.syncFull] 启用按天窗口全量同步: " + sourceTableName
+        String unit = normalizeWindowUnit(windowUnit);
+        System.out.println("[DataSyncExecutor.syncFull] 启用按" + windowUnitLabel(unit) + "窗口全量同步: " + sourceTableName
                 + ", minTs=" + bounds.minTs + ", maxTs=" + bounds.maxTs);
 
         FullSyncStats stats = new FullSyncStats();
         String windowSql = extractor.buildSelectFullWindow(schema, table, tsField, sourcePk);
-        Timestamp windowStart = truncateToDay(bounds.minTs);
-        int windowDays = Math.max(1, getFullSyncWindowDays());
+        Timestamp windowStart = truncateToWindowStart(bounds.minTs, unit);
         while (!windowStart.after(bounds.maxTs)) {
             checkStopped();
             Timestamp currentStart = windowStart;
-            Timestamp currentEnd = addDays(currentStart, windowDays);
+            Timestamp currentEnd = nextWindowStart(currentStart, unit);
             String messagePrefix = "Full sync " + currentStart.toLocalDateTime().toLocalDate();
             syncFullQuery(windowSql, ps -> {
                 ps.setTimestamp(1, currentStart);
@@ -733,6 +735,50 @@ public abstract class DataSyncExecutor {
             windowStart = currentEnd;
         }
         return stats;
+    }
+
+    /**
+     * 全量时间窗口分片粒度，默认按年；复用直连导入的窗口单位配置（YEAR/MONTH/DAY）。
+     */
+    private static String normalizeWindowUnit(String windowUnit) {
+        if ("MONTH".equalsIgnoreCase(windowUnit)) return "MONTH";
+        if ("DAY".equalsIgnoreCase(windowUnit)) return "DAY";
+        return "YEAR";
+    }
+
+    private static String windowUnitLabel(String unit) {
+        if ("MONTH".equals(unit)) return "月";
+        if ("DAY".equals(unit)) return "日";
+        return "年";
+    }
+
+    private static Timestamp truncateToWindowStart(Timestamp ts, String unit) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(ts.getTime());
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        if ("YEAR".equals(unit)) {
+            cal.set(Calendar.MONTH, Calendar.JANUARY);
+            cal.set(Calendar.DAY_OF_MONTH, 1);
+        } else if ("MONTH".equals(unit)) {
+            cal.set(Calendar.DAY_OF_MONTH, 1);
+        }
+        return new Timestamp(cal.getTimeInMillis());
+    }
+
+    private static Timestamp nextWindowStart(Timestamp ts, String unit) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(ts.getTime());
+        if ("YEAR".equals(unit)) {
+            cal.add(Calendar.YEAR, 1);
+        } else if ("MONTH".equals(unit)) {
+            cal.add(Calendar.MONTH, 1);
+        } else {
+            cal.add(Calendar.DAY_OF_MONTH, 1);
+        }
+        return new Timestamp(cal.getTimeInMillis());
     }
 
     private TimestampBounds loadTimestampBounds(DataSyncExtractor extractor, Connection sourceConn,
@@ -754,7 +800,7 @@ public abstract class DataSyncExecutor {
                                         int batchSize, String tsField, SyncProgressCallback callback,
                                         String sourceTableName, String messagePrefix, FullSyncStats stats) throws Exception {
         try (PreparedStatement psSel = sourceConn.prepareStatement(selectSql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
-            psSel.setFetchSize(batchSize);
+            applySourceFetchSize(psSel, batchSize);
             if (binder != null) {
                 binder.bind(psSel);
             }
@@ -824,25 +870,14 @@ public abstract class DataSyncExecutor {
         return stats;
     }
 
-    protected int getFullSyncWindowDays() {
-        return 1;
-    }
-
-    private static Timestamp truncateToDay(Timestamp ts) {
-        Calendar cal = Calendar.getInstance();
-        cal.setTimeInMillis(ts.getTime());
-        cal.set(Calendar.HOUR_OF_DAY, 0);
-        cal.set(Calendar.MINUTE, 0);
-        cal.set(Calendar.SECOND, 0);
-        cal.set(Calendar.MILLISECOND, 0);
-        return new Timestamp(cal.getTimeInMillis());
-    }
-
-    private static Timestamp addDays(Timestamp ts, int days) {
-        Calendar cal = Calendar.getInstance();
-        cal.setTimeInMillis(ts.getTime());
-        cal.add(Calendar.DAY_OF_MONTH, days);
-        return new Timestamp(cal.getTimeInMillis());
+    /**
+     * MySQL 协议驱动（Connector/J）默认忽略正数 fetchSize，会把整个结果集一次性缓冲进 JVM 内存；
+     * 逐行流式（Integer.MIN_VALUE）才能限制读取端内存，对 MySQL/TiDB/StarRocks 均可靠生效。
+     * 其他驱动（PostgreSQL/Oracle/SQL Server）正数 fetchSize 即为游标/预取流式。
+     * 注意：逐行流式期间该连接不能执行其他语句——同步读源、写目标各用独立连接，满足该约束。
+     */
+    private void applySourceFetchSize(PreparedStatement ps, int batchSize) throws Exception {
+        ps.setFetchSize(mysqlProtocolSource ? Integer.MIN_VALUE : batchSize);
     }
 
     private interface PreparedStatementBinder {
@@ -890,7 +925,7 @@ public abstract class DataSyncExecutor {
         try {
             try (PreparedStatement psSel = sourceConn.prepareStatement(selectSql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
                  PreparedStatement psIns = targetConn.prepareStatement(upsertSql)) {
-                psSel.setFetchSize(batchSize);
+                applySourceFetchSize(psSel, batchSize);
                 psSel.setTimestamp(1, lastTs);
                 System.out.println("[DataSyncExecutor.syncIncremental] 执行查询，lastTs=" + lastTs);
                 ResultSet rs = psSel.executeQuery();

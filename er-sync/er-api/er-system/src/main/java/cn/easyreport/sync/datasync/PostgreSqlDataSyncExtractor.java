@@ -63,7 +63,7 @@ public class PostgreSqlDataSyncExtractor implements DataSyncExtractor {
         sql.append(schemaPrefix).append("\"").append(table).append("\"");
 
         sql.append(" ORDER BY ");
-        if (timestampField != null && !timestampField.isEmpty()) {
+        if (timestampField != null && !timestampField.trim().isEmpty()) {
             sql.append("\"").append(timestampField).append("\"");
             if (pkColumns != null && !pkColumns.isEmpty()) {
                 sql.append(", \"").append(pkColumns.get(0)).append("\"");

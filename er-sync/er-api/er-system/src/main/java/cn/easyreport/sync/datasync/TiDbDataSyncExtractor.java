@@ -93,9 +93,21 @@ public class TiDbDataSyncExtractor implements DataSyncExtractor {
     @Override
     public String buildSelectFull(String schema, String table, String tsField, List<String> pkCols) {
         String prefix = (schema != null && !schema.isEmpty()) ? ("`" + schema + "`.") : "";
-        String order = "`" + tsField + "`";
-        if (!pkCols.isEmpty()) order += ", `" + pkCols.get(0) + "`";
-        return "SELECT * FROM " + prefix + "`" + table + "` ORDER BY " + order;
+        String tablePart = prefix + "`" + table + "`";
+        // 未配置时间戳字段时不走时间窗口，按主键排序整表导入
+        if (tsField == null || tsField.trim().isEmpty()) {
+            StringBuilder order = new StringBuilder();
+            for (int i = 0; i < pkCols.size(); i++) {
+                if (i > 0) order.append(", ");
+                order.append("`").append(pkCols.get(i)).append("`");
+            }
+            return order.length() > 0
+                    ? "SELECT * FROM " + tablePart + " ORDER BY " + order
+                    : "SELECT * FROM " + tablePart;
+        }
+        String tsOrder = "`" + tsField + "`";
+        if (!pkCols.isEmpty()) tsOrder += ", `" + pkCols.get(0) + "`";
+        return "SELECT * FROM " + tablePart + " ORDER BY " + tsOrder;
     }
 
     @Override

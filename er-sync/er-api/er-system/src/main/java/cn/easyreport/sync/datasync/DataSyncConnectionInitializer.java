@@ -19,10 +19,19 @@ final class DataSyncConnectionInitializer {
         if (ds == null || conn == null || ds.getDatasourceType() == null) {
             return;
         }
-        String dbType = ds.getDatasourceType().toUpperCase();
-        if ("MYSQL".equals(dbType) || "TIDB".equals(dbType) || "STARROCKS".equals(dbType)) {
+        if (isMySqlProtocol(ds.getDatasourceType())) {
             initializeMySqlProtocolSession(conn);
         }
+    }
+
+    /**
+     * 是否为 MySQL 协议数据源（MySQL / TiDB / StarRocks）。
+     * 这些库共用 Connector/J，其默认忽略正数 fetchSize 的行为需要统一规避。
+     */
+    static boolean isMySqlProtocol(String datasourceType) {
+        if (datasourceType == null) return false;
+        String dbType = datasourceType.toUpperCase();
+        return "MYSQL".equals(dbType) || "TIDB".equals(dbType) || "STARROCKS".equals(dbType);
     }
 
     private static void initializeMySqlProtocolSession(Connection conn) {

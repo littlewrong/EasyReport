@@ -84,7 +84,7 @@ public class DataSyncFullNullTimestampTest {
             DataSyncExecutor.FullSyncStats stats = (DataSyncExecutor.FullSyncStats) invoke(executor,
                     "syncFullByTimestampWindow", "source", "orders", "target.orders", COLUMNS, COLUMNS, KEYS,
                     KEYS, extractor, fixture.sourceConnection(), fixture.targetConnection(), fixture.insertStatement(),
-                    2, "modified_at", progress, "source.orders");
+                    2, "modified_at", "DAY", progress, "source.orders");
             assertEquals(0L, stats.processed);
             assertNull(stats.maxTs);
             assertEquals(Collections.singletonList("BOUNDS"), fixture.queries);
@@ -117,6 +117,52 @@ public class DataSyncFullNullTimestampTest {
                 assertNull(stats.maxTs);
                 assertEquals(Arrays.asList(1, 2, 3, 4, 5), fixture.writtenIds());
                 assertEquals(3, fixture.commits);
+            }
+        }
+    }
+
+    @Test public void yearWindowAdvancesByCalendarYear() throws Exception {
+        assertWindows("YEAR", "2023-03-15 10:00:00", "2025-06-20 10:00:00",
+                "2023-01-01 00:00:00", "2024-01-01 00:00:00",
+                "2024-01-01 00:00:00", "2025-01-01 00:00:00",
+                "2025-01-01 00:00:00", "2026-01-01 00:00:00");
+    }
+
+    @Test public void monthWindowAdvancesByCalendarMonth() throws Exception {
+        assertWindows("MONTH", "2023-11-15 10:00:00", "2024-02-20 10:00:00",
+                "2023-11-01 00:00:00", "2023-12-01 00:00:00",
+                "2023-12-01 00:00:00", "2024-01-01 00:00:00",
+                "2024-01-01 00:00:00", "2024-02-01 00:00:00",
+                "2024-02-01 00:00:00", "2024-03-01 00:00:00");
+    }
+
+    @Test public void dayWindowKeepsDailyStride() throws Exception {
+        assertWindows("DAY", "2026-10-01 10:00:00", "2026-10-03 10:00:00",
+                "2026-10-01 00:00:00", "2026-10-02 00:00:00",
+                "2026-10-02 00:00:00", "2026-10-03 00:00:00",
+                "2026-10-03 00:00:00", "2026-10-04 00:00:00");
+    }
+
+    @Test public void blankWindowUnitDefaultsToYear() throws Exception {
+        for (String unit : new String[]{null, "", "WEEK"}) {
+            assertWindows(unit, "2023-03-15 10:00:00", "2024-01-05 10:00:00",
+                    "2023-01-01 00:00:00", "2024-01-01 00:00:00",
+                    "2024-01-01 00:00:00", "2025-01-01 00:00:00");
+        }
+    }
+
+    private void assertWindows(String unit, String minTs, String maxTs, String... expectedEdges) throws Exception {
+        Fixture fixture = new Fixture(Collections.emptyList());
+        fixture.boundsMin = Timestamp.valueOf(minTs);
+        fixture.boundsMax = Timestamp.valueOf(maxTs);
+        try (TestExecutor executor = new TestExecutor(true, fixture)) {
+            invoke(executor, "syncFullByTimestampWindow", "source", "orders", "target.orders", COLUMNS, COLUMNS, KEYS,
+                    KEYS, new MySqlDataSyncExtractor(), fixture.sourceConnection(), fixture.targetConnection(),
+                    fixture.insertStatement(), 2, "modified_at", unit, null, "source.orders");
+            assertEquals("window count for unit " + unit, expectedEdges.length / 2, fixture.windows.size());
+            for (int i = 0; i < fixture.windows.size(); i++) {
+                assertEquals("window " + i + " start", Timestamp.valueOf(expectedEdges[2 * i]), fixture.windows.get(i)[0]);
+                assertEquals("window " + i + " end", Timestamp.valueOf(expectedEdges[2 * i + 1]), fixture.windows.get(i)[1]);
             }
         }
     }
@@ -170,7 +216,11 @@ public class DataSyncFullNullTimestampTest {
         final List<Object[]> sourceRows;
         final List<Object[]> writtenRows = new ArrayList<>();
         final List<String> queries = new ArrayList<>();
+        final List<Timestamp[]> windows = new ArrayList<>();
+        final List<Timestamp> boundParameters = new ArrayList<>();
         boolean boundsRowExists = true;
+        Timestamp boundsMin;
+        Timestamp boundsMax;
         int commits;
         int parameterBindings;
         int nullRowsReadBeyondTimestamp;
@@ -183,7 +233,19 @@ public class DataSyncFullNullTimestampTest {
                     String sql = (String) args[0];
                     queries.add(sql);
                     return proxy(PreparedStatement.class, (statement, query, values) -> {
-                        if ("executeQuery".equals(query.getName())) return "BOUNDS".equals(sql) ? bounds() : rows();
+                        if ("setTimestamp".equals(query.getName())) {
+                            boundParameters.add((Timestamp) values[1]);
+                        }
+                        if ("executeQuery".equals(query.getName())) {
+                            // 边界查询（MIN/MAX 聚合）与窗口数据查询区分开
+                            if ("BOUNDS".equals(sql) || sql.contains("MIN(")) return bounds();
+                            if (boundParameters.size() >= 2) {
+                                windows.add(new Timestamp[]{
+                                        boundParameters.get(boundParameters.size() - 2),
+                                        boundParameters.get(boundParameters.size() - 1)});
+                            }
+                            return rows();
+                        }
                         return defaultValue(query.getReturnType());
                     });
                 }
@@ -221,7 +283,9 @@ public class DataSyncFullNullTimestampTest {
             AtomicInteger row = new AtomicInteger();
             return proxy(ResultSet.class, (object, method, args) -> {
                 if ("next".equals(method.getName())) return boundsRowExists && row.getAndIncrement() == 0;
-                if ("getTimestamp".equals(method.getName())) return null;
+                if ("getTimestamp".equals(method.getName())) {
+                    return ((Integer) args[0]) == 1 ? boundsMin : boundsMax;
+                }
                 return defaultValue(method.getReturnType());
             });
         }

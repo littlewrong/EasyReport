@@ -83,6 +83,18 @@ public class SqlServerDataSyncExtractor implements DataSyncExtractor {
         // schema 是数据库名(catalog)，需要使用三段式 [database].[dbo].[table]
         String tableName = buildTableName(schema, table);
 
+        // 未配置时间戳字段时不走时间窗口，按主键排序整表导入
+        if (timestampField == null || timestampField.trim().isEmpty()) {
+            StringBuilder order = new StringBuilder();
+            for (int i = 0; i < pkColumns.size(); i++) {
+                if (i > 0) order.append(", ");
+                order.append("[").append(pkColumns.get(i)).append("]");
+            }
+            return order.length() > 0
+                    ? "SELECT * FROM " + tableName + " ORDER BY " + order
+                    : "SELECT * FROM " + tableName;
+        }
+
         String order = "[" + timestampField + "]";
         if (!pkColumns.isEmpty()) {
             order += ", [" + pkColumns.get(0) + "]";

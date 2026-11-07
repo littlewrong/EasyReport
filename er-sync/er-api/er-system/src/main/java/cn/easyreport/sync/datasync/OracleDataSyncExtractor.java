@@ -63,7 +63,7 @@ public class OracleDataSyncExtractor implements DataSyncExtractor {
         sql.append(tableName);
 
         sql.append(" ORDER BY ");
-        if (timestampField != null && !timestampField.isEmpty()) {
+        if (timestampField != null && !timestampField.trim().isEmpty()) {
             sql.append("\"").append(timestampField).append("\"");
             if (pkColumns != null && !pkColumns.isEmpty()) {
                 sql.append(", \"").append(pkColumns.get(0)).append("\"");
