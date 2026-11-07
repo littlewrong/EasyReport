@@ -60,6 +60,39 @@ public class TableSyncServiceTest {
     }
 
     @Test
+    public void mapsMySqlZerofillColumnsBeforeExecutingStarRocksDdl() {
+        RecordingConnector connector = new RecordingConnector(false);
+        TableSyncContext original = context(connector);
+        ColumnMeta restore = column("is_restore", "int(1) unsigned zerofill");
+        restore.setNullable(true);
+        restore.setDefaultValue("0");
+        restore.setComment("是否还原票号");
+        ColumnMeta description = column("description", "varchar(100)");
+        description.setNullable(true);
+        description.setDefaultValue("unsigned zerofill");
+        original.getTableMeta().setColumns(Arrays.asList(
+                column("id", "bigint(20) unsigned zerofill"), restore, description));
+        TableSyncContext context = new TableSyncContext(original.getTask(), datasource("MYSQL"),
+                original.getTargetDs(), connector, original.getDialect(), original.getStrategy(),
+                original.getTargetConfig(), original.getTableMeta(), original.getSourceSchema());
+
+        ErDataSyncLog result = new TableSyncService().syncTable(context);
+
+        assertEquals("0", result.getSyncResult());
+        assertEquals("CREATE", result.getSyncAction());
+        assertEquals(connector.sql, result.getExecuteSql());
+        assertTrue(connector.sql, connector.sql.contains("`id` LARGEINT NOT NULL"));
+        assertTrue(connector.sql, connector.sql.contains(
+                "`is_restore` BIGINT NULL DEFAULT \"0\" COMMENT '是否还原票号'"));
+        assertTrue(connector.sql, connector.sql.contains(
+                "`description` STRING NULL DEFAULT \"unsigned zerofill\""));
+        assertTrue(connector.sql, connector.sql.contains("PRIMARY KEY (`id`)"));
+        assertEquals("BIGINT", restore.getColumnType());
+        assertEquals("0", restore.getDefaultValue());
+        assertEquals("是否还原票号", restore.getComment());
+    }
+
+    @Test
     public void retainsGeneratedDdlWhenExecutionFails() {
         RecordingConnector connector = new RecordingConnector(true);
 

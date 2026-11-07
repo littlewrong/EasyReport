@@ -12,7 +12,7 @@ import java.util.*;
  *
  * 支持的目标数据库：
  * - TIDB: MySQL 兼容的分布式数据库
- * - (未来可扩展) STARROCKS, CLICKHOUSE, POSTGRESQL 等
+ * - STARROCKS, SQLSERVER, POSTGRESQL, ORACLE
  */
 public class MySqlTypeMapper implements DatabaseTypeMapper {
 
@@ -240,44 +240,55 @@ public class MySqlTypeMapper implements DatabaseTypeMapper {
      */
     private void initializeStarRocksMappings() {
         List<TypeMappingRule> starrocksRules = new ArrayList<>();
+        String integerWidth = "(?:\\s*\\(\\s*\\d+\\s*\\))?";
+        String numericModifiers = "(?:\\s+(?:UNSIGNED|SIGNED))?(?:\\s+ZEROFILL)?";
+        // MySQL 的 ZEROFILL 隐含 UNSIGNED；StarRocks 没有这两个修饰符。
+        String unsignedModifiers = "(?:\\s+UNSIGNED(?:\\s+ZEROFILL)?|(?:\\s+SIGNED)?\\s+ZEROFILL)";
 
         // ==================== 整数类型 ====================
-        // TINYINT 完全兼容
-        starrocksRules.add(new TypeMappingRule("TINYINT(?:\\(\\d+\\))?(?:\\s+UNSIGNED)?", "TINYINT", 10, false,
+        // 无符号整数先匹配并提升类型，避免仅去掉 UNSIGNED 后超出目标类型范围。
+        starrocksRules.add(new TypeMappingRule("TINYINT" + integerWidth + unsignedModifiers, "SMALLINT", 5, false,
+                "TINYINT UNSIGNED/ZEROFILL -> SMALLINT (防溢出)"));
+        starrocksRules.add(new TypeMappingRule("SMALLINT" + integerWidth + unsignedModifiers, "INT", 6, false,
+                "SMALLINT UNSIGNED/ZEROFILL -> INT (防溢出)"));
+        starrocksRules.add(new TypeMappingRule("(?:INT|INTEGER)" + integerWidth + unsignedModifiers, "BIGINT", 7, false,
+                "INT/INTEGER UNSIGNED/ZEROFILL -> BIGINT (防溢出)"));
+        starrocksRules.add(new TypeMappingRule("BIGINT" + integerWidth + unsignedModifiers, "DECIMAL(20,0)", 8, false,
+                "BIGINT UNSIGNED/ZEROFILL -> DECIMAL(20,0) (防溢出)"));
+
+        // 显示宽度不影响数值范围，不传递到 StarRocks。
+        starrocksRules.add(new TypeMappingRule("TINYINT" + integerWidth + numericModifiers, "TINYINT", 10, false,
                 "TINYINT 兼容"));
 
-        // SMALLINT 完全兼容
-        starrocksRules.add(new TypeMappingRule("SMALLINT(?:\\(\\d+\\))?(?:\\s+UNSIGNED)?", "SMALLINT", 11, false,
+        starrocksRules.add(new TypeMappingRule("SMALLINT" + integerWidth + numericModifiers, "SMALLINT", 11, false,
                 "SMALLINT 兼容"));
 
-        // MEDIUMINT 转换为 INT (StarRocks 不支持 MEDIUMINT)
-        starrocksRules.add(new TypeMappingRule("MEDIUMINT(?:\\(\\d+\\))?(?:\\s+UNSIGNED)?", "INT", 12, false,
+        // INT 可覆盖 MEDIUMINT 的有符号和无符号范围。
+        starrocksRules.add(new TypeMappingRule("MEDIUMINT" + integerWidth + numericModifiers, "INT", 12, false,
                 "MEDIUMINT -> INT"));
 
-        // INT 完全兼容
-        starrocksRules.add(new TypeMappingRule("INT(?:\\(\\d+\\))?(?:\\s+UNSIGNED)?", "INT", 13, false,
+        starrocksRules.add(new TypeMappingRule("INT" + integerWidth + numericModifiers, "INT", 13, false,
                 "INT 兼容"));
-        starrocksRules.add(new TypeMappingRule("INTEGER(?:\\(\\d+\\))?(?:\\s+UNSIGNED)?", "INT", 14, false,
+        starrocksRules.add(new TypeMappingRule("INTEGER" + integerWidth + numericModifiers, "INT", 14, false,
                 "INTEGER -> INT"));
 
-        // BIGINT 完全兼容
-        starrocksRules.add(new TypeMappingRule("BIGINT(?:\\(\\d+\\))?(?:\\s+UNSIGNED)?", "BIGINT", 15, false,
+        starrocksRules.add(new TypeMappingRule("BIGINT" + integerWidth + numericModifiers, "BIGINT", 15, false,
                 "BIGINT 兼容"));
 
         // ==================== 浮点类型 ====================
-        starrocksRules.add(new TypeMappingRule("FLOAT(?:\\(\\d+,\\d+\\))?(?:\\s+UNSIGNED)?", "FLOAT", 20, false,
+        starrocksRules.add(new TypeMappingRule("FLOAT(?:\\(\\d+,\\d+\\))?" + numericModifiers, "FLOAT", 20, false,
                 "FLOAT 兼容"));
-        starrocksRules.add(new TypeMappingRule("DOUBLE(?:\\(\\d+,\\d+\\))?(?:\\s+UNSIGNED)?", "DOUBLE", 21, false,
+        starrocksRules.add(new TypeMappingRule("DOUBLE(?:\\(\\d+,\\d+\\))?" + numericModifiers, "DOUBLE", 21, false,
                 "DOUBLE 兼容"));
-        starrocksRules.add(new TypeMappingRule("REAL(?:\\(\\d+,\\d+\\))?(?:\\s+UNSIGNED)?", "DOUBLE", 22, false,
+        starrocksRules.add(new TypeMappingRule("REAL(?:\\(\\d+,\\d+\\))?" + numericModifiers, "DOUBLE", 22, false,
                 "REAL -> DOUBLE"));
 
         // ==================== 精确数值类型 ====================
-        starrocksRules.add(new TypeMappingRule("DECIMAL\\((\\d+),(\\d+)\\)(?:\\s+UNSIGNED)?", "DECIMAL($1,$2)", 30, false,
+        starrocksRules.add(new TypeMappingRule("DECIMAL\\((\\d+),(\\d+)\\)" + numericModifiers, "DECIMAL($1,$2)", 30, false,
                 "DECIMAL 兼容"));
-        starrocksRules.add(new TypeMappingRule("NUMERIC\\((\\d+),(\\d+)\\)(?:\\s+UNSIGNED)?", "DECIMAL($1,$2)", 31, false,
+        starrocksRules.add(new TypeMappingRule("NUMERIC\\((\\d+),(\\d+)\\)" + numericModifiers, "DECIMAL($1,$2)", 31, false,
                 "NUMERIC -> DECIMAL"));
-        starrocksRules.add(new TypeMappingRule("DECIMAL(?:\\s+UNSIGNED)?", "DECIMAL(10,0)", 32, false,
+        starrocksRules.add(new TypeMappingRule("DECIMAL" + numericModifiers, "DECIMAL(10,0)", 32, false,
                 "DECIMAL 无参数 -> DECIMAL(10,0)"));
 
         // ==================== 字符串类型 ====================
