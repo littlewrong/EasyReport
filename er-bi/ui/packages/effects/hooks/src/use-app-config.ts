@@ -28,11 +28,11 @@ export function useAppConfig(
     apiURL: VITE_GLOB_API_URL,
     auth: {},
     httpDatasourceApiURL:
-      VITE_GLOB_HTTP_DATASOURCE_API_URL || '/dsapi/http',
+      VITE_GLOB_HTTP_DATASOURCE_API_URL || '/erdsapi/http',
     pythonDatasourceApiURL:
-      VITE_GLOB_PYTHON_DATASOURCE_API_URL || '/dsapi/python',
+      VITE_GLOB_PYTHON_DATASOURCE_API_URL || '/erdsapi/python',
     sqlDatasourceApiURL:
-      VITE_GLOB_SQL_DATASOURCE_API_URL || '/dsapi/sql',
+      VITE_GLOB_SQL_DATASOURCE_API_URL || '/erdsapi/sql',
   };
   if (VITE_GLOB_AUTH_DINGDING_CORP_ID && VITE_GLOB_AUTH_DINGDING_CLIENT_ID) {
     applicationConfig.auth.dingding = {

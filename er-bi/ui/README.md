@@ -85,10 +85,10 @@ pnpm build
 The ER-BI application uses isolated API prefixes while keeping same-origin browser requests:
 
 ```text
-/biapi -> http://localhost:5320/api   # main system and DB connectors
-/dsapi/http -> HTTP datasource route
-/dsapi/sql -> SQL datasource route
-/dsapi/python -> Python datasource route
+/erbiapi -> http://localhost:5320/api   # main system and DB connectors
+/erdsapi/http -> HTTP datasource route
+/erdsapi/sql -> SQL datasource route
+/erdsapi/python -> Python datasource route
 ```
 
 Development proxy rules are defined in `apps/web-ele/vite.config.ts`. Production

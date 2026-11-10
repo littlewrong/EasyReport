@@ -65,17 +65,17 @@ def _connector_map() -> dict[int, dict]:
 
 
 def _http_path(item: BiHttpDatasource) -> Optional[str]:
-    return f"/dsapi/http/bi/datasource/public/http/{item.id}" if item.status == 1 else None
+    return f"/erdsapi/http/bi/datasource/public/http/{item.id}" if item.status == 1 else None
 
 
 def _sql_path(item: BiSqlDatasource) -> Optional[str]:
-    return f"/dsapi/sql/bi/datasource/public/sql/{item.id}" if item.status == 1 else None
+    return f"/erdsapi/sql/bi/datasource/public/sql/{item.id}" if item.status == 1 else None
 
 
 def _python_path(item: BiPythonDatasource) -> Optional[str]:
     if item.status != 1 or not item.endpoint_key:
         return None
-    return f"/dsapi/python/bi/datasource/public/python/{item.endpoint_key}"
+    return f"/erdsapi/python/bi/datasource/public/python/{item.endpoint_key}"
 
 
 def _http_item(item: BiHttpDatasource) -> dict:

@@ -1,9 +1,9 @@
-# 易报表 BI 后端 API
+# EasyReport-BI 后端 API
 
 基于 **FastAPI + SQLAlchemy + MySQL + JWT** 的主控制服务，提供系统管理、认证授权、动态菜单、BI 大屏项目和 DB 连接器管理。HTTP、SQL、Python 数据源已迁移到相邻的 `../datasource_api` 独立进程。
 
 接口契约与 `ui/apps/web-ele` 前端对齐，统一挂载在 `/api` 前缀下。
-生产环境通过 nginx 将主服务暴露为 `/biapi`，数据源服务按类型暴露为 `/dsapi/http`、`/dsapi/sql`、`/dsapi/python`。
+生产环境通过 nginx 将主服务暴露为 `/erbiapi`，数据源服务按类型暴露为 `/erdsapi/http`、`/erdsapi/sql`、`/erdsapi/python`。
 
 ## 当前能力
 
@@ -93,20 +93,20 @@ ui/apps/web-ele/.env.development
 关键配置：
 
 ```ini
-VITE_GLOB_API_URL=/biapi
-VITE_GLOB_HTTP_DATASOURCE_API_URL=/dsapi/http
-VITE_GLOB_SQL_DATASOURCE_API_URL=/dsapi/sql
-VITE_GLOB_PYTHON_DATASOURCE_API_URL=/dsapi/python
+VITE_GLOB_API_URL=/erbiapi
+VITE_GLOB_HTTP_DATASOURCE_API_URL=/erdsapi/http
+VITE_GLOB_SQL_DATASOURCE_API_URL=/erdsapi/sql
+VITE_GLOB_PYTHON_DATASOURCE_API_URL=/erdsapi/python
 VITE_NITRO_MOCK=false
 ```
 
 前端使用以下固定前缀：
 
 ```text
-/biapi -> http://localhost:5320/api
-/dsapi/http -> HTTP数据源进程
-/dsapi/sql -> SQL数据源进程
-/dsapi/python -> Python数据源进程
+/erbiapi -> http://localhost:5320/api
+/erdsapi/http -> HTTP数据源进程
+/erdsapi/sql -> SQL数据源进程
+/erdsapi/python -> Python数据源进程
 ```
 
 登录账号：

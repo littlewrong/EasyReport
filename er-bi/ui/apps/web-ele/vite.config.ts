@@ -13,24 +13,24 @@ export default defineConfig(async () => {
       ],
       server: {
         proxy: {
-          '/dsapi/http': {
+          '/erdsapi/http': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/dsapi\/http/, ''),
+            rewrite: (path) => path.replace(/^\/erdsapi\/http/, ''),
             target: 'http://localhost:5321/api',
           },
-          '/dsapi/sql': {
+          '/erdsapi/sql': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/dsapi\/sql/, ''),
+            rewrite: (path) => path.replace(/^\/erdsapi\/sql/, ''),
             target: 'http://localhost:5321/api',
           },
-          '/dsapi/python': {
+          '/erdsapi/python': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/dsapi\/python/, ''),
+            rewrite: (path) => path.replace(/^\/erdsapi\/python/, ''),
             target: 'http://localhost:5321/api',
           },
-          '/biapi': {
+          '/erbiapi': {
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/biapi/, ''),
+            rewrite: (path) => path.replace(/^\/erbiapi/, ''),
             // 其余系统、大屏接口仍然进入主 API。
             target: 'http://localhost:5320/api',
             ws: true,

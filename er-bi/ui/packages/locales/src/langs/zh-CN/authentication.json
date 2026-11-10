@@ -1,10 +1,10 @@
 {
   "welcomeBack": "欢迎回来",
-  "pageTitle": "易报表BI",
+  "pageTitle": "EasyReport-BI",
   "pageDesc": "面向业务的数据分析与报表管理平台",
   "loginSuccess": "登录成功",
   "loginSuccessDesc": "欢迎回来",
-  "loginSubtitle": "请输入账号信息进入易报表BI",
+  "loginSubtitle": "请输入账号信息进入EasyReport-BI",
   "selectAccount": "快速选择账号",
   "username": "账号",
   "password": "密码",

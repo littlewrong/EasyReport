@@ -29,10 +29,10 @@ python run.py
 
 `ui/apps/web-ele/vite.config.ts` 和 `bi_designer/vite.config.ts` 使用以下固定前缀：
 
-- `/biapi`：主服务和 DB 连接器。
-- `/dsapi/http`：HTTP 数据源。
-- `/dsapi/sql`：SQL 数据源。
-- `/dsapi/python`：Python 数据源。
+- `/erbiapi`：主服务和 DB 连接器。
+- `/erdsapi/http`：HTTP 数据源。
+- `/erdsapi/sql`：SQL 数据源。
+- `/erdsapi/python`：Python 数据源。
 
 ## 关键环境变量
 

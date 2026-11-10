@@ -19,27 +19,27 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3020,
       open: true,
-      // 后端接口代理，与主系统(vben)保持一致：/biapi -> http://localhost:5320/api
+      // 后端接口代理，与主系统(vben)保持一致：/erbiapi -> http://localhost:5320/api
       proxy: {
-        '/dsapi/http': {
+        '/erdsapi/http': {
           target: 'http://localhost:5321/api',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/dsapi\/http/, '')
+          rewrite: (path) => path.replace(/^\/erdsapi\/http/, '')
         },
-        '/dsapi/sql': {
+        '/erdsapi/sql': {
           target: 'http://localhost:5321/api',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/dsapi\/sql/, '')
+          rewrite: (path) => path.replace(/^\/erdsapi\/sql/, '')
         },
-        '/dsapi/python': {
+        '/erdsapi/python': {
           target: 'http://localhost:5321/api',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/dsapi\/python/, '')
+          rewrite: (path) => path.replace(/^\/erdsapi\/python/, '')
         },
-        '/biapi': {
+        '/erbiapi': {
           target: 'http://localhost:5320/api',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/biapi/, '')
+          rewrite: (path) => path.replace(/^\/erbiapi/, '')
         }
       }
     },
