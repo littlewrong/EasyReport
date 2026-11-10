@@ -1,0 +1,356 @@
+/* The same Page/card rhythm as BI, shared by migrated business and system pages. */
+.bi-management-content {
+  display: flex;
+  min-height: 0;
+}
+.bi-page-layout {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.bi-page-main {
+  container-type: inline-size;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+}
+.bi-search-card,
+.bi-table-card,
+.bi-sidebar-card {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-radius: 8px;
+}
+.bi-search-card {
+  flex: none;
+  padding: 20px 24px;
+}
+.bi-search-card .el-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 32px;
+  row-gap: 20px;
+}
+.bi-search-card .el-form > .el-form-item {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+}
+.bi-search-card .el-form-item__label {
+  flex-shrink: 0;
+  width: 90px !important;
+  height: 32px;
+  padding-right: 12px;
+  font-weight: 600;
+  line-height: 32px;
+}
+.bi-search-card .el-form-item__content {
+  flex: 1;
+  min-width: 0;
+  margin-left: 0 !important;
+  line-height: 32px;
+}
+.bi-search-card .el-input,
+.bi-search-card .el-select,
+.bi-search-card .el-date-editor,
+.bi-search-card .el-input-number {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+.bi-search-card .el-form-item:not(:has(.el-form-item__label)) {
+  grid-column: -2 / -1;
+  justify-self: end;
+}
+.bi-search-card
+  .el-form-item:not(:has(.el-form-item__label))
+  .el-form-item__content {
+  display: flex;
+  gap: 12px;
+}
+.bi-search-card .el-form-item__content > .el-button + .el-button {
+  margin-left: 0;
+}
+.bi-table-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 10px;
+}
+.bi-table-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding-bottom: 10px;
+}
+.bi-table-toolbar h2 {
+  flex: none;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.bi-table-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.bi-table-tools > .el-row {
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0 !important;
+}
+.bi-table-tools > .el-row > .el-col {
+  flex: none;
+  width: auto;
+  max-width: none;
+  padding: 0 !important;
+}
+.bi-table-tools .el-button + .el-button {
+  margin-left: 0;
+}
+.bi-table-tools .top-right-btn {
+  margin-left: 0;
+  margin-right: 0 !important;
+}
+.bi-table-tools .top-right-btn > .el-row {
+  gap: 8px;
+}
+.bi-table-tools .el-button--small,
+.bi-search-card .el-button--small {
+  height: 32px;
+  padding: 8px 15px;
+  font-size: 14px;
+}
+.bi-table-tools .el-button.is-circle {
+  width: 32px;
+  height: 32px;
+  padding: 8px;
+}
+.bi-search-card .el-input__wrapper,
+.bi-search-card .el-select__wrapper,
+.bi-search-card .el-date-editor {
+  background-color: transparent;
+  min-height: 32px;
+}
+.bi-table-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.bi-table-content > .el-table {
+  --el-table-bg-color: hsl(var(--card));
+  --el-table-tr-bg-color: hsl(var(--card));
+  --el-table-header-bg-color: var(--el-fill-color-light);
+  --el-table-header-text-color: hsl(var(--foreground));
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  font-size: 14px;
+}
+.bi-table-content > .el-table th.el-table__cell {
+  height: 44px;
+  font-weight: 600;
+}
+.bi-table-content > .el-table td.el-table__cell {
+  height: 48px;
+}
+.bi-table-content > .el-table .cell {
+  padding: 0 10px;
+}
+.bi-table-content > .el-table .el-button.is-link {
+  padding: 2px 0;
+  font-size: 13px;
+}
+.bi-table-content > .el-table .el-button.is-link + .el-button.is-link {
+  margin-left: 12px;
+}
+.bi-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.bi-table-content
+  > .el-table
+  .bi-row-actions
+  > .el-button.is-link
+  + .el-button.is-link {
+  margin-left: 0;
+}
+.bi-row-actions .el-dropdown {
+  display: inline-flex;
+  vertical-align: middle;
+}
+.bi-row-actions-chevron {
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+}
+.el-dropdown-menu__item.bi-row-action-delete {
+  color: var(--el-color-danger);
+}
+.bi-table-pagination {
+  flex: none;
+  padding-top: 12px;
+}
+.bi-table-pagination .pagination-container {
+  padding: 0 4px 4px;
+  border: 0;
+}
+.bi-table-pagination .el-pagination {
+  width: 100%;
+}
+.bi-table-pagination .el-pagination__sizes {
+  margin-right: auto;
+}
+.bi-sidebar-card {
+  flex: 0 0 220px;
+  padding: 16px;
+  overflow: auto;
+}
+.bi-sidebar-card .head-container {
+  padding-bottom: 16px;
+}
+.bi-sidebar-card .el-tree {
+  background: transparent;
+}
+.monitor-card,
+.cache-overview .el-card,
+.cache-panel {
+  --el-bg-color: hsl(var(--card));
+  background: hsl(var(--card));
+  border-radius: 8px;
+}
+@container (max-width: 1024px) {
+  .bi-search-card .el-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (max-width: 600px) {
+  .bi-search-card .el-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Drawers use the same comfortable form rhythm as BI's editors. */
+.bi-management-drawer {
+  --el-bg-color: hsl(var(--card));
+  --el-fill-color-blank: hsl(var(--card));
+  background: hsl(var(--card));
+}
+.el-drawer .el-drawer__header {
+  margin-bottom: 0;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.el-drawer .el-drawer__body {
+  padding: 24px;
+}
+.el-drawer .el-form-item {
+  margin-bottom: 24px;
+}
+.el-drawer .el-form-item__label {
+  padding-right: 16px;
+}
+.el-drawer .el-form--label-top .el-form-item__label {
+  width: auto !important;
+  margin-bottom: 8px;
+  padding: 0;
+  font-weight: 500;
+}
+.el-drawer .el-form .el-row {
+  column-gap: 0;
+  margin: 0 -8px;
+}
+.el-drawer .el-form .el-row > .el-col {
+  padding: 0 8px;
+}
+.el-drawer .el-input,
+.el-drawer .el-select,
+.el-drawer .el-date-editor {
+  width: 100%;
+}
+.el-drawer .el-drawer__footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+.el-drawer .dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.el-drawer .dialog-footer .el-button + .el-button {
+  margin-left: 0;
+}
+@media (max-width: 1279px) {
+  .bi-search-card .el-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bi-sidebar-card {
+    flex-basis: 190px;
+  }
+}
+@media (max-width: 767px) {
+  .bi-management-content {
+    padding: 8px !important;
+    overflow: auto !important;
+  }
+  .bi-page-layout {
+    flex-direction: column;
+    height: auto;
+    min-height: 100%;
+    gap: 12px;
+  }
+  .bi-page-main {
+    flex: none;
+    gap: 12px;
+  }
+  .bi-search-card {
+    padding: 16px 12px;
+  }
+  .bi-search-card .el-form {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 16px;
+  }
+  .bi-search-card .el-form-item__label {
+    width: 86px !important;
+  }
+  .bi-table-card {
+    flex: none;
+    min-height: 400px;
+  }
+  .bi-table-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .bi-table-tools {
+    width: 100%;
+  }
+  .bi-table-tools > .el-row {
+    justify-content: flex-start;
+  }
+  .bi-table-content {
+    flex: none;
+    height: 320px;
+  }
+  .bi-sidebar-card {
+    flex: none;
+    max-height: 240px;
+  }
+  .el-drawer {
+    max-width: 100%;
+  }
+}

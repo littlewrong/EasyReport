@@ -1,0 +1,248 @@
+<template>
+  <BiTablePage
+    title="角色授权用户"
+    :show-search="showSearch"
+    :show-pagination="total > 0"
+  >
+    <template #search
+      ><el-form
+        :model="queryParams"
+        ref="queryForm"
+        :inline="true"
+        v-show="showSearch"
+      >
+        <el-form-item label="用户名称" prop="userName">
+          <el-input
+            v-model="queryParams.userName"
+            placeholder="请输入用户名称"
+            clearable
+            @keyup.enter="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item label="手机号码" prop="phonenumber">
+          <el-input
+            v-model="queryParams.phonenumber"
+            placeholder="请输入手机号码"
+            clearable
+            @keyup.enter="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item class="bi-search-actions"
+          ><el-button icon="el-icon-refresh" @click="resetQuery"
+            >重置</el-button
+          >
+          <el-button type="primary" icon="el-icon-search" @click="handleQuery"
+            >搜索</el-button
+          ></el-form-item
+        >
+      </el-form></template
+    >
+    <template #toolbar>
+      <el-button
+        type="primary"
+        icon="el-icon-plus"
+        @click="openSelectUser"
+        v-hasPermi="['system:role:add']"
+        >添加用户</el-button
+      >
+
+      <el-button
+        type="danger"
+        icon="el-icon-circle-close"
+        :disabled="multiple"
+        @click="cancelAuthUserAll"
+        v-hasPermi="['system:role:remove']"
+        >批量取消授权</el-button
+      >
+
+      <el-button icon="el-icon-close" @click="handleClose">关闭</el-button>
+
+      <right-toolbar
+        v-model:showSearch="showSearch"
+        @queryTable="getList"
+      ></right-toolbar>
+    </template>
+    <el-table
+      height="100%"
+      v-loading="loading"
+      :data="userList"
+      @selection-change="handleSelectionChange"
+    >
+      <el-table-column type="selection" width="55" align="center" />
+      <el-table-column
+        align="center"
+        label="用户名称"
+        prop="userName"
+        :show-overflow-tooltip="true"
+      />
+      <el-table-column
+        align="center"
+        label="用户昵称"
+        prop="nickName"
+        :show-overflow-tooltip="true"
+      />
+      <el-table-column
+        align="center"
+        label="邮箱"
+        prop="email"
+        :show-overflow-tooltip="true"
+      />
+      <el-table-column
+        align="center"
+        label="手机"
+        prop="phonenumber"
+        :show-overflow-tooltip="true"
+      />
+      <el-table-column label="状态" align="center" prop="status">
+        <template #default="scope">
+          <dict-tag
+            :options="dict.type.sys_normal_disable"
+            :value="scope.row.status"
+          />
+        </template>
+      </el-table-column>
+      <el-table-column
+        label="创建时间"
+        align="center"
+        prop="createTime"
+        width="180"
+      >
+        <template #default="scope">
+          <span>{{ parseTime(scope.row.createTime) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" align="center" fixed="right" width="140">
+        <template #default="scope">
+          <el-button
+            size="small"
+            link
+            type="danger"
+            icon="el-icon-circle-close"
+            @click="cancelAuthUser(scope.row)"
+            v-hasPermi="['system:role:remove']"
+            >取消授权</el-button
+          >
+        </template>
+      </el-table-column>
+    </el-table>
+    <template #pagination
+      ><pagination
+        v-show="total > 0"
+        :total="total"
+        v-model:page="queryParams.pageNum"
+        v-model:limit="queryParams.pageSize"
+        @pagination="getList"
+    /></template>
+    <select-user ref="select" :roleId="queryParams.roleId" @ok="handleQuery" />
+  </BiTablePage>
+</template>
+
+<script>
+import {
+  allocatedUserList,
+  authUserCancel,
+  authUserCancelAll,
+} from '#/legacy/api/system/role';
+import selectUser from './selectUser.vue';
+
+export default {
+  name: 'AuthUser',
+  dicts: ['sys_normal_disable'],
+  components: { selectUser },
+  data() {
+    return {
+      // 遮罩层
+      loading: true,
+      // 选中用户组
+      userIds: [],
+      // 非多个禁用
+      multiple: true,
+      // 显示搜索条件
+      showSearch: true,
+      // 总条数
+      total: 0,
+      // 用户表格数据
+      userList: [],
+      // 查询参数
+      queryParams: {
+        pageNum: 1,
+        pageSize: 10,
+        roleId: undefined,
+        userName: undefined,
+        phonenumber: undefined,
+      },
+    };
+  },
+  created() {
+    const roleId = this.$route.params && this.$route.params.roleId;
+    if (roleId) {
+      this.queryParams.roleId = roleId;
+      this.getList();
+    }
+  },
+  methods: {
+    /** 查询授权用户列表 */
+    getList() {
+      this.loading = true;
+      allocatedUserList(this.queryParams).then((response) => {
+        this.userList = response.rows;
+        this.total = response.total;
+        this.loading = false;
+      });
+    },
+    // 返回按钮
+    handleClose() {
+      const obj = { path: '/system/role' };
+      this.$tab.closeOpenPage(obj);
+    },
+    /** 搜索按钮操作 */
+    handleQuery() {
+      this.queryParams.pageNum = 1;
+      this.getList();
+    },
+    /** 重置按钮操作 */
+    resetQuery() {
+      this.resetForm('queryForm');
+      this.handleQuery();
+    },
+    // 多选框选中数据
+    handleSelectionChange(selection) {
+      this.userIds = selection.map((item) => item.userId);
+      this.multiple = !selection.length;
+    },
+    /** 打开授权用户表弹窗 */
+    openSelectUser() {
+      this.$refs.select.show();
+    },
+    /** 取消授权按钮操作 */
+    cancelAuthUser(row) {
+      const roleId = this.queryParams.roleId;
+      this.$modal
+        .confirm('确认要取消该用户"' + row.userName + '"角色吗？')
+        .then(function () {
+          return authUserCancel({ userId: row.userId, roleId: roleId });
+        })
+        .then(() => {
+          this.getList();
+          this.$modal.msgSuccess('取消授权成功');
+        })
+        .catch(() => {});
+    },
+    /** 批量取消授权按钮操作 */
+    cancelAuthUserAll(row) {
+      const roleId = this.queryParams.roleId;
+      const userIds = this.userIds.join(',');
+      this.$modal
+        .confirm('是否取消选中用户授权数据项？')
+        .then(function () {
+          return authUserCancelAll({ roleId: roleId, userIds: userIds });
+        })
+        .then(() => {
+          this.getList();
+          this.$modal.msgSuccess('取消授权成功');
+        })
+        .catch(() => {});
+    },
+  },
+};
+</script>

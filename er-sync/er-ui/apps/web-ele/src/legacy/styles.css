@@ -1,0 +1,240 @@
+.app-container {
+  --page-gap: 16px;
+  box-sizing: border-box;
+  margin: var(--page-gap);
+  padding: 10px;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  min-height: calc(
+    var(--vben-content-height, calc(100dvh - 88px)) - 2 * var(--page-gap)
+  );
+  color: var(--el-text-color-primary);
+}
+.app-container .el-form--inline .el-input,
+.app-container .el-form--inline .el-select {
+  width: 210px;
+}
+.app-container .el-form--inline .el-date-editor {
+  width: 250px;
+}
+.app-container .el-table {
+  margin-top: 12px;
+}
+.app-container .el-dialog {
+  max-width: calc(100vw - 32px);
+}
+.app-container .el-col:has(> .el-button) {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: none;
+  margin-bottom: 8px;
+}
+.mb8 {
+  margin-bottom: 8px;
+}
+.mb20 {
+  margin-bottom: 20px;
+}
+.mt20 {
+  margin-top: 20px;
+}
+.mr10 {
+  margin-right: 10px;
+}
+.ml10 {
+  margin-left: 10px;
+}
+.pt5 {
+  padding-top: 5px;
+}
+.pb5 {
+  padding-bottom: 5px;
+}
+.text-center {
+  text-align: center;
+}
+.pull-right {
+  float: right;
+}
+.top-right-btn {
+  margin-left: auto;
+}
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 20px;
+  background: transparent !important;
+}
+.pagination-container.hidden {
+  display: none;
+}
+.small-padding .cell {
+  padding-inline: 5px;
+}
+.list-group {
+  padding: 0;
+  list-style: none;
+}
+.list-group-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.list-group-item .legacy-svg {
+  margin-right: 6px;
+}
+.head-container {
+  padding-bottom: 20px;
+}
+.el-tree {
+  background: transparent;
+}
+.el-upload-dragger {
+  max-width: 100%;
+}
+.legacy-splitpanes > section:first-child {
+  min-width: 180px;
+}
+.legacy-splitpanes > section:last-child {
+  overflow: hidden;
+}
+.legacy-editor {
+  background: var(--el-bg-color);
+}
+.el-dialog__body pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.el-form-item__content .el-select {
+  min-width: 140px;
+}
+.el-icon-arrow-up:before {
+  content: '⌃';
+}
+.el-icon-arrow-down:before {
+  content: '⌄';
+}
+.el-icon-arrow-up,
+.el-icon-arrow-down {
+  font-style: normal;
+  padding-inline: 3px;
+}
+/* Match BI's page gutter and let the table own the available space. */
+.app-container:has(> .el-table),
+.app-container:has(> .el-row > .legacy-splitpanes) {
+  display: flex;
+  flex-direction: column;
+  height: calc(
+    var(--vben-content-height, calc(100dvh - 88px)) - 2 * var(--page-gap)
+  );
+  min-height: 0;
+}
+.app-container:has(> .el-table) > * {
+  flex-shrink: 0;
+}
+.app-container > .el-table {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.app-container > .pagination-container {
+  flex: none;
+  margin-top: 0;
+  padding: 12px 4px 2px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+/* User management has a department tree beside its list. */
+.app-container > .el-row:has(> .legacy-splitpanes) {
+  flex: 1;
+  min-height: 0;
+}
+.app-container > .el-row > .legacy-splitpanes {
+  flex: 1;
+  min-height: 0;
+}
+.app-container .legacy-splitpanes > section {
+  min-height: 0;
+  overflow: auto;
+}
+.app-container
+  .legacy-splitpanes
+  > section:has(.pagination-container)
+  > .el-col {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.app-container
+  .legacy-splitpanes
+  > section:has(.pagination-container)
+  > .el-col
+  > * {
+  flex-shrink: 0;
+}
+.app-container
+  .legacy-splitpanes
+  > section:has(.pagination-container)
+  > .el-col
+  > .el-table {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.app-container .legacy-splitpanes .pagination-container {
+  flex: none;
+  padding: 12px 4px 2px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+.pagination-container {
+  max-width: 100%;
+  overflow-x: auto;
+}
+@media (max-width: 768px) {
+  .app-container {
+    --page-gap: 8px;
+    padding: 10px;
+  }
+  .app-container:has(> .el-table),
+  .app-container:has(> .el-row > .legacy-splitpanes) {
+    height: auto;
+    min-height: calc(
+      var(--vben-content-height, calc(100dvh - 88px)) - 2 * var(--page-gap)
+    );
+  }
+  .app-container > .el-table {
+    flex-basis: auto;
+    min-height: 240px;
+  }
+  .app-container .legacy-splitpanes {
+    flex-direction: column !important;
+  }
+  .app-container .legacy-splitpanes > section {
+    flex: 0 0 auto !important;
+  }
+  .legacy-splitpanes > section:first-child {
+    min-width: 0;
+  }
+  .app-container
+    .legacy-splitpanes
+    > section:has(.pagination-container)
+    > .el-col {
+    height: auto;
+  }
+  .app-container
+    .legacy-splitpanes
+    > section:has(.pagination-container)
+    > .el-col
+    > .el-table {
+    flex-basis: auto;
+    min-height: 240px;
+  }
+  .pagination-container {
+    justify-content: flex-start;
+  }
+  .app-container .el-form--inline .el-form-item {
+    margin-right: 10px;
+  }
+  .app-container .el-form--inline .el-input,
+  .app-container .el-form--inline .el-select {
+    width: 170px;
+  }
+}
