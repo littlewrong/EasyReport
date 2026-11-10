@@ -57,8 +57,9 @@ public final class HtmlCellLayout {
         if (fragment.trim().length() == 0) {
             return;
         }
-        double height = preferredHeight(cell, fragment, Math.max(1d, width * PIXELS_PER_POINT - 2d));
-        int required = (int) Math.ceil((height + 2d) / PIXELS_PER_POINT);
+        // Match the rendered wrapper: it has the full cell width and no padding.
+        double height = preferredHeight(cell, fragment, Math.max(1d, width * PIXELS_PER_POINT));
+        int required = (int) Math.ceil(height / PIXELS_PER_POINT);
         long available = visibleHeight(cell, context);
         if (required > available) {
             long grown = row.getRealHeight() + (long) required - available;
@@ -157,14 +158,19 @@ public final class HtmlCellLayout {
                 lineHeight = style.getLineHeight();
             }
         }
+        // HONOR_DISPLAY_PROPERTIES interprets Font sizes as points; W3C_LENGTH_UNITS
+        // performs the point-to-pixel conversion. Converting here would do it twice.
         Font font = new Font(family, (bold ? Font.BOLD : 0) | (italic ? Font.ITALIC : 0),
-                Math.max(1, (int) Math.round(size * PIXELS_PER_POINT)));
+                Math.max(1, size));
         // A font family is data; do not let it introduce rules into the stylesheet.
         family = font.getFamily().replaceAll("[^\\p{L}\\p{N} _-]", "");
         HTMLEditorKit kit = new LayoutEditorKit();
         StyleSheet sheet = new StyleSheet();
         sheet.addStyleSheet(kit.getStyleSheet());
         sheet.addRule("html, body { margin: 0; padding: 0; }");
+        // Swing does not reliably apply the scoped descendant selectors below.
+        // This document contains only cell content; inline paragraph margins still win.
+        sheet.addRule("p, div { margin: 0; padding: 0; }");
         sheet.addRule("body { font-family: '" + family + "'; font-size: " + size + "pt;"
                 + "font-weight: " + (bold ? "bold" : "normal") + "; font-style: "
                 + (italic ? "italic" : "normal") + ";"
@@ -185,7 +191,8 @@ public final class HtmlCellLayout {
         document.putProperty("IgnoreCharsetDirective", Boolean.TRUE);
         pane.setDocument(document);
         try {
-            kit.read(new StringReader("<html><body><div class='easyreport-rich-text'>" + fragment
+            String wrapperStyle = lineHeight > 0 ? " style='line-height:" + lineHeight + ";'" : "";
+            kit.read(new StringReader("<html><body><div class='easyreport-rich-text'" + wrapperStyle + ">" + fragment
                     + "</div></body></html>"), document, 0);
         } catch (IOException ex) {
             throw new IllegalStateException("Unable to measure sanitized HTML cell", ex);
@@ -199,6 +206,7 @@ public final class HtmlCellLayout {
 
     private static final class LayoutEditorKit extends HTMLEditorKit {
         private static final long serialVersionUID = 1L;
+        private StyleSheet layoutStyleSheet;
         private final ViewFactory factory = new HTMLFactory() {
             @Override
             public View create(Element element) {
@@ -222,6 +230,17 @@ public final class HtmlCellLayout {
         @Override
         public ViewFactory getViewFactory() {
             return factory;
+        }
+
+        @Override
+        public StyleSheet getStyleSheet() {
+            return layoutStyleSheet == null ? super.getStyleSheet() : layoutStyleSheet;
+        }
+
+        @Override
+        public void setStyleSheet(StyleSheet styleSheet) {
+            // HTMLEditorKit's setter otherwise publishes the sheet to AppContext.
+            layoutStyleSheet = styleSheet;
         }
     }
 

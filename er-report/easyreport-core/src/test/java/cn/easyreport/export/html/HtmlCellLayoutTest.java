@@ -8,6 +8,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.StyleSheet;
+
 import org.junit.Test;
 
 import cn.easyreport.build.Context;
@@ -23,6 +26,64 @@ import cn.easyreport.model.Row;
 public class HtmlCellLayoutTest {
     private static final String SENTENCE = "One two three four five six seven eight nine ten "
             + "eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen.";
+
+    @Test
+    public void pureTextDoesNotExpandTemplateRowsThatAlreadyFitTheFont() {
+        for (int size : new int[]{9, 12}) {
+            int templateHeight = size * 4 / 3;
+            Fixture fixture = fixture("Short text", new int[]{300}, new int[]{templateHeight});
+            fixture.cell.getCellStyle().setFontSize(size);
+            fixture.compute();
+            assertEquals("Enabling HTML must not add blank space around plain text", templateHeight, fixture.height());
+            assertEquals("Short text", fixture.cell.getFormatData());
+        }
+    }
+
+    @Test
+    public void paragraphsDoNotIntroduceAnImplicitBlankLine() {
+        for (String html : new String[]{"Text", "<p>Text</p>", "<div>Text</div>"}) {
+            Fixture text = fixture("Text", new int[]{300}, new int[]{1});
+            Fixture paragraph = fixture(html, new int[]{300}, new int[]{1});
+            text.compute();
+            paragraph.compute();
+            assertEquals(html, text.height(), paragraph.height());
+        }
+        Fixture paragraphs = fixture("<p>One</p><p>Two</p>", new int[]{300}, new int[]{1});
+        Fixture breaks = fixture("One<br>Two", new int[]{300}, new int[]{1});
+        paragraphs.compute();
+        breaks.compute();
+        assertEquals(breaks.height(), paragraphs.height());
+    }
+
+    @Test
+    public void explicitParagraphSpacingAndCellLineHeightRemainEffective() {
+        Fixture ordinary = fixture("<p>One</p><p>Two</p>", new int[]{300}, new int[]{1});
+        Fixture margins = fixture("<p style='margin-top:9pt;margin-bottom:6pt'>One</p><p>Two</p>",
+                new int[]{300}, new int[]{1});
+        Fixture doubleSpaced = fixture("<p>One</p><p>Two</p>", new int[]{300}, new int[]{1});
+        CellStyle columnStyle = new CellStyle();
+        columnStyle.setLineHeight(2f);
+        doubleSpaced.cell.getColumn().setCustomCellStyle(columnStyle);
+        ordinary.compute();
+        margins.compute();
+        doubleSpaced.compute();
+        assertTrue(margins.height() > ordinary.height());
+        assertTrue(doubleSpaced.height() > ordinary.height());
+    }
+
+    @Test
+    public void measuringCellsDoesNotPublishStylesToOtherEditorKits() {
+        StyleSheet defaults = new HTMLEditorKit().getStyleSheet();
+        Fixture ordinary = fixture("<p>Text</p>", new int[]{300}, new int[]{1});
+        ordinary.compute();
+        Fixture large = fixture("<p style='margin-top:30pt'>Text</p>", new int[]{300}, new int[]{1});
+        large.cell.getCellStyle().setFontSize(32);
+        large.compute();
+        Fixture following = fixture("<p>Text</p>", new int[]{300}, new int[]{1});
+        following.compute();
+        assertSame(defaults, new HTMLEditorKit().getStyleSheet());
+        assertEquals(ordinary.height(), following.height());
+    }
 
     @Test
     public void constrainedWidthWrapsVisibleContent() {
