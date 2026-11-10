@@ -154,7 +154,7 @@
         width="80"
         :show-overflow-tooltip="true"
       />
-      <el-table-column label="状态" align="center" prop="status" width="60">
+      <el-table-column label="状态" align="center" prop="status" width="80">
         <template #default="scope">
           <dict-tag
             :options="dict.type.sys_normal_disable"
@@ -828,8 +828,10 @@ export default {
 
 /* 数据源类型标签居中显示 */
 .ds-type-tag {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 80px;
-  text-align: center;
+  vertical-align: middle;
 }
 </style>

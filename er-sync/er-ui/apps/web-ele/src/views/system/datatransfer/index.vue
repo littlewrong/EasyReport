@@ -1,1236 +1,8 @@
-<template>
-  <BiTablePage
-    title="数据传输任务"
-    :show-search="showSearch"
-    :show-pagination="total > 0"
-  >
-    <template #search>
-      <el-form
-        :model="queryParams"
-        ref="queryForm"
-        :inline="true"
-        v-show="showSearch"
-        label-width="88px"
-      >
-        <el-form-item label="任务名称" prop="transferName">
-          <el-input
-            v-model="queryParams.transferName"
-            placeholder="请输入任务名称"
-            clearable
-            @keyup.enter="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item label="源数据源" prop="sourceDatasourceId">
-          <el-select
-            v-model="queryParams.sourceDatasourceId"
-            placeholder="请选择源数据源"
-            clearable
-          >
-            <el-option
-              v-for="item in datasourceOptions"
-              :key="item.datasourceId"
-              :label="item.datasourceName"
-              :value="item.datasourceId"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="同步模式" prop="syncMode">
-          <el-select
-            v-model="queryParams.syncMode"
-            placeholder="请选择同步模式"
-            clearable
-          >
-            <el-option label="初始化同步" value="0" />
-            <el-option label="增量同步" value="1" />
-          </el-select>
-        </el-form-item>
-        <template v-if="advanced">
-          <el-form-item label="同步状态" prop="syncStatus">
-            <el-select
-              v-model="queryParams.syncStatus"
-              placeholder="请选择同步状态"
-              clearable
-            >
-              <el-option label="待同步" value="0" />
-              <el-option label="同步中" value="1" />
-              <el-option label="同步成功" value="2" />
-              <el-option label="同步失败" value="3" />
-              <el-option label="已停止" value="4" />
-              <el-option label="停止中" value="5" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="状态" prop="status">
-            <el-select
-              v-model="queryParams.status"
-              placeholder="请选择状态"
-              clearable
-            >
-              <el-option label="正常" value="0" />
-              <el-option label="停用" value="1" />
-            </el-select>
-          </el-form-item>
-        </template>
-        <el-form-item>
-          <el-button type="primary" :icon="Search" @click="handleQuery"
-            >搜索</el-button
-          >
-          <el-button :icon="RotateCw" @click="resetQuery">重置</el-button>
-          <el-button link type="primary" @click="advanced = !advanced">
-            {{ advanced ? '收起' : '展开' }}
-            <i
-              :class="advanced ? 'el-icon-arrow-up' : 'el-icon-arrow-down'"
-            ></i>
-          </el-button>
-        </el-form-item>
-      </el-form>
-    </template>
-    <template #toolbar>
-      <el-row :gutter="10" class="mb8">
-        <el-col class="toolbar-action">
-          <el-button
-            type="primary"
-            :icon="Plus"
-            @click="handleAdd"
-            v-hasPermi="['system:datatransfer:add']"
-            >新增</el-button
-          >
-        </el-col>
-        <el-col class="toolbar-action">
-          <el-button
-            :icon="SquareCode"
-            :disabled="single"
-            @click="handleUpdate"
-            v-hasPermi="['system:datatransfer:edit']"
-            >修改</el-button
-          >
-        </el-col>
-        <el-col class="toolbar-action">
-          <el-button
-            type="danger"
-            :icon="Eraser"
-            :disabled="multiple"
-            @click="handleDelete"
-            v-hasPermi="['system:datatransfer:remove']"
-            >删除</el-button
-          >
-        </el-col>
-        <right-toolbar
-          v-model:show-search="showSearch"
-          @queryTable="getList"
-        ></right-toolbar>
-      </el-row>
-    </template>
-    <el-table
-      height="100%"
-      v-loading="loading"
-      :data="dataTransferList"
-      @selection-change="handleSelectionChange"
-    >
-      <el-table-column type="selection" width="55" align="center" />
-      <el-table-column
-        label="任务名称"
-        align="center"
-        prop="transferName"
-        min-width="120"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        label="源数据源"
-        align="center"
-        prop="sourceDatasourceName"
-        min-width="100"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        label="源表"
-        align="center"
-        prop="sourceTable"
-        min-width="120"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        label="目标数据源"
-        align="center"
-        prop="targetDatasourceName"
-        min-width="100"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        label="同步模式"
-        align="center"
-        prop="syncMode"
-        width="100"
-      >
-        <template #default="scope">
-          <el-tag
-            :type="scope.row.syncMode === '0' ? 'info' : 'primary'"
-            size="small"
-          >
-            {{ scope.row.syncMode === '0' ? '初始化' : '增量' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="同步操作" align="center" width="120">
-        <template #default="scope">
-          <el-tag
-            v-if="scope.row.syncInsert === '1'"
-            type="success"
-            size="small"
-            style="margin-right: 2px"
-            >I</el-tag
-          >
-          <el-tag
-            v-if="scope.row.syncUpdate === '1'"
-            type="warning"
-            size="small"
-            style="margin-right: 2px"
-            >U</el-tag
-          >
-          <el-tag v-if="scope.row.syncDelete === '1'" type="danger" size="small"
-            >D</el-tag
-          >
-        </template>
-      </el-table-column>
-      <el-table-column
-        label="同步状态"
-        align="center"
-        prop="syncStatus"
-        width="90"
-      >
-        <template #default="scope">
-          <el-tag
-            :type="getSyncStatusType(scope.row.syncStatus)"
-            size="small"
-            :style="scope.row.syncStatus !== '0' ? 'cursor: pointer;' : ''"
-            @click="
-              scope.row.syncStatus !== '0'
-                ? showSyncProgress(scope.row.transferId)
-                : null
-            "
-          >
-            {{ getSyncStatusLabel(scope.row.syncStatus) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="状态" align="center" prop="status" width="80">
-        <template #default="scope">
-          <el-switch
-            v-model="scope.row.status"
-            active-value="0"
-            inactive-value="1"
-            @change="handleStatusChange(scope.row)"
-          ></el-switch>
-        </template>
-      </el-table-column>
-      <el-table-column
-        label="最后同步时间"
-        align="center"
-        prop="lastSyncTime"
-        width="160"
-      >
-        <template #default="scope">
-          <span v-if="scope.row.lastSyncTime">{{
-            parseTime(scope.row.lastSyncTime, '{y}-{m}-{d} {h}:{i}:{s}')
-          }}</span>
-          <span v-else>-</span>
-        </template>
-      </el-table-column>
-      <el-table-column
-        label="操作"
-        align="center"
-        width="280"
-        fixed="right"
-        class-name="bi-actions-column"
-      >
-        <template #default="scope"
-          ><div class="bi-row-actions">
-            <el-button
-              size="small"
-              link
-              type="primary"
-              :icon="Eye"
-              @click="handlePreview(scope.row)"
-              v-hasPermi="['system:datatransfer:query']"
-              >预览</el-button
-            >
-            <el-button
-              size="small"
-              link
-              type="primary"
-              :icon="RotateCw"
-              @click="handleExecute(scope.row)"
-              v-hasPermi="['system:datatransfer:execute']"
-              :disabled="isTransferRunning(scope.row.syncStatus)"
-              >同步</el-button
-            >
-            <el-button
-              size="small"
-              link
-              type="primary"
-              :icon="List"
-              @click="handleLog(scope.row)"
-              v-hasPermi="['system:datatransfer:log']"
-              >日志</el-button
-            >
-            <el-dropdown
-              trigger="click"
-              placement="bottom-end"
-              v-hasPermi="[
-                'system:datatransfer:query',
-                'system:datatransfer:execute',
-                'system:datatransfer:edit',
-                'system:datatransfer:add',
-                'system:datatransfer:remove',
-              ]"
-            >
-              <el-button link type="primary" aria-label="更多操作"
-                >更多<ChevronDown class="bi-row-actions-chevron"
-              /></el-button>
-              <template #dropdown
-                ><el-dropdown-menu>
-                  <el-dropdown-item
-                    :icon="ArrowRightLeft"
-                    v-hasPermi="['system:datatransfer:query']"
-                    v-if="scope.row.syncStatus !== '0'"
-                    @click="showSyncProgress(scope.row.transferId)"
-                    >进度</el-dropdown-item
-                  >
-                  <el-dropdown-item
-                    :icon="Circle"
-                    v-hasPermi="['system:datatransfer:query']"
-                    @click="handleProgress(scope.row)"
-                    >时间戳</el-dropdown-item
-                  >
-                  <el-dropdown-item
-                    :icon="RotateCw"
-                    v-hasPermi="['system:datatransfer:execute']"
-                    :disabled="isTransferRunning(scope.row.syncStatus)"
-                    @click="handleRefreshTransferProgress(scope.row)"
-                    >刷新TS</el-dropdown-item
-                  >
-                  <el-dropdown-item
-                    :icon="SquareCode"
-                    v-hasPermi="['system:datatransfer:edit']"
-                    @click="handleUpdate(scope.row)"
-                    >修改</el-dropdown-item
-                  >
-                  <el-dropdown-item
-                    :icon="Copy"
-                    v-hasPermi="['system:datatransfer:add']"
-                    @click="handleCopy(scope.row)"
-                    >复制</el-dropdown-item
-                  >
-                  <el-dropdown-item
-                    :icon="Eraser"
-                    v-hasPermi="['system:datatransfer:remove']"
-                    @click="handleDelete(scope.row)"
-                    class="bi-row-action-delete"
-                    :divided="
-                      $auth.hasPermiOr([
-                        'system:datatransfer:query',
-                        'system:datatransfer:execute',
-                        'system:datatransfer:edit',
-                        'system:datatransfer:add',
-                      ])
-                    "
-                    >删除</el-dropdown-item
-                  >
-                </el-dropdown-menu></template
-              >
-            </el-dropdown>
-          </div></template
-        >
-      </el-table-column>
-    </el-table>
-    <template #pagination>
-      <pagination
-        v-show="total > 0"
-        :total="total"
-        v-model:page="queryParams.pageNum"
-        v-model:limit="queryParams.pageSize"
-        @pagination="getList"
-      />
-    </template>
-    <el-drawer
-      class="bi-management-drawer"
-      :title="title"
-      v-model="open"
-      size="950px"
-      append-to-body
-    >
-      <el-form
-        class="bi-editor-form"
-        label-position="top"
-        ref="form"
-        :model="form"
-        :rules="rules"
-        label-width="110px"
-      >
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="任务名称" prop="transferName">
-              <el-input
-                v-model="form.transferName"
-                placeholder="请输入任务名称"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="任务编码" prop="transferCode">
-              <el-input
-                v-model="form.transferCode"
-                placeholder="可选，用于标识任务"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <div class="form-section">源数据配置</div>
-
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="源数据源" prop="sourceDatasourceId">
-              <el-select
-                v-model="form.sourceDatasourceId"
-                placeholder="请选择源数据源"
-                filterable
-                style="width: 100%"
-                @change="handleSourceChange"
-              >
-                <el-option
-                  v-for="item in datasourceOptions"
-                  :key="item.datasourceId"
-                  :label="
-                    item.datasourceName + ' (' + item.datasourceType + ')'
-                  "
-                  :value="item.datasourceId"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item label="源Schema模式" prop="sourceSchemaPattern">
-          <el-input
-            v-model="form.sourceSchemaPattern"
-            type="textarea"
-            :rows="2"
-            placeholder="多个模式用逗号分隔，支持通配符%，如: db_%, schema_2024%, test_db（可选，留空表示所有Schema）"
-          >
-          </el-input>
-        </el-form-item>
-
-        <el-form-item label="源表名" prop="sourceTable">
-          <el-input
-            v-model="form.sourceTable"
-            type="textarea"
-            :rows="2"
-            placeholder="多个模式用逗号分隔，支持通配符%，如: user_%, order_2024%, sys_user"
-          >
-          </el-input>
-        </el-form-item>
-
-        <div class="form-section">目标数据配置</div>
-
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="目标数据源" prop="targetDatasourceId">
-              <el-select
-                v-model="form.targetDatasourceId"
-                placeholder="请选择目标数据源"
-                filterable
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="item in datasourceOptions"
-                  :key="item.datasourceId"
-                  :label="
-                    item.datasourceName + ' (' + item.datasourceType + ')'
-                  "
-                  :value="item.datasourceId"
-                  :disabled="item.datasourceId === form.sourceDatasourceId"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <div class="form-section">同步配置</div>
-
-        <!-- 第一行：同步模式 -->
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="同步模式" prop="syncMode">
-              <el-radio-group
-                v-model="form.syncMode"
-                @change="handleSyncModeChange"
-              >
-                <el-radio value="0">初始化同步</el-radio>
-                <el-radio value="1">增量同步</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item
-          v-if="canUseExternalTableImport"
-          label="数据湖导入"
-          prop="externalTableEnabled"
-          class="external-table-import-item"
-        >
-          <div class="external-table-import-option">
-            <el-switch
-              v-model="form.externalTableEnabled"
-              active-value="1"
-              inactive-value="0"
-            />
-            <span class="external-table-import-tip"
-              >由 StarRocks 直接读取源数据</span
-            >
-          </div>
-        </el-form-item>
-
-        <el-form-item
-          v-if="isExternalTableImportEnabled"
-          label="导入方式"
-          prop="directImportMethod"
-          :required="true"
-        >
-          <el-radio-group
-            v-model="form.directImportMethod"
-            @change="handleDirectImportMethodChange"
-          >
-            <el-radio v-if="canUseMysqlExternalTable" value="EXTERNAL_TABLE"
-              >外部表</el-radio
-            >
-            <el-radio value="JDBC_CATALOG">JDBC Catalog</el-radio>
-          </el-radio-group>
-          <div class="external-table-import-tip">{{ directImportTip }}</div>
-        </el-form-item>
-
-        <el-form-item
-          v-if="isCatalogImportEnabled"
-          label="Catalog 名称"
-          prop="catalogName"
-          :required="true"
-        >
-          <el-input
-            v-model="form.catalogName"
-            placeholder="例如：src_mysql"
-            :maxlength="1023"
-            clearable
-            class="catalog-name-input"
-          />
-        </el-form-item>
-
-        <!-- 两种数据湖导入方式共享导入策略 -->
-        <el-form-item
-          v-if="isExternalTableImportEnabled"
-          label="导入策略"
-          class="external-table-policy-item"
-        >
-          <div class="external-table-policy-controls">
-            <div class="external-table-policy-clause">
-              <span>有效数据少于</span>
-              <el-form-item
-                prop="externalTableThresholdWan"
-                class="external-table-policy-field"
-              >
-                <el-input-number
-                  v-model="form.externalTableThresholdWan"
-                  :min="1"
-                  :max="2147483647"
-                  :step="1"
-                  :precision="0"
-                  controls-position="right"
-                  class="external-table-threshold"
-                  aria-label="整批导入阈值，单位万条"
-                />
-              </el-form-item>
-              <span>万条时整批导入，</span>
-            </div>
-            <div class="external-table-policy-clause">
-              <span>否则按</span>
-              <el-form-item
-                prop="externalTableWindowUnit"
-                class="external-table-policy-field"
-              >
-                <el-select
-                  v-model="form.externalTableWindowUnit"
-                  class="external-table-window-unit"
-                  aria-label="分段导入时间单位"
-                >
-                  <el-option label="年" value="YEAR" />
-                  <el-option label="月" value="MONTH" />
-                  <el-option label="日" value="DAY" />
-                </el-select>
-              </el-form-item>
-              <span>导入</span>
-            </div>
-          </div>
-          <div class="external-table-policy-tip">
-            <template v-if="form.timestampField && form.timestampField.trim()"
-              >不同步时间戳为 NULL 的数据。</template
-            >
-            <template v-else>未配置时间戳字段时按整表导入。</template>
-          </div>
-        </el-form-item>
-
-        <!-- 时间戳字段（独立一行，始终显示） -->
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="时间戳字段" prop="timestampField">
-              <el-input
-                v-model="form.timestampField"
-                placeholder="默认: time_stamp"
-              >
-                <template #append>
-                  <el-tooltip
-                    content="同步时依据此字段判断时间窗口"
-                    placement="top"
-                  >
-                    <CircleHelp class="inline-icon" />
-                  </el-tooltip>
-                </template>
-              </el-input>
-            </el-form-item>
-          </el-col>
-          <el-col
-            :span="12"
-            v-if="
-              form.syncMode === '0' &&
-              !isExternalTableImportEnabled &&
-              form.timestampField &&
-              form.timestampField.trim()
-            "
-          >
-            <el-form-item label="分片粒度" prop="externalTableWindowUnit">
-              <el-select
-                v-model="form.externalTableWindowUnit"
-                aria-label="全量分片时间粒度"
-              >
-                <el-option label="年" value="YEAR" />
-                <el-option label="月" value="MONTH" />
-                <el-option label="日" value="DAY" />
-              </el-select>
-              <div
-                style="
-                  color: hsl(var(--muted-foreground));
-                  font-size: 12px;
-                  margin-top: 4px;
-                "
-              >
-                初始化时按所选时间粒度分片读取，时间戳字段建议建索引
-              </div>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <!-- 同步操作与原 JDBC 批次大小 -->
-        <el-row :gutter="20">
-          <el-col :span="12" v-if="form.syncMode === '1'">
-            <el-form-item label="同步操作" prop="syncOperations">
-              <el-checkbox v-model="syncOperations.insert">INSERT</el-checkbox>
-              <el-checkbox v-model="syncOperations.update">UPDATE</el-checkbox>
-              <el-checkbox v-model="syncOperations.delete">DELETE</el-checkbox>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12" v-if="!isExternalTableImportEnabled">
-            <el-form-item label="批次大小" prop="batchSize">
-              <el-input-number
-                v-model="form.batchSize"
-                :min="10"
-                :max="100000"
-                :step="10"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <!-- 第四行：删除保护窗口（增量模式显示） -->
-        <el-row :gutter="20" v-if="form.syncMode === '1'">
-          <el-col :span="12">
-            <el-form-item label="删除窗口(年)" prop="deleteWindowYears">
-              <el-input-number
-                v-model="form.deleteWindowYears"
-                :min="1"
-                :max="10"
-                :step="1"
-              />
-              <div
-                style="
-                  color: hsl(var(--muted-foreground));
-                  font-size: 12px;
-                  margin-top: 4px;
-                "
-              >
-                只同步最近 N 年内的删除，默认 2 年
-              </div>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <div class="form-section">其他配置</div>
-
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="Cron表达式" prop="cronExpression">
-              <el-input v-model="form.cronExpression" placeholder="定时任务">
-                <template #append>
-                  <el-tooltip content="" placement="top">
-                    <CircleHelp class="inline-icon" />
-                  </el-tooltip>
-                </template>
-              </el-input>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item label="备注" prop="remark">
-          <el-input
-            v-model="form.remark"
-            type="textarea"
-            :rows="2"
-            placeholder="请输入备注"
-          />
-        </el-form-item>
-
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="状态" prop="status">
-              <el-radio-group v-model="form.status">
-                <el-radio value="0">正常</el-radio>
-                <el-radio value="1">停用</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-      <template #footer
-        ><div class="dialog-footer">
-          <el-button @click="cancel">取 消</el-button>
-          <el-button type="primary" @click="submitForm">确 定</el-button>
-        </div></template
-      >
-    </el-drawer>
-    <el-dialog
-      title="同步预览 - 匹配的表列表"
-      v-model="previewOpen"
-      width="700px"
-      append-to-body
-    >
-      <div v-loading="previewLoading">
-        <el-alert
-          v-if="previewTables.length > 0"
-          :title="
-            '共匹配到 ' +
-            previewSchemaCount +
-            ' 个库，' +
-            previewTableCount +
-            ' 张表'
-          "
-          type="success"
-          :closable="false"
-          show-icon
-          style="margin-bottom: 15px"
-        />
-        <el-alert
-          v-else
-          title="未匹配到任何表，请检查源数据源和匹配模式"
-          type="warning"
-          :closable="false"
-          show-icon
-          style="margin-bottom: 15px"
-        />
-        <el-table :data="previewTables" max-height="400" border size="small">
-          <el-table-column type="index" label="#" width="50" align="center" />
-          <el-table-column
-            prop="schemaName"
-            label="库名"
-            width="180"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            prop="tableName"
-            label="表名"
-            show-overflow-tooltip
-          />
-        </el-table>
-      </div>
-      <template #footer
-        ><div class="dialog-footer">
-          <el-button @click="previewOpen = false">关 闭</el-button>
-        </div></template
-      >
-    </el-dialog>
-    <el-dialog title="同步日志" v-model="logOpen" width="1200px" append-to-body>
-      <!-- 搜索条件 -->
-      <el-form
-        :model="logQueryParams"
-        ref="logQueryForm"
-        size="small"
-        :inline="true"
-      >
-        <el-form-item label="源表名称" prop="sourceTable">
-          <el-input
-            v-model="logQueryParams.sourceTable"
-            placeholder="请输入源表名称"
-            clearable
-            style="width: 180px"
-            @keyup.enter="handleLogQuery"
-          />
-        </el-form-item>
-        <el-form-item label="目标表名称" prop="targetTable">
-          <el-input
-            v-model="logQueryParams.targetTable"
-            placeholder="请输入目标表名称"
-            clearable
-            style="width: 180px"
-            @keyup.enter="handleLogQuery"
-          />
-        </el-form-item>
-        <el-form-item label="同步模式" prop="syncMode">
-          <el-select
-            v-model="logQueryParams.syncMode"
-            placeholder="请选择"
-            clearable
-            style="width: 120px"
-          >
-            <el-option label="初始化" value="0" />
-            <el-option label="增量" value="1" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="同步结果" prop="syncResult">
-          <el-select
-            v-model="logQueryParams.syncResult"
-            placeholder="请选择"
-            clearable
-            style="width: 120px"
-          >
-            <el-option label="成功" value="0" />
-            <el-option label="失败" value="1" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="创建时间">
-          <el-date-picker
-            v-model="logDateRange"
-            style="width: 240px"
-            value-format="YYYY-MM-DD"
-            type="daterange"
-            range-separator="-"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-          ></el-date-picker>
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            :icon="Search"
-            size="small"
-            @click="handleLogQuery"
-            >搜索</el-button
-          >
-          <el-button :icon="RotateCw" size="small" @click="resetLogQuery"
-            >重置</el-button
-          >
-        </el-form-item>
-      </el-form>
-
-      <!-- 日志列表 -->
-      <el-table
-        :data="logList"
-        max-height="400"
-        border
-        size="small"
-        v-loading="logLoading"
-      >
-        <el-table-column
-          label="源表"
-          align="center"
-          prop="sourceTable"
-          min-width="120"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          label="目标表"
-          align="center"
-          prop="targetTable"
-          min-width="120"
-          show-overflow-tooltip
-        />
-        <el-table-column label="模式" align="center" prop="syncMode" width="70">
-          <template #default="scope">
-            <el-tag
-              :type="scope.row.syncMode === '0' ? 'info' : 'primary'"
-              size="small"
-            >
-              {{ scope.row.syncMode === '0' ? '初始化' : '增量' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="操作"
-          align="center"
-          prop="syncAction"
-          width="80"
-        />
-        <el-table-column
-          label="总数"
-          align="center"
-          prop="totalCount"
-          width="70"
-        />
-        <el-table-column
-          label="成功"
-          align="center"
-          prop="successCount"
-          width="70"
-        >
-          <template #default="scope">
-            <span style="color: #67c23a">{{ scope.row.successCount }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="失败"
-          align="center"
-          prop="failCount"
-          width="70"
-        >
-          <template #default="scope">
-            <span
-              :style="{ color: scope.row.failCount > 0 ? '#F56C6C' : '' }"
-              >{{ scope.row.failCount }}</span
-            >
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="结果"
-          align="center"
-          prop="syncResult"
-          width="70"
-        >
-          <template #default="scope">
-            <el-tag
-              :type="scope.row.syncResult === '0' ? 'success' : 'danger'"
-              size="small"
-            >
-              {{ scope.row.syncResult === '0' ? '成功' : '失败' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column
-          label="耗时(ms)"
-          align="center"
-          prop="executeTime"
-          width="90"
-        />
-        <el-table-column
-          label="错误信息"
-          align="center"
-          prop="errorMessage"
-          min-width="150"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          label="时间"
-          align="center"
-          prop="createTime"
-          width="160"
-        >
-          <template #default="scope">
-            <span>{{
-              parseTime(scope.row.createTime, '{y}-{m}-{d} {h}:{i}:{s}')
-            }}</span>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <!-- 分页 -->
-      <pagination
-        v-show="logTotal > 0"
-        :total="logTotal"
-        v-model:page="logQueryParams.pageNum"
-        v-model:limit="logQueryParams.pageSize"
-        @pagination="getLogList"
-      />
-
-      <template #footer
-        ><div class="dialog-footer">
-          <el-button @click="logOpen = false">关 闭</el-button>
-        </div></template
-      >
-    </el-dialog>
-    <el-dialog
-      title="表级同步时间戳"
-      v-model="progressOpen"
-      width="820px"
-      append-to-body
-    >
-      <el-table
-        :data="progressList"
-        max-height="500"
-        border
-        size="small"
-        v-loading="progressLoading"
-      >
-        <el-table-column
-          label="源表"
-          align="center"
-          prop="sourceTable"
-          min-width="200"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          label="最后时间戳(ms)"
-          align="center"
-          prop="lastSyncValue"
-          width="140"
-        />
-        <el-table-column label="最后时间" align="center" min-width="180">
-          <template #default="scope">
-            <span v-if="scope.row.lastSyncValue">{{
-              parseTime(
-                Number(scope.row.lastSyncValue),
-                '{y}-{m}-{d} {h}:{i}:{s}',
-              )
-            }}</span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="更新时间" align="center" min-width="160">
-          <template #default="scope">
-            <span v-if="scope.row.updateTime">{{
-              parseTime(scope.row.updateTime, '{y}-{m}-{d} {h}:{i}:{s}')
-            }}</span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-      </el-table>
-      <template #footer
-        ><div class="dialog-footer">
-          <el-button
-            type="primary"
-            :icon="RotateCw"
-            :loading="progressRefreshLoading"
-            @click="
-              handleRefreshTransferProgress({ transferId: progressTransferId })
-            "
-            v-hasPermi="['system:datatransfer:execute']"
-            >刷新最大时间戳</el-button
-          >
-          <el-button @click="progressOpen = false">关 闭</el-button>
-        </div></template
-      >
-    </el-dialog>
-    <el-dialog
-      title="同步进度"
-      v-model="syncProgressOpen"
-      width="600px"
-      :close-on-click-modal="false"
-      :close-on-press-escape="false"
-      :show-close="true"
-      @close="handleSyncProgressClose"
-      append-to-body
-    >
-      <div v-loading="syncProgressLoading">
-        <el-alert
-          :title="getSyncProgressTitle()"
-          :type="getSyncProgressAlertType()"
-          :closable="false"
-          show-icon
-          style="margin-bottom: 20px"
-        >
-        </el-alert>
-
-        <div v-if="syncProgressData.syncProgress" style="padding: 0 20px">
-          <div style="margin-bottom: 15px">
-            <span style="font-weight: bold">表进度：</span>
-            <span
-              >{{ syncProgressInfo.current || 0
-              }}{{
-                syncProgressInfo.total > 0 ? ' / ' + syncProgressInfo.total : ''
-              }}</span
-            >
-          </div>
-          <el-progress
-            :percentage="syncProgressInfo.percent || 0"
-            :status="getSyncProgressStatus()"
-            :stroke-width="20"
-            :show-text="false"
-          >
-          </el-progress>
-          <div
-            style="
-              margin-top: 15px;
-              color: hsl(var(--muted-foreground));
-              font-size: 13px;
-            "
-          >
-            {{ syncProgressInfo.message || '准备开始同步...' }}
-          </div>
-        </div>
-
-        <!-- 表列表显示 -->
-        <div
-          v-if="
-            syncProgressInfo.pendingTables || syncProgressInfo.completedTables
-          "
-          style="margin-top: 20px; padding: 0 20px"
-        >
-          <el-alert
-            v-if="syncProgressInfo.tableListsTruncated"
-            title="表数量较多，列表仅展示部分待同步表和最近完成表；下方计数为实际总数，详细结果请查看同步日志。"
-            type="info"
-            :closable="false"
-            style="margin-bottom: 10px"
-          >
-          </el-alert>
-          <el-tabs type="border-card" style="box-shadow: none">
-            <el-tab-pane v-if="syncProgressInfo.completedTableCount > 0">
-              <template #label
-                ><span
-                  ><Check class="inline-icon" /> 已同步 ({{
-                    syncProgressInfo.completedTableCount
-                  }})</span
-                ></template
-              >
-              <el-table
-                :data="syncProgressInfo.completedTables"
-                max-height="200"
-                border
-                size="small"
-                style="width: 100%"
-              >
-                <el-table-column
-                  type="index"
-                  label="#"
-                  width="50"
-                  align="center"
-                />
-                <el-table-column
-                  prop="table"
-                  label="表名"
-                  show-overflow-tooltip
-                >
-                  <template #default="scope">
-                    {{ scope.row }}
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-tab-pane>
-            <el-tab-pane v-if="syncProgressInfo.pendingTableCount > 0">
-              <template #label
-                ><span
-                  ><Circle class="inline-icon" /> 待同步 ({{
-                    syncProgressInfo.pendingTableCount
-                  }})</span
-                ></template
-              >
-              <el-table
-                :data="syncProgressInfo.pendingTables"
-                max-height="200"
-                border
-                size="small"
-                style="width: 100%"
-              >
-                <el-table-column
-                  type="index"
-                  label="#"
-                  width="50"
-                  align="center"
-                />
-                <el-table-column
-                  prop="table"
-                  label="表名"
-                  show-overflow-tooltip
-                >
-                  <template #default="scope">
-                    {{ scope.row }}
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-tab-pane>
-          </el-tabs>
-        </div>
-
-        <div
-          v-if="
-            syncProgressData.lastSyncResult &&
-            (syncProgressData.syncStatus === '2' ||
-              syncProgressData.syncStatus === '3' ||
-              syncProgressData.syncStatus === '4')
-          "
-          style="margin-top: 20px; padding: 0 20px"
-        >
-          <div class="form-section">同步结果</div>
-          <div
-            style="
-              background: hsl(var(--muted));
-              padding: 10px;
-              border-radius: 4px;
-              font-size: 13px;
-            "
-          >
-            {{ formatSyncResult(syncProgressData.lastSyncResult) }}
-          </div>
-        </div>
-
-        <div
-          v-if="syncProgressData.lastSyncTime"
-          style="
-            margin-top: 15px;
-            padding: 0 20px;
-            font-size: 13px;
-            color: hsl(var(--muted-foreground));
-          "
-        >
-          最后同步时间：{{
-            parseTime(syncProgressData.lastSyncTime, '{y}-{m}-{d} {h}:{i}:{s}')
-          }}
-        </div>
-      </div>
-
-      <template #footer
-        ><div class="dialog-footer">
-          <el-button
-            @click="handleRefreshSyncProgress"
-            :icon="RotateCw"
-            :loading="syncProgressLoading"
-            >刷新进度</el-button
-          >
-          <el-button
-            @click="handleStopSync"
-            type="danger"
-            v-if="isTransferRunning(syncProgressData.syncStatus)"
-            :loading="stopping || syncProgressData.syncStatus === '5'"
-            :disabled="syncProgressData.syncStatus === '5'"
-            >{{
-              syncProgressData.syncStatus === '5' ? '停止中' : '停止同步'
-            }}</el-button
-          >
-          <el-button
-            @click="handleViewLogFromProgress"
-            type="primary"
-            v-if="
-              syncProgressData.syncStatus === '2' ||
-              syncProgressData.syncStatus === '3' ||
-              syncProgressData.syncStatus === '4'
-            "
-            >查看日志</el-button
-          >
-          <el-button @click="handleSyncProgressClose">关 闭</el-button>
-        </div></template
-      >
-    </el-dialog>
-  </BiTablePage>
-</template>
-
 <script>
-import { Page } from '@vben/common-ui';
 import {
-  ChevronDown,
   ArrowRightLeft,
   Check,
+  ChevronDown,
   Circle,
   CircleHelp,
   Copy,
@@ -1242,23 +14,25 @@ import {
   Search,
   SquareCode,
 } from '@vben/icons';
-import {
-  listDataTransfer,
-  getDataTransfer,
-  delDataTransfer,
-  addDataTransfer,
-  updateDataTransfer,
-  executeTransfer,
-  previewTransfer,
-  listTransferLog,
-  getTransferProgress,
-  refreshTransferProgress,
-  getTransferSyncProgress,
-  stopTransfer,
-} from '#/legacy/api/system/datatransfer';
+
 import { getDatasourceOptions } from '#/legacy/api/system/datasource';
+import {
+  addDataTransfer,
+  delDataTransfer,
+  executeTransfer,
+  getDataTransfer,
+  getTransferProgress,
+  getTransferSyncProgress,
+  listDataTransfer,
+  listTransferLog,
+  previewTransfer,
+  refreshTransferProgress,
+  stopTransfer,
+  updateDataTransfer,
+} from '#/legacy/api/system/datatransfer';
 
 export default {
+  name: 'DataTransfer',
   components: {
     ChevronDown,
     ArrowRightLeft,
@@ -1291,7 +65,6 @@ export default {
       SquareCode,
     };
   },
-  name: 'DataTransfer',
   data() {
     return {
       pageActive: true,
@@ -1449,11 +222,11 @@ export default {
         this.form.syncMode === '0' &&
         [
           'MYSQL',
-          'TIDB',
-          'POSTGRESQL',
           'ORACLE',
+          'POSTGRESQL',
           'SQLSERVER',
           'STARROCKS',
+          'TIDB',
         ].includes(this.catalogImportSourceType) &&
         this.directImportTargetType === 'STARROCKS'
       );
@@ -1463,26 +236,6 @@ export default {
         this.canUseExternalTableImport &&
         ['MYSQL', 'TIDB'].includes(this.catalogImportSourceType)
       );
-    },
-    directImportTip() {
-      if (this.form.directImportMethod === 'EXTERNAL_TABLE') {
-        return '自动创建并清理临时外部表，无需 Catalog。StarRocks 各读取节点须能访问当前源数据源的主机和端口。';
-      }
-      return this.catalogImportTip;
-    },
-    catalogImportTip() {
-      if (
-        this.catalogImportSourceType === 'ORACLE' ||
-        this.catalogImportSourceType === 'SQLSERVER'
-      ) {
-        const sourceName =
-          this.catalogImportSourceType === 'ORACLE' ? 'Oracle' : 'SQL Server';
-        return `请先创建连接源 ${sourceName} 的 JDBC Catalog；目标 StarRocks 需支持对应 JDBC Catalog（3.2.9 / 3.3.1 对应版本线及以上）。`;
-      }
-      if (this.catalogImportSourceType === 'STARROCKS') {
-        return '请先创建连接源 StarRocks FE 查询端口（默认 9030）的 MySQL 兼容 JDBC Catalog；JSON、ARRAY、MAP 等复杂类型需验证。';
-      }
-      return '请先在目标 StarRocks 创建连接当前源数据源的 JDBC Catalog。';
     },
     isExternalTableImportEnabled() {
       return (
@@ -1514,22 +267,22 @@ export default {
         const parsed = JSON.parse(this.syncProgressData.syncProgress);
         return {
           current: parsed.current || 0,
-          total: parsed.total > 0 ? parsed.total : 0,
+          total: Math.max(parsed.total, 0),
           percent: parsed.percent || 0,
           message: parsed.message || '',
           pendingTables: parsed.pendingTables || [],
           completedTables: parsed.completedTables || [],
           pendingTableCount:
-            parsed.pendingTableCount != null
-              ? parsed.pendingTableCount
-              : (parsed.pendingTables || []).length,
+            parsed.pendingTableCount == null
+              ? (parsed.pendingTables || []).length
+              : parsed.pendingTableCount,
           completedTableCount:
-            parsed.completedTableCount != null
-              ? parsed.completedTableCount
-              : (parsed.completedTables || []).length,
+            parsed.completedTableCount == null
+              ? (parsed.completedTables || []).length
+              : parsed.completedTableCount,
           tableListsTruncated: parsed.tableListsTruncated === true,
         };
-      } catch (e) {
+      } catch {
         return {
           current: 0,
           total: 0,
@@ -1696,7 +449,7 @@ export default {
     handleSelectionChange(selection) {
       this.ids = selection.map((item) => item.transferId);
       this.single = selection.length !== 1;
-      this.multiple = !selection.length;
+      this.multiple = selection.length === 0;
     },
     /** 新增按钮操作 */
     handleAdd() {
@@ -1716,7 +469,7 @@ export default {
         this.syncOperations.update = this.form.syncUpdate === '1';
         this.syncOperations.delete = this.form.syncDelete === '1';
         this.form.deleteWindowYears =
-          this.form.deleteWindowYears != null ? this.form.deleteWindowYears : 2;
+          this.form.deleteWindowYears == null ? 2 : this.form.deleteWindowYears;
         this.open = true;
         this.title = '修改同步任务';
       });
@@ -1735,7 +488,7 @@ export default {
         this.syncOperations.update = this.form.syncUpdate === '1';
         this.syncOperations.delete = this.form.syncDelete === '1';
         this.form.deleteWindowYears =
-          this.form.deleteWindowYears != null ? this.form.deleteWindowYears : 2;
+          this.form.deleteWindowYears == null ? 2 : this.form.deleteWindowYears;
         this.open = true;
         this.title = '复制同步任务';
       });
@@ -1746,12 +499,12 @@ export default {
         typeof data.catalogName === 'string' ? data.catalogName.trim() : '';
       const directImportMethod =
         data.directImportMethod == null
-          ? catalogName
+          ? (catalogName
             ? 'JDBC_CATALOG'
-            : 'EXTERNAL_TABLE'
-          : typeof data.directImportMethod === 'string'
+            : 'EXTERNAL_TABLE')
+          : (typeof data.directImportMethod === 'string'
             ? data.directImportMethod.trim()
-            : data.directImportMethod;
+            : data.directImportMethod);
       return {
         ...data,
         externalTableEnabled: data.externalTableEnabled === '1' ? '1' : '0',
@@ -1833,7 +586,7 @@ export default {
     validateExternalTableThreshold(rule, value, callback) {
       if (
         this.isExternalTableImportEnabled &&
-        (!Number.isInteger(value) || value < 1 || value > 2147483647)
+        (!Number.isInteger(value) || value < 1 || value > 2_147_483_647)
       ) {
         callback(new Error('请输入 1 至 2147483647 之间的整数，单位为万条'));
         return;
@@ -1843,7 +596,7 @@ export default {
     validateExternalTableWindowUnit(rule, value, callback) {
       if (
         this.isExternalTableImportEnabled &&
-        !['YEAR', 'MONTH', 'DAY'].includes(value)
+        !['DAY', 'MONTH', 'YEAR'].includes(value)
       ) {
         callback(new Error('请选择按年、月或日导入'));
         return;
@@ -1890,15 +643,15 @@ export default {
               : '';
           // deleteWindowYears 已绑定在 form 上，直接提交
 
-          if (this.form.transferId != null) {
-            updateDataTransfer(this.form).then((response) => {
-              this.$modal.msgSuccess('修改成功');
+          if (this.form.transferId == null) {
+            addDataTransfer(this.form).then((response) => {
+              this.$modal.msgSuccess('新增成功');
               this.open = false;
               this.getList();
             });
           } else {
-            addDataTransfer(this.form).then((response) => {
-              this.$modal.msgSuccess('新增成功');
+            updateDataTransfer(this.form).then((response) => {
+              this.$modal.msgSuccess('修改成功');
               this.open = false;
               this.getList();
             });
@@ -1911,7 +664,7 @@ export default {
       const transferIds = row.transferId || this.ids;
       this.$modal
         .confirm('是否确认删除同步任务编号为"' + transferIds + '"的数据项？')
-        .then(function () {
+        .then(() => {
           return delDataTransfer(transferIds);
         })
         .then(() => {
@@ -1925,7 +678,7 @@ export default {
       let text = row.status === '0' ? '启用' : '停用';
       this.$modal
         .confirm('确认要"' + text + '""' + row.transferName + '"任务吗？')
-        .then(function () {
+        .then(() => {
           return updateDataTransfer({
             transferId: row.transferId,
             status: row.status,
@@ -1934,7 +687,7 @@ export default {
         .then(() => {
           this.$modal.msgSuccess(text + '成功');
         })
-        .catch(function () {
+        .catch(() => {
           row.status = row.status === '0' ? '1' : '0';
         });
     },
@@ -2194,15 +947,18 @@ export default {
     },
     /** 获取同步进度条状态 */
     getSyncProgressStatus() {
-      if (this.syncProgressData.syncStatus === '2') {
+      switch (this.syncProgressData.syncStatus) {
+      case '2': {
         return 'success';
-      } else if (this.syncProgressData.syncStatus === '3') {
+      }
+      case '3': {
         return 'exception';
-      } else if (
-        this.syncProgressData.syncStatus === '4' ||
-        this.syncProgressData.syncStatus === '5'
-      ) {
+      }
+      case '4': 
+      case '5': {
         return 'warning';
+      }
+      // No default
       }
       return null;
     },
@@ -2241,7 +997,7 @@ export default {
       try {
         const obj = JSON.parse(result);
         return obj.message || obj.error || JSON.stringify(obj);
-      } catch (e) {
+      } catch {
         return result;
       }
     },
@@ -2298,6 +1054,1237 @@ export default {
   },
 };
 </script>
+
+<template>
+  <BiTablePage
+    title="数据传输任务"
+    :show-search="showSearch"
+    :show-pagination="total > 0"
+  >
+    <template #search>
+      <el-form
+        :model="queryParams"
+        ref="queryForm"
+        :inline="true"
+        v-show="showSearch"
+        label-width="88px"
+      >
+        <el-form-item label="任务名称" prop="transferName">
+          <el-input
+            v-model="queryParams.transferName"
+            placeholder="请输入任务名称"
+            clearable
+            @keyup.enter="handleQuery"
+          />
+        </el-form-item>
+        <el-form-item label="源数据源" prop="sourceDatasourceId">
+          <el-select
+            v-model="queryParams.sourceDatasourceId"
+            placeholder="请选择源数据源"
+            clearable
+          >
+            <el-option
+              v-for="item in datasourceOptions"
+              :key="item.datasourceId"
+              :label="item.datasourceName"
+              :value="item.datasourceId"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="同步模式" prop="syncMode">
+          <el-select
+            v-model="queryParams.syncMode"
+            placeholder="请选择同步模式"
+            clearable
+          >
+            <el-option label="初始化同步" value="0" />
+            <el-option label="增量同步" value="1" />
+          </el-select>
+        </el-form-item>
+        <template v-if="advanced">
+          <el-form-item label="同步状态" prop="syncStatus">
+            <el-select
+              v-model="queryParams.syncStatus"
+              placeholder="请选择同步状态"
+              clearable
+            >
+              <el-option label="待同步" value="0" />
+              <el-option label="同步中" value="1" />
+              <el-option label="同步成功" value="2" />
+              <el-option label="同步失败" value="3" />
+              <el-option label="已停止" value="4" />
+              <el-option label="停止中" value="5" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="状态" prop="status">
+            <el-select
+              v-model="queryParams.status"
+              placeholder="请选择状态"
+              clearable
+            >
+              <el-option label="正常" value="0" />
+              <el-option label="停用" value="1" />
+            </el-select>
+          </el-form-item>
+        </template>
+        <el-form-item>
+          <el-button type="primary" :icon="Search" @click="handleQuery">
+搜索
+</el-button>
+          <el-button :icon="RotateCw" @click="resetQuery">重置</el-button>
+          <el-button link type="primary" @click="advanced = !advanced">
+            {{ advanced ? '收起' : '展开' }}
+            <i
+              :class="advanced ? 'el-icon-arrow-up' : 'el-icon-arrow-down'"
+            ></i>
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </template>
+    <template #toolbar>
+      <el-row :gutter="10" class="mb8">
+        <el-col class="toolbar-action">
+          <el-button
+            type="primary"
+            :icon="Plus"
+            @click="handleAdd"
+            v-hasPermi="['system:datatransfer:add']"
+            >
+新增
+</el-button>
+        </el-col>
+        <el-col class="toolbar-action">
+          <el-button
+            :icon="SquareCode"
+            :disabled="single"
+            @click="handleUpdate"
+            v-hasPermi="['system:datatransfer:edit']"
+            >
+修改
+</el-button>
+        </el-col>
+        <el-col class="toolbar-action">
+          <el-button
+            type="danger"
+            :icon="Eraser"
+            :disabled="multiple"
+            @click="handleDelete"
+            v-hasPermi="['system:datatransfer:remove']"
+            >
+删除
+</el-button>
+        </el-col>
+        <right-toolbar
+          v-model:show-search="showSearch"
+          @query-table="getList"
+        />
+      </el-row>
+    </template>
+    <el-table
+      height="100%"
+      v-loading="loading"
+      :data="dataTransferList"
+      @selection-change="handleSelectionChange"
+    >
+      <el-table-column type="selection" width="55" align="center" />
+      <el-table-column
+        label="任务名称"
+        align="center"
+        prop="transferName"
+        min-width="120"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        label="源数据源"
+        align="center"
+        prop="sourceDatasourceName"
+        min-width="100"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        label="源表"
+        align="center"
+        prop="sourceTable"
+        min-width="120"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        label="目标数据源"
+        align="center"
+        prop="targetDatasourceName"
+        min-width="100"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        label="同步模式"
+        align="center"
+        prop="syncMode"
+        width="100"
+      >
+        <template #default="scope">
+          <el-tag
+            :type="scope.row.syncMode === '0' ? 'info' : 'primary'"
+            size="small"
+          >
+            {{ scope.row.syncMode === '0' ? '初始化' : '增量' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="同步操作" align="center" width="120">
+        <template #default="scope">
+          <el-tag
+            v-if="scope.row.syncInsert === '1'"
+            type="success"
+            size="small"
+            style="margin-right: 2px"
+            >
+I
+</el-tag>
+          <el-tag
+            v-if="scope.row.syncUpdate === '1'"
+            type="warning"
+            size="small"
+            style="margin-right: 2px"
+            >
+U
+</el-tag>
+          <el-tag v-if="scope.row.syncDelete === '1'" type="danger" size="small">
+D
+</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column
+        label="同步状态"
+        align="center"
+        prop="syncStatus"
+        width="90"
+      >
+        <template #default="scope">
+          <el-tag
+            :type="getSyncStatusType(scope.row.syncStatus)"
+            size="small"
+            :style="scope.row.syncStatus !== '0' ? 'cursor: pointer;' : ''"
+            @click="
+              scope.row.syncStatus !== '0'
+                ? showSyncProgress(scope.row.transferId)
+                : null
+            "
+          >
+            {{ getSyncStatusLabel(scope.row.syncStatus) }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="状态" align="center" prop="status" width="80">
+        <template #default="scope">
+          <el-switch
+            v-model="scope.row.status"
+            active-value="0"
+            inactive-value="1"
+            @change="handleStatusChange(scope.row)"
+          />
+        </template>
+      </el-table-column>
+      <el-table-column
+        label="最后同步时间"
+        align="center"
+        prop="lastSyncTime"
+        width="160"
+      >
+        <template #default="scope">
+          <span v-if="scope.row.lastSyncTime">{{
+            parseTime(scope.row.lastSyncTime, '{y}-{m}-{d} {h}:{i}:{s}')
+          }}</span>
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
+      <el-table-column
+        label="操作"
+        align="center"
+        width="280"
+        fixed="right"
+        class-name="bi-actions-column"
+      >
+        <template #default="scope">
+<div class="bi-row-actions">
+            <el-button
+              size="small"
+              link
+              type="primary"
+              :icon="Eye"
+              @click="handlePreview(scope.row)"
+              v-hasPermi="['system:datatransfer:query']"
+              >
+预览
+</el-button>
+            <el-button
+              size="small"
+              link
+              type="primary"
+              :icon="RotateCw"
+              @click="handleExecute(scope.row)"
+              v-hasPermi="['system:datatransfer:execute']"
+              :disabled="isTransferRunning(scope.row.syncStatus)"
+              >
+同步
+</el-button>
+            <el-button
+              size="small"
+              link
+              type="primary"
+              :icon="List"
+              @click="handleLog(scope.row)"
+              v-hasPermi="['system:datatransfer:log']"
+              >
+日志
+</el-button>
+            <el-dropdown
+              trigger="click"
+              placement="bottom-end"
+              v-hasPermi="[
+                'system:datatransfer:query',
+                'system:datatransfer:execute',
+                'system:datatransfer:edit',
+                'system:datatransfer:add',
+                'system:datatransfer:remove',
+              ]"
+            >
+              <el-button link type="primary" aria-label="更多操作">
+更多<ChevronDown class="bi-row-actions-chevron" />
+</el-button>
+              <template #dropdown>
+<el-dropdown-menu>
+                  <el-dropdown-item
+                    :icon="ArrowRightLeft"
+                    v-hasPermi="['system:datatransfer:query']"
+                    v-if="scope.row.syncStatus !== '0'"
+                    @click="showSyncProgress(scope.row.transferId)"
+                    >
+进度
+</el-dropdown-item>
+                  <el-dropdown-item
+                    :icon="Circle"
+                    v-hasPermi="['system:datatransfer:query']"
+                    @click="handleProgress(scope.row)"
+                    >
+时间戳
+</el-dropdown-item>
+                  <el-dropdown-item
+                    :icon="RotateCw"
+                    v-hasPermi="['system:datatransfer:execute']"
+                    :disabled="isTransferRunning(scope.row.syncStatus)"
+                    @click="handleRefreshTransferProgress(scope.row)"
+                    >
+刷新TS
+</el-dropdown-item>
+                  <el-dropdown-item
+                    :icon="SquareCode"
+                    v-hasPermi="['system:datatransfer:edit']"
+                    @click="handleUpdate(scope.row)"
+                    >
+修改
+</el-dropdown-item>
+                  <el-dropdown-item
+                    :icon="Copy"
+                    v-hasPermi="['system:datatransfer:add']"
+                    @click="handleCopy(scope.row)"
+                    >
+复制
+</el-dropdown-item>
+                  <el-dropdown-item
+                    :icon="Eraser"
+                    v-hasPermi="['system:datatransfer:remove']"
+                    @click="handleDelete(scope.row)"
+                    class="bi-row-action-delete"
+                    :divided="
+                      $auth.hasPermiOr([
+                        'system:datatransfer:query',
+                        'system:datatransfer:execute',
+                        'system:datatransfer:edit',
+                        'system:datatransfer:add',
+                      ])
+                    "
+                    >
+删除
+</el-dropdown-item>
+                </el-dropdown-menu>
+</template>
+            </el-dropdown>
+          </div>
+</template>
+      </el-table-column>
+    </el-table>
+    <template #pagination>
+      <pagination
+        v-show="total > 0"
+        :total="total"
+        v-model:page="queryParams.pageNum"
+        v-model:limit="queryParams.pageSize"
+        @pagination="getList"
+      />
+    </template>
+    <el-drawer
+      class="bi-management-drawer"
+      :title="title"
+      v-model="open"
+      size="950px"
+      append-to-body
+    >
+      <el-form
+        class="bi-editor-form"
+        label-position="top"
+        ref="form"
+        :model="form"
+        :rules="rules"
+        label-width="110px"
+      >
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="任务名称" prop="transferName">
+              <el-input
+                v-model="form.transferName"
+                placeholder="请输入任务名称"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="任务编码" prop="transferCode">
+              <el-input
+                v-model="form.transferCode"
+                placeholder="可选，用于标识任务"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <div class="form-section">源数据配置</div>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="源数据源" prop="sourceDatasourceId">
+              <el-select
+                v-model="form.sourceDatasourceId"
+                placeholder="请选择源数据源"
+                filterable
+                style="width: 100%"
+                @change="handleSourceChange"
+              >
+                <el-option
+                  v-for="item in datasourceOptions"
+                  :key="item.datasourceId"
+                  :label="
+                    `${item.datasourceName } (${ item.datasourceType })`
+                  "
+                  :value="item.datasourceId"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="源Schema模式" prop="sourceSchemaPattern">
+          <el-input
+            v-model="form.sourceSchemaPattern"
+            type="textarea"
+            :rows="2"
+            placeholder="多个模式用逗号分隔，支持通配符%，如: db_%, schema_2024%, test_db（可选，留空表示所有Schema）"
+          />
+        </el-form-item>
+
+        <el-form-item label="源表名" prop="sourceTable">
+          <el-input
+            v-model="form.sourceTable"
+            type="textarea"
+            :rows="2"
+            placeholder="多个模式用逗号分隔，支持通配符%，如: user_%, order_2024%, sys_user"
+          />
+        </el-form-item>
+
+        <div class="form-section">目标数据配置</div>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="目标数据源" prop="targetDatasourceId">
+              <el-select
+                v-model="form.targetDatasourceId"
+                placeholder="请选择目标数据源"
+                filterable
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="item in datasourceOptions"
+                  :key="item.datasourceId"
+                  :label="
+                    `${item.datasourceName } (${ item.datasourceType })`
+                  "
+                  :value="item.datasourceId"
+                  :disabled="item.datasourceId === form.sourceDatasourceId"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <div class="form-section">同步配置</div>
+
+        <!-- 第一行：同步模式 -->
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="同步模式" prop="syncMode">
+              <el-radio-group
+                v-model="form.syncMode"
+                @change="handleSyncModeChange"
+              >
+                <el-radio value="0">初始化同步</el-radio>
+                <el-radio value="1">增量同步</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item
+          v-if="canUseExternalTableImport"
+          label="数据湖导入"
+          prop="externalTableEnabled"
+          class="external-table-import-item"
+        >
+          <div class="external-table-import-option">
+            <el-switch
+              v-model="form.externalTableEnabled"
+              active-value="1"
+              inactive-value="0"
+            />
+            <span class="external-table-import-tip">由 StarRocks 直接读取源数据</span>
+          </div>
+        </el-form-item>
+
+        <el-form-item
+          v-if="isExternalTableImportEnabled"
+          label="导入方式"
+          prop="directImportMethod"
+          :required="true"
+        >
+          <el-radio-group
+            v-model="form.directImportMethod"
+            @change="handleDirectImportMethodChange"
+          >
+            <el-radio v-if="canUseMysqlExternalTable" value="EXTERNAL_TABLE">
+外部表
+</el-radio>
+            <el-radio value="JDBC_CATALOG">JDBC Catalog</el-radio>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item
+          v-if="isCatalogImportEnabled"
+          label="Catalog 名称"
+          prop="catalogName"
+          :required="true"
+        >
+          <el-input
+            v-model="form.catalogName"
+            placeholder="例如：src_mysql"
+            :maxlength="1023"
+            clearable
+            class="catalog-name-input"
+          />
+        </el-form-item>
+
+        <!-- 两种数据湖导入方式共享导入策略 -->
+        <el-form-item
+          v-if="isExternalTableImportEnabled"
+          label="导入策略"
+          class="external-table-policy-item"
+        >
+          <div class="external-table-policy-controls">
+            <div class="external-table-policy-clause">
+              <span>有效数据少于</span>
+              <el-form-item
+                prop="externalTableThresholdWan"
+                class="external-table-policy-field"
+              >
+                <el-input-number
+                  v-model="form.externalTableThresholdWan"
+                  :min="1"
+                  :max="2147483647"
+                  :step="1"
+                  :precision="0"
+                  controls-position="right"
+                  class="external-table-threshold"
+                  aria-label="整批导入阈值，单位万条"
+                />
+              </el-form-item>
+              <span>万条时整批导入，</span>
+            </div>
+            <div class="external-table-policy-clause">
+              <span>否则按</span>
+              <el-form-item
+                prop="externalTableWindowUnit"
+                class="external-table-policy-field"
+              >
+                <el-select
+                  v-model="form.externalTableWindowUnit"
+                  class="external-table-window-unit"
+                  aria-label="分段导入时间单位"
+                >
+                  <el-option label="年" value="YEAR" />
+                  <el-option label="月" value="MONTH" />
+                  <el-option label="日" value="DAY" />
+                </el-select>
+              </el-form-item>
+              <span>导入</span>
+            </div>
+          </div>
+          <div class="external-table-policy-tip">
+            <template v-if="form.timestampField && form.timestampField.trim()">
+&nbsp;不同步时间戳为 NULL 的数据。
+</template>
+            <template v-else>未配置时间戳字段时按整表导入。</template>
+          </div>
+        </el-form-item>
+
+        <!-- 时间戳字段（独立一行，始终显示） -->
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="时间戳字段" prop="timestampField">
+              <el-input
+                v-model="form.timestampField"
+                placeholder="默认: time_stamp"
+              >
+                <template #append>
+                  <el-tooltip
+                    content="同步时依据此字段判断时间窗口"
+                    placement="top"
+                  >
+                    <CircleHelp class="inline-icon" />
+                  </el-tooltip>
+                </template>
+              </el-input>
+            </el-form-item>
+          </el-col>
+          <el-col
+            :span="12"
+            v-if="
+              form.syncMode === '0' &&
+              !isExternalTableImportEnabled &&
+              form.timestampField &&
+              form.timestampField.trim()
+            "
+          >
+            <el-form-item label="分片粒度" prop="externalTableWindowUnit">
+              <el-select
+                v-model="form.externalTableWindowUnit"
+                aria-label="全量分片时间粒度"
+              >
+                <el-option label="年" value="YEAR" />
+                <el-option label="月" value="MONTH" />
+                <el-option label="日" value="DAY" />
+              </el-select>
+              <div
+                style="
+                  color: hsl(var(--muted-foreground));
+                  font-size: 12px;
+                  margin-top: 4px;
+                "
+              >
+                初始化时按所选时间粒度分片读取，时间戳字段建议建索引
+              </div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 同步操作与原 JDBC 批次大小 -->
+        <el-row :gutter="20">
+          <el-col :span="12" v-if="form.syncMode === '1'">
+            <el-form-item label="同步操作" prop="syncOperations">
+              <el-checkbox v-model="syncOperations.insert">INSERT</el-checkbox>
+              <el-checkbox v-model="syncOperations.update">UPDATE</el-checkbox>
+              <el-checkbox v-model="syncOperations.delete">DELETE</el-checkbox>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12" v-if="!isExternalTableImportEnabled">
+            <el-form-item label="批次大小" prop="batchSize">
+              <el-input-number
+                v-model="form.batchSize"
+                :min="10"
+                :max="100000"
+                :step="10"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- 第四行：删除保护窗口（增量模式显示） -->
+        <el-row :gutter="20" v-if="form.syncMode === '1'">
+          <el-col :span="12">
+            <el-form-item label="删除窗口(年)" prop="deleteWindowYears">
+              <el-input-number
+                v-model="form.deleteWindowYears"
+                :min="1"
+                :max="10"
+                :step="1"
+              />
+              <div
+                style="
+                  color: hsl(var(--muted-foreground));
+                  font-size: 12px;
+                  margin-top: 4px;
+                "
+              >
+                只同步最近 N 年内的删除，默认 2 年
+              </div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <div class="form-section">其他配置</div>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="Cron表达式" prop="cronExpression">
+              <el-input v-model="form.cronExpression" placeholder="定时任务">
+                <template #append>
+                  <el-tooltip content="" placement="top">
+                    <CircleHelp class="inline-icon" />
+                  </el-tooltip>
+                </template>
+              </el-input>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="备注" prop="remark">
+          <el-input
+            v-model="form.remark"
+            type="textarea"
+            :rows="2"
+            placeholder="请输入备注"
+          />
+        </el-form-item>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="状态" prop="status">
+              <el-radio-group v-model="form.status">
+                <el-radio value="0">正常</el-radio>
+                <el-radio value="1">停用</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+<div class="dialog-footer">
+          <el-button @click="cancel">取 消</el-button>
+          <el-button type="primary" @click="submitForm">确 定</el-button>
+        </div>
+</template>
+    </el-drawer>
+    <el-dialog
+      title="同步预览 - 匹配的表列表"
+      v-model="previewOpen"
+      width="700px"
+      append-to-body
+    >
+      <div v-loading="previewLoading">
+        <el-alert
+          v-if="previewTables.length > 0"
+          :title="
+            `共匹配到 ${ 
+            previewSchemaCount 
+            } 个库，${ 
+            previewTableCount 
+            } 张表`
+          "
+          type="success"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 15px"
+        />
+        <el-alert
+          v-else
+          title="未匹配到任何表，请检查源数据源和匹配模式"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 15px"
+        />
+        <el-table :data="previewTables" max-height="400" border size="small">
+          <el-table-column type="index" label="#" width="50" align="center" />
+          <el-table-column
+            prop="schemaName"
+            label="库名"
+            width="180"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="tableName"
+            label="表名"
+            show-overflow-tooltip
+          />
+        </el-table>
+      </div>
+      <template #footer>
+<div class="dialog-footer">
+          <el-button @click="previewOpen = false">关 闭</el-button>
+        </div>
+</template>
+    </el-dialog>
+    <el-dialog title="同步日志" v-model="logOpen" width="1200px" append-to-body>
+      <!-- 搜索条件 -->
+      <el-form
+        :model="logQueryParams"
+        ref="logQueryForm"
+        size="small"
+        :inline="true"
+      >
+        <el-form-item label="源表名称" prop="sourceTable">
+          <el-input
+            v-model="logQueryParams.sourceTable"
+            placeholder="请输入源表名称"
+            clearable
+            style="width: 180px"
+            @keyup.enter="handleLogQuery"
+          />
+        </el-form-item>
+        <el-form-item label="目标表名称" prop="targetTable">
+          <el-input
+            v-model="logQueryParams.targetTable"
+            placeholder="请输入目标表名称"
+            clearable
+            style="width: 180px"
+            @keyup.enter="handleLogQuery"
+          />
+        </el-form-item>
+        <el-form-item label="同步模式" prop="syncMode">
+          <el-select
+            v-model="logQueryParams.syncMode"
+            placeholder="请选择"
+            clearable
+            style="width: 120px"
+          >
+            <el-option label="初始化" value="0" />
+            <el-option label="增量" value="1" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="同步结果" prop="syncResult">
+          <el-select
+            v-model="logQueryParams.syncResult"
+            placeholder="请选择"
+            clearable
+            style="width: 120px"
+          >
+            <el-option label="成功" value="0" />
+            <el-option label="失败" value="1" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="创建时间">
+          <el-date-picker
+            v-model="logDateRange"
+            style="width: 240px"
+            value-format="YYYY-MM-DD"
+            type="daterange"
+            range-separator="-"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button
+            type="primary"
+            :icon="Search"
+            size="small"
+            @click="handleLogQuery"
+            >
+搜索
+</el-button>
+          <el-button :icon="RotateCw" size="small" @click="resetLogQuery">
+重置
+</el-button>
+        </el-form-item>
+      </el-form>
+
+      <!-- 日志列表 -->
+      <el-table
+        :data="logList"
+        max-height="400"
+        border
+        size="small"
+        v-loading="logLoading"
+      >
+        <el-table-column
+          label="源表"
+          align="center"
+          prop="sourceTable"
+          min-width="120"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="目标表"
+          align="center"
+          prop="targetTable"
+          min-width="120"
+          show-overflow-tooltip
+        />
+        <el-table-column label="模式" align="center" prop="syncMode" width="70">
+          <template #default="scope">
+            <el-tag
+              :type="scope.row.syncMode === '0' ? 'info' : 'primary'"
+              size="small"
+            >
+              {{ scope.row.syncMode === '0' ? '初始化' : '增量' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="操作"
+          align="center"
+          prop="syncAction"
+          width="80"
+        />
+        <el-table-column
+          label="总数"
+          align="center"
+          prop="totalCount"
+          width="70"
+        />
+        <el-table-column
+          label="成功"
+          align="center"
+          prop="successCount"
+          width="70"
+        >
+          <template #default="scope">
+            <span style="color: #67c23a">{{ scope.row.successCount }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="失败"
+          align="center"
+          prop="failCount"
+          width="70"
+        >
+          <template #default="scope">
+            <span
+              :style="{ color: scope.row.failCount > 0 ? '#F56C6C' : '' }"
+              >{{ scope.row.failCount }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="结果"
+          align="center"
+          prop="syncResult"
+          width="70"
+        >
+          <template #default="scope">
+            <el-tag
+              :type="scope.row.syncResult === '0' ? 'success' : 'danger'"
+              size="small"
+            >
+              {{ scope.row.syncResult === '0' ? '成功' : '失败' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="耗时(ms)"
+          align="center"
+          prop="executeTime"
+          width="90"
+        />
+        <el-table-column
+          label="错误信息"
+          align="center"
+          prop="errorMessage"
+          min-width="150"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="时间"
+          align="center"
+          prop="createTime"
+          width="160"
+        >
+          <template #default="scope">
+            <span>{{
+              parseTime(scope.row.createTime, '{y}-{m}-{d} {h}:{i}:{s}')
+            }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 分页 -->
+      <pagination
+        v-show="logTotal > 0"
+        :total="logTotal"
+        v-model:page="logQueryParams.pageNum"
+        v-model:limit="logQueryParams.pageSize"
+        @pagination="getLogList"
+      />
+
+      <template #footer>
+<div class="dialog-footer">
+          <el-button @click="logOpen = false">关 闭</el-button>
+        </div>
+</template>
+    </el-dialog>
+    <el-dialog
+      title="表级同步时间戳"
+      v-model="progressOpen"
+      width="820px"
+      append-to-body
+    >
+      <el-table
+        :data="progressList"
+        max-height="500"
+        border
+        size="small"
+        v-loading="progressLoading"
+      >
+        <el-table-column
+          label="源表"
+          align="center"
+          prop="sourceTable"
+          min-width="200"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="最后时间戳(ms)"
+          align="center"
+          prop="lastSyncValue"
+          width="140"
+        />
+        <el-table-column label="最后时间" align="center" min-width="180">
+          <template #default="scope">
+            <span v-if="scope.row.lastSyncValue">{{
+              parseTime(
+                Number(scope.row.lastSyncValue),
+                '{y}-{m}-{d} {h}:{i}:{s}',
+              )
+            }}</span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="更新时间" align="center" min-width="160">
+          <template #default="scope">
+            <span v-if="scope.row.updateTime">{{
+              parseTime(scope.row.updateTime, '{y}-{m}-{d} {h}:{i}:{s}')
+            }}</span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+<div class="dialog-footer">
+          <el-button
+            type="primary"
+            :icon="RotateCw"
+            :loading="progressRefreshLoading"
+            @click="
+              handleRefreshTransferProgress({ transferId: progressTransferId })
+            "
+            v-hasPermi="['system:datatransfer:execute']"
+            >
+刷新最大时间戳
+</el-button>
+          <el-button @click="progressOpen = false">关 闭</el-button>
+        </div>
+</template>
+    </el-dialog>
+    <el-dialog
+      title="同步进度"
+      v-model="syncProgressOpen"
+      width="600px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="true"
+      @close="handleSyncProgressClose"
+      append-to-body
+    >
+      <div v-loading="syncProgressLoading">
+        <el-alert
+          :title="getSyncProgressTitle()"
+          :type="getSyncProgressAlertType()"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 20px"
+        />
+
+        <div v-if="syncProgressData.syncProgress" style="padding: 0 20px">
+          <div style="margin-bottom: 15px">
+            <span style="font-weight: bold">表进度：</span>
+            <span>{{ syncProgressInfo.current || 0
+              }}{{
+                syncProgressInfo.total > 0 ? ` / ${ syncProgressInfo.total}` : ''
+              }}</span>
+          </div>
+          <el-progress
+            :percentage="syncProgressInfo.percent || 0"
+            :status="getSyncProgressStatus()"
+            :stroke-width="20"
+            :show-text="false"
+          />
+          <div
+            style="
+              margin-top: 15px;
+              color: hsl(var(--muted-foreground));
+              font-size: 13px;
+            "
+          >
+            {{ syncProgressInfo.message || '准备开始同步...' }}
+          </div>
+        </div>
+
+        <!-- 表列表显示 -->
+        <div
+          v-if="
+            syncProgressInfo.pendingTables || syncProgressInfo.completedTables
+          "
+          style="margin-top: 20px; padding: 0 20px"
+        >
+          <el-alert
+            v-if="syncProgressInfo.tableListsTruncated"
+            title="表数量较多，列表仅展示部分待同步表和最近完成表；下方计数为实际总数，详细结果请查看同步日志。"
+            type="info"
+            :closable="false"
+            style="margin-bottom: 10px"
+          />
+          <el-tabs type="border-card" style="box-shadow: none">
+            <el-tab-pane v-if="syncProgressInfo.completedTableCount > 0">
+              <template #label>
+<span><Check class="inline-icon" /> 已同步 ({{
+                    syncProgressInfo.completedTableCount
+                  }})</span>
+</template>
+              <el-table
+                :data="syncProgressInfo.completedTables"
+                max-height="200"
+                border
+                size="small"
+                style="width: 100%"
+              >
+                <el-table-column
+                  type="index"
+                  label="#"
+                  width="50"
+                  align="center"
+                />
+                <el-table-column
+                  prop="table"
+                  label="表名"
+                  show-overflow-tooltip
+                >
+                  <template #default="scope">
+                    {{ scope.row }}
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane v-if="syncProgressInfo.pendingTableCount > 0">
+              <template #label>
+<span><Circle class="inline-icon" /> 待同步 ({{
+                    syncProgressInfo.pendingTableCount
+                  }})</span>
+</template>
+              <el-table
+                :data="syncProgressInfo.pendingTables"
+                max-height="200"
+                border
+                size="small"
+                style="width: 100%"
+              >
+                <el-table-column
+                  type="index"
+                  label="#"
+                  width="50"
+                  align="center"
+                />
+                <el-table-column
+                  prop="table"
+                  label="表名"
+                  show-overflow-tooltip
+                >
+                  <template #default="scope">
+                    {{ scope.row }}
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+
+        <div
+          v-if="
+            syncProgressData.lastSyncResult &&
+            (syncProgressData.syncStatus === '2' ||
+              syncProgressData.syncStatus === '3' ||
+              syncProgressData.syncStatus === '4')
+          "
+          style="margin-top: 20px; padding: 0 20px"
+        >
+          <div class="form-section">同步结果</div>
+          <div
+            style="
+              background: hsl(var(--muted));
+              padding: 10px;
+              border-radius: 4px;
+              font-size: 13px;
+            "
+          >
+            {{ formatSyncResult(syncProgressData.lastSyncResult) }}
+          </div>
+        </div>
+
+        <div
+          v-if="syncProgressData.lastSyncTime"
+          style="
+            margin-top: 15px;
+            padding: 0 20px;
+            font-size: 13px;
+            color: hsl(var(--muted-foreground));
+          "
+        >
+          最后同步时间：{{
+            parseTime(syncProgressData.lastSyncTime, '{y}-{m}-{d} {h}:{i}:{s}')
+          }}
+        </div>
+      </div>
+
+      <template #footer>
+<div class="dialog-footer">
+          <el-button
+            @click="handleRefreshSyncProgress"
+            :icon="RotateCw"
+            :loading="syncProgressLoading"
+            >
+刷新进度
+</el-button>
+          <el-button
+            @click="handleStopSync"
+            type="danger"
+            v-if="isTransferRunning(syncProgressData.syncStatus)"
+            :loading="stopping || syncProgressData.syncStatus === '5'"
+            :disabled="syncProgressData.syncStatus === '5'"
+            >
+{{
+              syncProgressData.syncStatus === '5' ? '停止中' : '停止同步'
+            }}
+</el-button>
+          <el-button
+            @click="handleViewLogFromProgress"
+            type="primary"
+            v-if="
+              syncProgressData.syncStatus === '2' ||
+              syncProgressData.syncStatus === '3' ||
+              syncProgressData.syncStatus === '4'
+            "
+            >
+查看日志
+</el-button>
+          <el-button @click="handleSyncProgressClose">关 闭</el-button>
+        </div>
+</template>
+    </el-dialog>
+  </BiTablePage>
+</template>
 
 <style scoped>
 .toolbar-action {
