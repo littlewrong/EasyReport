@@ -319,17 +319,25 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         if (submittedMethod != null)
         {
             submittedMethod = submittedMethod.trim();
+            if (ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE.equals(submittedMethod))
+            {
+                submittedMethod = ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE;
+            }
             task.setDirectImportMethod(submittedMethod);
         }
         if (submittedMethod != null
-                && !ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE.equals(submittedMethod)
-                && !ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(submittedMethod))
+                && !ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(submittedMethod)
+                && !ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE.equals(submittedMethod))
         {
-            throw new ServiceException("数据湖导入方式仅允许EXTERNAL_TABLE或JDBC_CATALOG");
+            throw new ServiceException("数据湖导入方式仅允许JDBC_CATALOG或JDBC_RESOURCE");
         }
         if (task.getCatalogName() != null)
         {
             task.setCatalogName(task.getCatalogName().trim());
+        }
+        if (task.getResourceName() != null)
+        {
+            task.setResourceName(task.getResourceName().trim());
         }
         if (oldTask == null && submittedMethod == null)
         {
@@ -343,16 +351,16 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         }
         boolean bindingChanged = oldTask != null && (task.getSyncMode() != null
                 || task.getSourceDatasourceId() != null || task.getTargetDatasourceId() != null
-                || task.getCatalogName() != null || submittedMethod != null);
+                || task.getCatalogName() != null || task.getResourceName() != null || submittedMethod != null);
         if (bindingChanged && submittedMethod == null
                 && ("0".equals(enabled) || (enabled == null && !"1".equals(oldTask.getExternalTableEnabled()))))
         {
             // Preserve the route of disabled legacy records before their inactive parameters change.
             String originalMethod = oldTask.resolveDirectImportMethod();
-            if (!ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE.equals(originalMethod)
-                    && !ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(originalMethod))
+            if (!ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(originalMethod)
+                    && !ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE.equals(originalMethod))
             {
-                throw new ServiceException("数据湖导入方式仅允许EXTERNAL_TABLE或JDBC_CATALOG");
+                throw new ServiceException("数据湖导入方式仅允许JDBC_CATALOG或JDBC_RESOURCE");
             }
             task.setDirectImportMethod(originalMethod);
         }
@@ -365,16 +373,17 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
             return;
         }
 
-        // A sparse edit cannot switch a saved Catalog task to external tables by clearing its name.
+        // A sparse edit cannot change a saved import route by clearing an inactive name.
         String importMethod = submittedMethod != null ? submittedMethod
                 : oldTask != null ? oldTask.resolveDirectImportMethod() : task.resolveDirectImportMethod();
-        if (!ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE.equals(importMethod)
-                && !ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(importMethod))
+        if (!ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(importMethod)
+                && !ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE.equals(importMethod))
         {
-            throw new ServiceException("数据湖导入方式仅允许EXTERNAL_TABLE或JDBC_CATALOG");
+            throw new ServiceException("数据湖导入方式仅允许JDBC_CATALOG或JDBC_RESOURCE");
         }
         task.setDirectImportMethod(importMethod);
         boolean catalogImport = ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(importMethod);
+        boolean resourceImport = ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE.equals(importMethod);
         String syncMode = task.getSyncMode() != null ? task.getSyncMode()
                 : oldTask != null ? oldTask.getSyncMode() : "0";
         Long sourceId = task.getSourceDatasourceId() != null ? task.getSourceDatasourceId()
@@ -385,24 +394,40 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         ErDatasource target = targetId != null ? erDatasourceMapper.selectErDatasourceByDatasourceId(targetId) : null;
         String sourceType = source != null ? source.getDatasourceType() : null;
         String targetType = target != null ? target.getDatasourceType() : null;
-        boolean supportedSource = "MYSQL".equalsIgnoreCase(sourceType) || "TIDB".equalsIgnoreCase(sourceType)
+        boolean supportedSource = resourceImport
+                ? "MYSQL".equalsIgnoreCase(sourceType) || "TIDB".equalsIgnoreCase(sourceType)
+                    || "STARROCKS".equalsIgnoreCase(sourceType) || "KINGBASE".equalsIgnoreCase(sourceType)
+                    || "DM".equalsIgnoreCase(sourceType) || "POSTGRESQL".equalsIgnoreCase(sourceType)
+                    || "ORACLE".equalsIgnoreCase(sourceType) || "SQLSERVER".equalsIgnoreCase(sourceType)
+                : "MYSQL".equalsIgnoreCase(sourceType) || "TIDB".equalsIgnoreCase(sourceType)
+                || "STARROCKS".equalsIgnoreCase(sourceType)
                 || (catalogImport && ("POSTGRESQL".equalsIgnoreCase(sourceType) || "ORACLE".equalsIgnoreCase(sourceType)
-                    || "SQLSERVER".equalsIgnoreCase(sourceType) || "STARROCKS".equalsIgnoreCase(sourceType)));
+                    || "SQLSERVER".equalsIgnoreCase(sourceType)));
         boolean supported = "0".equals(syncMode) && supportedSource
                 && "STARROCKS".equalsIgnoreCase(targetType);
         if (!supported)
         {
             if ("1".equals(enabled) || submittedMethod != null)
             {
-                throw new ServiceException(catalogImport
-                        ? "Catalog导入仅支持MySQL/TiDB/PostgreSQL/Oracle/SQLServer/StarRocks到StarRocks的初始化同步"
-                        : "外部表导入仅支持MySQL/TiDB到StarRocks的初始化同步");
+                throw new ServiceException(resourceImport
+                        ? "Resource导入仅支持MySQL/TiDB/StarRocks/Kingbase/DM/PostgreSQL/Oracle/SQLServer到StarRocks的初始化同步"
+                        : "Catalog导入仅支持MySQL/TiDB/PostgreSQL/Oracle/SQLServer/StarRocks到StarRocks的初始化同步");
             }
             task.setExternalTableEnabled("0");
             return;
         }
-        if (!catalogImport)
+        if (resourceImport)
         {
+            String resourceName = task.getResourceName() != null ? task.getResourceName()
+                    : oldTask != null ? oldTask.getResourceName() : null;
+            if (resourceName == null || resourceName.isEmpty())
+            {
+                throw new ServiceException("启用Resource导入时必须填写Resource名称");
+            }
+            if (resourceName.length() > 64 || !resourceName.matches("[a-zA-Z][a-zA-Z0-9_]*"))
+            {
+                throw new ServiceException("Resource导入名称须以字母开头，仅包含字母、数字、下划线，且不超过64个字符");
+            }
             return;
         }
         String catalogName = task.getCatalogName() != null ? task.getCatalogName()
@@ -868,6 +893,18 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
                     }
                 }
             }
+            else if ("KINGBASE".equalsIgnoreCase(dbType) || "DM".equalsIgnoreCase(dbType))
+            {
+                DataSyncExtractor extractor = DataSyncFactory.buildExtractor(sourceDatasource);
+                for (String[] spec : extractor.listTableSpecs(conn, schemaPatterns, tablePatterns))
+                {
+                    schemas.add(spec[0]);
+                    Map<String, String> tableInfo = new HashMap<>();
+                    tableInfo.put("schemaName", spec[0]);
+                    tableInfo.put("tableName", spec[1]);
+                    tables.add(tableInfo);
+                }
+            }
             else
             {
                 // 其他数据库（PostgreSQL/Oracle/SQL Server）：使用 JDBC getTables
@@ -1228,6 +1265,11 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         if ("POSTGRESQL".equals(type))
         {
             return "\"" + schema + "\".\"" + table + "\"";
+        }
+        if ("KINGBASE".equals(type) || "DM".equals(type))
+        {
+            return quoteTargetIdentifierForProgressRefresh(dbType, schema) + "."
+                + quoteTargetIdentifierForProgressRefresh(dbType, table);
         }
         return "`" + schema + "`.`" + table + "`";
     }

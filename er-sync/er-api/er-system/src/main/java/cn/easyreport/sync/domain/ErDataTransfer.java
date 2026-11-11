@@ -57,17 +57,22 @@ public class ErDataTransfer extends BaseEntity
     @Excel(name = "同步模式", readConverterExp = "0=初始化同步,1=增量同步")
     private String syncMode;
 
+    /** Legacy request/storage alias for JDBC_RESOURCE; no MYSQL external-table route remains. */
     public static final String DIRECT_IMPORT_EXTERNAL_TABLE = "EXTERNAL_TABLE";
     public static final String DIRECT_IMPORT_JDBC_CATALOG = "JDBC_CATALOG";
+    public static final String DIRECT_IMPORT_JDBC_RESOURCE = "JDBC_RESOURCE";
 
     /** 数据湖导入（0关闭 1开启，仅支持到StarRocks的初始化同步） */
     private String externalTableEnabled;
 
-    /** 导入方式；旧记录为空时沿用 Catalog 名称有无决定的原路径 */
+    /** 导入方式；旧记录及EXTERNAL_TABLE别名统一使用已有Resource，已有Catalog方式保留 */
     private String directImportMethod;
 
     /** 已在目标StarRocks创建的JDBC Catalog名称；旧外部表任务可为空 */
     private String catalogName;
+
+    /** 已在目标StarRocks创建的JDBC Resource名称；仅JDBC_RESOURCE方式使用 */
+    private String resourceName;
 
     /** 数据湖整批导入阈值（万条，少于该值时整批导入） */
     private Integer externalTableThresholdWan;
@@ -254,9 +259,10 @@ public class ErDataTransfer extends BaseEntity
     /** Explicit choices take precedence, including when an inactive Catalog name is retained. */
     public String resolveDirectImportMethod()
     {
+        if (DIRECT_IMPORT_EXTERNAL_TABLE.equals(directImportMethod)) return DIRECT_IMPORT_JDBC_RESOURCE;
         if (directImportMethod != null) return directImportMethod;
         return catalogName != null && !catalogName.trim().isEmpty()
-                ? DIRECT_IMPORT_JDBC_CATALOG : DIRECT_IMPORT_EXTERNAL_TABLE;
+                ? DIRECT_IMPORT_JDBC_CATALOG : DIRECT_IMPORT_JDBC_RESOURCE;
     }
 
     public void setCatalogName(String catalogName)
@@ -267,6 +273,16 @@ public class ErDataTransfer extends BaseEntity
     public String getCatalogName()
     {
         return catalogName;
+    }
+
+    public void setResourceName(String resourceName)
+    {
+        this.resourceName = resourceName;
+    }
+
+    public String getResourceName()
+    {
+        return resourceName;
     }
 
     public void setExternalTableThresholdWan(Integer externalTableThresholdWan)
@@ -443,6 +459,7 @@ public class ErDataTransfer extends BaseEntity
             .append("externalTableEnabled", getExternalTableEnabled())
             .append("directImportMethod", getDirectImportMethod())
             .append("catalogName", getCatalogName())
+            .append("resourceName", getResourceName())
             .append("externalTableThresholdWan", getExternalTableThresholdWan())
             .append("externalTableWindowUnit", getExternalTableWindowUnit())
             .append("timestampField", getTimestampField())

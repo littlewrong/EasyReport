@@ -34,6 +34,9 @@ import cn.easyreport.sync.core.SchemaSyncExecutor;
 import cn.easyreport.sync.model.SyncResult;
 import cn.easyreport.sync.model.TableMeta;
 import cn.easyreport.sync.extractor.ExtendedExtractorFactory;
+import cn.easyreport.sync.extractor.SchemaExtractor;
+import cn.easyreport.sync.extractor.KingbaseSchemaExtractor;
+import cn.easyreport.sync.extractor.DmSchemaExtractor;
 import cn.easyreport.sync.extractor.FirstSchemaSupport;
 import cn.easyreport.quartz.service.ISysJobService;
 import cn.easyreport.quartz.domain.SysJob;
@@ -454,9 +457,11 @@ public class ErDataSyncServiceImpl implements IErDataSyncService
             return result;
         }
 
-        if ("1".equals(syncTask.getStructureReuseMode()))
+        if ("1".equals(syncTask.getStructureReuseMode())
+            || "KINGBASE".equalsIgnoreCase(sourceDatasource.getDatasourceType())
+            || "DM".equalsIgnoreCase(sourceDatasource.getDatasourceType()))
         {
-            return previewShardedSchemas(syncTask, sourceDatasource);
+            return previewStructuredSchemas(syncTask, sourceDatasource);
         }
 
         Connection conn = null;
@@ -756,15 +761,19 @@ public class ErDataSyncServiceImpl implements IErDataSyncService
     }
 
     /**
-     * Preview the same shard/table combinations that the executor will create,
-     * without reading column or index metadata.
+     * Preview the executor's table plan without reading column or index metadata.
      */
-    private Map<String, Object> previewShardedSchemas(ErDataSync task, ErDatasource source)
+    private Map<String, Object> previewStructuredSchemas(ErDataSync task, ErDatasource source)
     {
         try
         {
-            List<TableMeta> plannedTables = ExtendedExtractorFactory.build(source).listTableNamesUsingFirstSchema(
-                task.getSourceSchemaPattern(), task.getSourceTablePattern());
+            SchemaExtractor extractor = ExtendedExtractorFactory.build(source);
+            boolean reuseFirstSchema = "1".equals(task.getStructureReuseMode());
+            List<TableMeta> plannedTables = reuseFirstSchema
+                ? extractor.listTableNamesUsingFirstSchema(task.getSourceSchemaPattern(), task.getSourceTablePattern())
+                : extractor instanceof DmSchemaExtractor
+                    ? ((DmSchemaExtractor) extractor).listTableNames(task.getSourceSchemaPattern(), task.getSourceTablePattern())
+                    : ((KingbaseSchemaExtractor) extractor).listTableNames(task.getSourceSchemaPattern(), task.getSourceTablePattern());
             List<Map<String, String>> tables = new ArrayList<>();
             Set<String> schemas = new HashSet<>();
             for (TableMeta table : plannedTables)
@@ -780,14 +789,16 @@ public class ErDataSyncServiceImpl implements IErDataSyncService
             result.put("tables", tables);
             result.put("schemaCount", schemas.size());
             result.put("tableCount", tables.size());
-            result.put("templateSchema", plannedTables.isEmpty() ? null
+            result.put("templateSchema", !reuseFirstSchema || plannedTables.isEmpty() ? null
                 : FirstSchemaSupport.scopeOf(plannedTables.get(0), source.getDatasourceType()));
             return result;
         }
         catch (Exception e)
         {
-            log.error("分片库架构预览失败", e);
-            throw new ServiceException("分片库架构预览失败: " + e.getMessage());
+            String message = "1".equals(task.getStructureReuseMode()) ? "分片库架构预览失败"
+                : "DM".equalsIgnoreCase(source.getDatasourceType()) ? "达梦架构预览失败" : "金仓架构预览失败";
+            log.error(message, e);
+            throw new ServiceException(message + ": " + e.getMessage());
         }
     }
 

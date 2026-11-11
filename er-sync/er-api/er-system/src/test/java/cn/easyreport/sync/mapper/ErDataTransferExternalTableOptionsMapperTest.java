@@ -57,6 +57,7 @@ public class ErDataTransferExternalTableOptionsMapperTest
         assertFalse(sql(bound).contains("external_table_threshold_wan"));
         assertFalse(sql(bound).contains("external_table_window_unit"));
         assertFalse(sql(bound).contains("catalog_name"));
+        assertFalse(sql(bound).contains("resource_name"));
         assertFalse(sql(bound).contains("direct_import_method"));
         assertTrue(properties(bound).isEmpty());
     }
@@ -74,6 +75,7 @@ public class ErDataTransferExternalTableOptionsMapperTest
         assertFalse(sql(bound).contains("external_table_threshold_wan"));
         assertFalse(sql(bound).contains("external_table_window_unit"));
         assertFalse(sql(bound).contains("catalog_name"));
+        assertFalse(sql(bound).contains("resource_name"));
         assertFalse(sql(bound).contains("direct_import_method"));
         assertFalse(sql(bound).contains("batch_size"));
         assertEquals(Arrays.asList("syncProgress", "transferId"), properties(bound));
@@ -109,6 +111,8 @@ public class ErDataTransferExternalTableOptionsMapperTest
             assertEquals("direct_import_method", columns.get("directImportMethod"));
             assertTrue(sql(select.getBoundSql(parameter)).contains("t.catalog_name"));
             assertEquals("catalog_name", columns.get("catalogName"));
+            assertTrue(sql(select.getBoundSql(parameter)).contains("t.resource_name"));
+            assertEquals("resource_name", columns.get("resourceName"));
             assertTrue(sql(select.getBoundSql(parameter)).contains("t.external_table_threshold_wan"));
             assertEquals("external_table_threshold_wan", columns.get("externalTableThresholdWan"));
             assertTrue(sql(select.getBoundSql(parameter)).contains("t.external_table_window_unit"));
@@ -184,7 +188,7 @@ public class ErDataTransferExternalTableOptionsMapperTest
         assertEquals(Arrays.asList("directImportMethod", "catalogName"), properties(bound));
 
         task.setTransferId(7L);
-        task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+        task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
         bound = statement("updateErDataTransfer", task);
         assertTrue(sql(bound).contains("direct_import_method = ?"));
         assertEquals(Arrays.asList("directImportMethod", "catalogName", "transferId"), properties(bound));
@@ -195,7 +199,7 @@ public class ErDataTransferExternalTableOptionsMapperTest
     {
         ErDataTransfer task = new ErDataTransfer();
         task.setTransferId(7L);
-        task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+        task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
         BoundSql bound = statement("updateErDataTransfer", task);
         assertFalse(sql(bound).contains("catalog_name"));
         assertFalse(sql(bound).contains("external_table_enabled"));
@@ -203,6 +207,42 @@ public class ErDataTransferExternalTableOptionsMapperTest
         assertFalse(sql(bound).contains("external_table_window_unit"));
         assertFalse(sql(bound).contains("batch_size"));
         assertEquals(Arrays.asList("directImportMethod", "transferId"), properties(bound));
+    }
+
+    @Test
+    public void jdbcResourceUsesItsOwnBoundNameOnInsertAndUpdate()
+    {
+        ErDataTransfer task = new ErDataTransfer();
+        task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+        task.setResourceName("src_kingbase");
+        BoundSql bound = statement("insertErDataTransfer", task);
+
+        assertTrue(sql(bound).contains("direct_import_method, resource_name"));
+        assertFalse(sql(bound).contains("catalog_name"));
+        assertFalse(sql(bound).contains("src_kingbase"));
+        assertEquals(Arrays.asList("directImportMethod", "resourceName"), properties(bound));
+
+        task.setTransferId(7L);
+        bound = statement("updateErDataTransfer", task);
+        assertTrue(sql(bound).contains("resource_name = ?"));
+        assertFalse(sql(bound).contains("catalog_name"));
+        assertEquals(Arrays.asList("directImportMethod", "resourceName", "transferId"), properties(bound));
+    }
+
+    @Test
+    public void resourceNamePatchDoesNotOverwriteMethodCatalogOrPolicy()
+    {
+        ErDataTransfer task = new ErDataTransfer();
+        task.setTransferId(7L);
+        task.setResourceName("");
+        BoundSql bound = statement("updateErDataTransfer", task);
+
+        assertTrue(sql(bound).contains("resource_name = ?"));
+        assertFalse(sql(bound).contains("direct_import_method"));
+        assertFalse(sql(bound).contains("catalog_name"));
+        assertFalse(sql(bound).contains("external_table_enabled"));
+        assertFalse(sql(bound).contains("external_table_threshold_wan"));
+        assertEquals(Arrays.asList("resourceName", "transferId"), properties(bound));
     }
 
     private BoundSql statement(String name, ErDataTransfer task)

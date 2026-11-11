@@ -20,6 +20,10 @@ public class DataSyncFactory {
                 return new SqlServerDataSyncExtractor();
             case "POSTGRESQL":
                 return new PostgreSqlDataSyncExtractor();
+            case "KINGBASE":
+                return new KingbaseDataSyncExtractor();
+            case "DM":
+                return new DmDataSyncExtractor();
             case "ORACLE":
                 return new OracleDataSyncExtractor();
             default:
@@ -41,6 +45,10 @@ public class DataSyncFactory {
                 return new SqlServerDataSyncLoader();
             case "POSTGRESQL":
                 return new PostgreSqlDataSyncLoader();
+            case "KINGBASE":
+                return new KingbaseDataSyncLoader();
+            case "DM":
+                return new DmDataSyncLoader();
             case "ORACLE":
                 return new OracleDataSyncLoader();
             default:

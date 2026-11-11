@@ -6,6 +6,8 @@ import cn.easyreport.sync.model.TableMeta;
 import cn.easyreport.sync.registry.DatabaseComponentRegistry;
 import cn.easyreport.sync.mapper.DatabaseTypeMapper;
 import cn.easyreport.sync.model.ColumnMeta;
+import cn.easyreport.sync.dialect.KingbaseDialect;
+import cn.easyreport.sync.dialect.DmDialect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +42,10 @@ public class TableSyncService {
             // 配置为删除重建时，无条件执行 DROP
             // 各 Strategy 已处理表不存在的情况（IF EXISTS 或 PL/SQL 异常捕获）
             if ("1".equals(context.getTask().getIfExistsAction())) {
+                if (context.getDialect() instanceof DmDialect) {
+                    // Reject unsupported DM key/identity types before removing an existing table.
+                    context.getDialect().createTable(context.getTableMeta());
+                }
                 dropTable(context);
                 exists = true; // 标记为 DROP_CREATE
             } else {
@@ -175,6 +181,17 @@ public class TableSyncService {
         log.debug("[TableSyncService] Full DDL: {}", ddl);
 
         logItem.setExecuteSql(ddl);
+        java.util.List<String> postCreate = context.getDialect() instanceof KingbaseDialect
+            ? ((KingbaseDialect) context.getDialect()).postCreateStatements(context.getTableMeta())
+            : context.getDialect() instanceof DmDialect
+            ? ((DmDialect) context.getDialect()).postCreateStatements(context.getTableMeta())
+            : java.util.Collections.emptyList();
+        if (!postCreate.isEmpty()) {
+            logItem.setExecuteSql(ddl + ";\n" + String.join(";\n", postCreate));
+        }
         context.getTargetConnector().execute(ddl);
+        for (String statement : postCreate) {
+            context.getTargetConnector().execute(statement);
+        }
     }
 }

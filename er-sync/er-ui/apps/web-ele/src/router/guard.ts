@@ -7,6 +7,7 @@ import { startProgress, stopProgress } from '@vben/utils';
 
 import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
+import { SessionExpiredError } from '#/api/session-expired';
 
 import { generateAccess } from './access';
 
@@ -92,7 +93,15 @@ function setupAccessGuard(router: Router) {
 
     // 生成路由表
     // 当前登录用户拥有的角色标识列表
-    const userInfo = userStore.userInfo || (await authStore.fetchUserInfo());
+    let userInfo = userStore.userInfo;
+    try {
+      userInfo = userInfo || (await authStore.fetchUserInfo());
+    } catch (error) {
+      // The request interceptor has already cleared the rejected session and
+      // navigated to login. Finish the interrupted guard without a router error.
+      if (error instanceof SessionExpiredError) return false;
+      throw error;
+    }
     const userRoles = userInfo.roles ?? [];
 
     // 生成菜单和路由

@@ -55,6 +55,20 @@
             <artifactId>postgresql</artifactId>
         </dependency>
 
+        <!-- 金仓 JDBC 驱动；可通过 kingbase.jdbc.version 匹配部署版本 -->
+        <dependency>
+            <groupId>cn.com.kingbase</groupId>
+            <artifactId>kingbase8</artifactId>
+            <version>${kingbase.jdbc.version}</version>
+        </dependency>
+
+        <!-- 达梦 JDBC 驱动 -->
+        <dependency>
+            <groupId>com.dameng</groupId>
+            <artifactId>DmJdbcDriver18</artifactId>
+            <version>${dm.jdbc.version}</version>
+        </dependency>
+
         <!-- Oracle驱动包 -->
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>

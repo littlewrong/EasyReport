@@ -25,6 +25,8 @@ public class PostgreSqlTypeMapper implements DatabaseTypeMapper {
         initializeStarRocksMappings();
         initializeSqlServerMappings();
         initializeOracleMappings();
+        mappingRules.put("KINGBASE", KingbaseTargetMappings.from(SOURCE_DB_TYPE, mappingRules.get("POSTGRESQL")));
+        mappingRules.put("DM", DmTargetMappings.rules(SOURCE_DB_TYPE));
     }
 
     @Override

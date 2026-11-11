@@ -68,6 +68,12 @@ public class TargetConfig {
             // PostgreSQL 不支持跨库操作，只在连接的数据库中创建 Schema
             String schema = (sourceSchema != null && !sourceSchema.isEmpty()) ? sourceSchema : "public";
             return new TargetConfig(null, schema, targetDbType);
+        } else if ("KINGBASE".equalsIgnoreCase(targetDbType)) {
+            // A Kingbase database is selected by the JDBC URL; null means the connection's current schema.
+            return new TargetConfig(null, sourceSchema, targetDbType);
+        } else if ("DM".equalsIgnoreCase(targetDbType)) {
+            // A DM instance contains multiple schemas; null selects the connection's current schema.
+            return new TargetConfig(null, sourceSchema, targetDbType);
         } else if (sourceSchema != null && !sourceSchema.isEmpty()) {
             // MySQL/TiDB/StarRocks：使用源 Schema
             return new TargetConfig(null, sourceSchema, targetDbType);

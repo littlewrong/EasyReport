@@ -21,6 +21,10 @@ public class DialectFactory {
                 return new PostgreSqlDialect();
             case "ORACLE":
                 return new OracleDialect();
+            case "KINGBASE":
+                return new KingbaseDialect();
+            case "DM":
+                return new DmDialect();
             default:
                 throw new UnsupportedOperationException("Unsupported dialect: " + type);
         }

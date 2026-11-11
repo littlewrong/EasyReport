@@ -177,6 +177,13 @@ export default {
             trigger: ['blur', 'change'],
           },
         ],
+        resourceName: [
+          {
+            validator: (rule, value, callback) =>
+              this.validateResourceName(rule, value, callback),
+            trigger: ['blur', 'change'],
+          },
+        ],
         externalTableThresholdWan: [
           {
             validator: (rule, value, callback) =>
@@ -221,6 +228,8 @@ export default {
       return (
         this.form.syncMode === '0' &&
         [
+          'DM',
+          'KINGBASE',
           'MYSQL',
           'ORACLE',
           'POSTGRESQL',
@@ -231,10 +240,16 @@ export default {
         this.directImportTargetType === 'STARROCKS'
       );
     },
-    canUseMysqlExternalTable() {
+    canUseCatalogMethod() {
       return (
         this.canUseExternalTableImport &&
-        ['MYSQL', 'TIDB'].includes(this.catalogImportSourceType)
+        ['MYSQL', 'ORACLE', 'POSTGRESQL', 'SQLSERVER', 'STARROCKS', 'TIDB'].includes(this.catalogImportSourceType)
+      );
+    },
+    canUseResourceMethod() {
+      return (
+        this.canUseExternalTableImport &&
+        ['DM', 'KINGBASE', 'MYSQL', 'ORACLE', 'POSTGRESQL', 'SQLSERVER', 'STARROCKS', 'TIDB'].includes(this.catalogImportSourceType)
       );
     },
     isExternalTableImportEnabled() {
@@ -246,6 +261,12 @@ export default {
       return (
         this.isExternalTableImportEnabled &&
         this.form.directImportMethod === 'JDBC_CATALOG'
+      );
+    },
+    isResourceImportEnabled() {
+      return (
+        this.isExternalTableImportEnabled &&
+        this.form.directImportMethod === 'JDBC_RESOURCE'
       );
     },
     /** 解析同步进度信息 */
@@ -414,8 +435,9 @@ export default {
         targetDatasourceId: null,
         syncMode: '0',
         externalTableEnabled: '0',
-        directImportMethod: 'JDBC_CATALOG',
+        directImportMethod: 'JDBC_RESOURCE',
         catalogName: '',
+        resourceName: '',
         externalTableThresholdWan: 50,
         externalTableWindowUnit: 'YEAR',
         timestampField: 'time_stamp',
@@ -493,23 +515,24 @@ export default {
         this.title = '复制同步任务';
       });
     },
-    /** 旧任务按 Catalog 名称推断原方式；编辑和复制不改变已保存的方案。 */
+    /** 保留已有Catalog方案；旧MYSQL外表方式转为Resource，必须补填已有Resource名称。 */
     normalizeExternalTableForm(data) {
       const catalogName =
         typeof data.catalogName === 'string' ? data.catalogName.trim() : '';
-      const directImportMethod =
+      const storedMethod =
         data.directImportMethod == null
           ? (catalogName
             ? 'JDBC_CATALOG'
-            : 'EXTERNAL_TABLE')
+            : 'JDBC_RESOURCE')
           : (typeof data.directImportMethod === 'string'
             ? data.directImportMethod.trim()
             : data.directImportMethod);
       return {
         ...data,
         externalTableEnabled: data.externalTableEnabled === '1' ? '1' : '0',
-        directImportMethod,
+        directImportMethod: storedMethod === 'EXTERNAL_TABLE' ? 'JDBC_RESOURCE' : storedMethod,
         catalogName,
+        resourceName: typeof data.resourceName === 'string' ? data.resourceName.trim() : '',
         externalTableThresholdWan:
           data.externalTableThresholdWan == null
             ? 50
@@ -528,22 +551,27 @@ export default {
         this.form.externalTableEnabled = '0';
         return;
       }
+      const method = this.form.directImportMethod;
       if (
-        !this.canUseMysqlExternalTable &&
-        this.form.directImportMethod === 'EXTERNAL_TABLE'
+        (method === 'JDBC_CATALOG' && !this.canUseCatalogMethod) ||
+        (method === 'JDBC_RESOURCE' && !this.canUseResourceMethod)
       ) {
-        this.form.directImportMethod = 'JDBC_CATALOG';
-        this.$modal.msgWarning(
-          '当前源仅支持 JDBC Catalog，已切换导入方式，请确认 Catalog 名称后保存',
-        );
+        this.form.directImportMethod = this.canUseResourceMethod ? 'JDBC_RESOURCE' : 'JDBC_CATALOG';
+        if (this.form.transferId != null || method !== 'JDBC_CATALOG') {
+          this.$modal.msgWarning(
+            this.canUseResourceMethod
+              ? '当前源仅支持 JDBC Resource，已切换导入方式，请确认 Resource 名称后保存'
+              : '已切换为 JDBC Catalog，请确认 Catalog 名称后保存',
+          );
+        }
         this.handleDirectImportMethodChange();
       }
     },
     handleDirectImportMethodChange() {
-      // 切换方式保留 Catalog 名称和原 JDBC 批次大小，只清理过期的校验提示。
+      // 切换方式保留未使用的名称和原 JDBC 批次大小，只清理过期的校验提示。
       this.$nextTick(() => {
         if (this.$refs.form)
-          this.$refs.form.clearValidate(['directImportMethod', 'catalogName']);
+          this.$refs.form.clearValidate(['directImportMethod', 'catalogName', 'resourceName']);
       });
     },
     validateDirectImportMethod(rule, value, callback) {
@@ -551,14 +579,16 @@ export default {
         callback();
         return;
       }
-      if (!['EXTERNAL_TABLE', 'JDBC_CATALOG'].includes(value)) {
-        callback(new Error('请选择外部表或 JDBC Catalog'));
+      if (!['JDBC_CATALOG', 'JDBC_RESOURCE'].includes(value)) {
+        callback(new Error('请选择当前源支持的导入方式'));
         return;
       }
-      if (value === 'EXTERNAL_TABLE' && !this.canUseMysqlExternalTable) {
-        callback(
-          new Error('外部表仅支持 MySQL / TiDB 到 StarRocks 的初始化同步'),
-        );
+      if (value === 'JDBC_CATALOG' && !this.canUseCatalogMethod) {
+        callback(new Error('当前源不支持 JDBC Catalog 导入'));
+        return;
+      }
+      if (value === 'JDBC_RESOURCE' && !this.canUseResourceMethod) {
+        callback(new Error('JDBC Resource 仅支持所列数据源到 StarRocks 的初始化同步'));
         return;
       }
       callback();
@@ -579,6 +609,22 @@ export default {
             'Catalog 名称须以字母开头，仅含字母、数字和下划线，最多 1023 个字符',
           ),
         );
+        return;
+      }
+      callback();
+    },
+    validateResourceName(rule, value, callback) {
+      if (!this.isResourceImportEnabled) {
+        callback();
+        return;
+      }
+      const resourceName = typeof value === 'string' ? value.trim() : '';
+      if (!resourceName) {
+        callback(new Error('请输入已在目标 StarRocks 创建的 JDBC Resource 名称'));
+        return;
+      }
+      if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(resourceName)) {
+        callback(new Error('Resource 名称须以字母开头，仅含字母、数字和下划线，最多 64 个字符'));
         return;
       }
       callback();
@@ -640,6 +686,10 @@ export default {
           this.form.catalogName =
             typeof this.form.catalogName === 'string'
               ? this.form.catalogName.trim()
+              : '';
+          this.form.resourceName =
+            typeof this.form.resourceName === 'string'
+              ? this.form.resourceName.trim()
               : '';
           // deleteWindowYears 已绑定在 form 上，直接提交
 
@@ -1567,10 +1617,8 @@ D
             v-model="form.directImportMethod"
             @change="handleDirectImportMethodChange"
           >
-            <el-radio v-if="canUseMysqlExternalTable" value="EXTERNAL_TABLE">
-外部表
-</el-radio>
-            <el-radio value="JDBC_CATALOG">JDBC Catalog</el-radio>
+            <el-radio v-if="canUseCatalogMethod" value="JDBC_CATALOG">JDBC Catalog</el-radio>
+            <el-radio v-if="canUseResourceMethod" value="JDBC_RESOURCE">JDBC Resource</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -1589,7 +1637,22 @@ D
           />
         </el-form-item>
 
-        <!-- 两种数据湖导入方式共享导入策略 -->
+        <el-form-item
+          v-if="isResourceImportEnabled"
+          label="Resource 名称"
+          prop="resourceName"
+          :required="true"
+        >
+          <el-input
+            v-model="form.resourceName"
+            placeholder="例如：src_jdbc"
+            :maxlength="64"
+            clearable
+            class="catalog-name-input"
+          />
+        </el-form-item>
+
+        <!-- 各数据湖导入方式共享导入策略 -->
         <el-form-item
           v-if="isExternalTableImportEnabled"
           label="导入策略"
@@ -1636,7 +1699,6 @@ D
           </div>
           <div class="external-table-policy-tip">
             <template v-if="form.timestampField && form.timestampField.trim()">
-&nbsp;不同步时间戳为 NULL 的数据。
 </template>
             <template v-else>未配置时间戳字段时按整表导入。</template>
           </div>

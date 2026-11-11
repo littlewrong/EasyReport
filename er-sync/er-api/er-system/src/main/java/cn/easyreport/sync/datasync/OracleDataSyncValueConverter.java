@@ -14,8 +14,12 @@ class OracleDataSyncValueConverter extends DefaultDataSyncValueConverter {
         if (value == null) {
             return null;
         }
+        if (isKingbaseObject(value)) return super.convertValue(value);
         String className = value.getClass().getName();
         try {
+            if ("dm.jdbc.driver.DmdbTimestamp".equals(className)) {
+                return value.getClass().getMethod("toTimestamp").invoke(value);
+            }
             if (className.startsWith("oracle.sql.TIMESTAMP") || className.equals("oracle.sql.DATE")) {
                 return value.getClass().getMethod("timestampValue").invoke(value);
             }

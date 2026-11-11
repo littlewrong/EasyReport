@@ -864,6 +864,9 @@ CREATE TABLE `sys_logininfor`  (
 -- Records of sys_logininfor
 -- ----------------------------
 
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+
 -- ----------------------------
 -- Table structure for sys_menu
 -- ----------------------------
@@ -890,11 +893,8 @@ CREATE TABLE `sys_menu`  (
   `update_time` datetime NULL DEFAULT NULL COMMENT '更新时间',
   `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT '' COMMENT '备注',
   PRIMARY KEY (`menu_id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 7107 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '菜单权限表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 7108 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '菜单权限表' ROW_FORMAT = DYNAMIC;
 
--- ----------------------------
--- Records of sys_menu
--- ----------------------------
 -- ----------------------------
 -- Records of sys_menu
 -- ----------------------------
@@ -989,7 +989,7 @@ INSERT INTO `sys_menu` VALUES (2103, '数据源修改', 2100, 3, '#', '', NULL, 
 INSERT INTO `sys_menu` VALUES (2104, '数据源删除', 2100, 4, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'system:datasource:remove', '#', 'admin', '2026-01-21 09:14:04', '', NULL, '');
 INSERT INTO `sys_menu` VALUES (2105, '数据源导出', 2100, 5, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'system:datasource:export', '#', 'admin', '2026-01-21 09:14:04', '', NULL, '');
 INSERT INTO `sys_menu` VALUES (2106, '数据源测试', 2100, 6, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'system:datasource:test', '#', 'admin', '2026-01-21 09:14:04', '', NULL, '');
-INSERT INTO `sys_menu` VALUES (2500, '架构同步', 2609, 1, 'datasync', 'system/datasync/index', NULL, '', 1, 0, 'C', '0', '0', 'system:datasync:list', 'example', 'admin', '2026-01-21 09:14:14', 'admin', '2026-01-21 09:21:17', '数据同步菜单');
+INSERT INTO `sys_menu` VALUES (2500, '架构同步', 7107, 1, 'datasync', 'system/datasync/index', NULL, '', 1, 0, 'C', '0', '0', 'system:datasync:list', 'example', 'admin', '2026-01-21 09:14:14', 'admin', '2026-11-10 14:15:45', '数据同步菜单');
 INSERT INTO `sys_menu` VALUES (2501, '同步查询', 2500, 1, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'system:datasync:query', '#', 'admin', '2026-01-21 09:14:14', '', NULL, '');
 INSERT INTO `sys_menu` VALUES (2502, '同步新增', 2500, 2, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'system:datasync:add', '#', 'admin', '2026-01-21 09:14:14', '', NULL, '');
 INSERT INTO `sys_menu` VALUES (2503, '同步修改', 2500, 3, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'system:datasync:edit', '#', 'admin', '2026-01-21 09:14:14', '', NULL, '');
@@ -1004,7 +1004,7 @@ INSERT INTO `sys_menu` VALUES (2604, '数据同步删除', 2600, 4, '', NULL, NU
 INSERT INTO `sys_menu` VALUES (2605, '执行同步', 2600, 5, '', NULL, NULL, '', 1, 0, 'F', '0', '0', 'system:datatransfer:execute', '#', 'admin', '2026-01-21 09:14:09', '', NULL, '');
 INSERT INTO `sys_menu` VALUES (2606, '同步日志', 2600, 6, '', NULL, NULL, '', 1, 0, 'F', '0', '0', 'system:datatransfer:log', '#', 'admin', '2026-01-21 09:14:09', '', NULL, '');
 INSERT INTO `sys_menu` VALUES (2607, '数据源管理', 0, 1, 'databasesource', NULL, NULL, '', 1, 0, 'M', '0', '0', '', 'build', 'admin', '2026-01-21 09:16:58', 'admin', '2026-01-21 09:17:23', '');
-INSERT INTO `sys_menu` VALUES (2609, '同步管理', 0, 3, 'dbsync', NULL, NULL, '', 1, 0, 'M', '0', '0', NULL, 'edit', 'admin', '2026-01-21 09:18:18', '', NULL, '');
+INSERT INTO `sys_menu` VALUES (2609, '扫描同步', 0, 3, 'dbsync', NULL, NULL, '', 1, 0, 'M', '0', '0', '', 'edit', 'admin', '2026-01-21 09:18:18', 'admin', '2026-11-10 14:16:23', '');
 INSERT INTO `sys_menu` VALUES (2700, '合并同步', 2609, 3, 'combinesync', 'system/combinesync/index', NULL, 'DataCombine', 1, 0, 'C', '0', '0', 'system:combinesync:list', 'build', 'admin', '2026-07-02 15:23:01', 'admin', '2026-07-02 16:18:21', '合并同步菜单');
 INSERT INTO `sys_menu` VALUES (2701, '合并查询', 2700, 1, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'system:combinesync:query', '#', 'admin', '2026-07-02 15:23:01', '', NULL, '');
 INSERT INTO `sys_menu` VALUES (2702, '合并新增', 2700, 2, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'system:combinesync:add', '#', 'admin', '2026-07-02 15:23:01', '', NULL, '');
@@ -1012,6 +1012,7 @@ INSERT INTO `sys_menu` VALUES (2703, '合并修改', 2700, 3, '#', '', NULL, '',
 INSERT INTO `sys_menu` VALUES (2704, '合并删除', 2700, 4, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'system:combinesync:remove', '#', 'admin', '2026-07-02 15:23:01', '', NULL, '');
 INSERT INTO `sys_menu` VALUES (2705, '执行合并', 2700, 5, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'system:combinesync:execute', '#', 'admin', '2026-07-02 15:23:01', '', NULL, '');
 INSERT INTO `sys_menu` VALUES (2706, '合并日志', 2700, 6, '#', '', NULL, '', 1, 0, 'F', '0', '0', 'system:combinesync:log', '#', 'admin', '2026-07-02 15:23:01', '', NULL, '');
+INSERT INTO `sys_menu` VALUES (7107, '架构同步', 0, 2, 'system:architecture', NULL, NULL, '', 1, 0, 'M', '0', '0', '', 'excel', 'admin', '2026-11-10 14:13:15', 'admin', '2026-11-10 14:16:01', '');
 
 SET FOREIGN_KEY_CHECKS = 1;
 

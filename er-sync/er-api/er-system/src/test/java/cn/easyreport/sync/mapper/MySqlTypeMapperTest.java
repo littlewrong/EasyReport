@@ -10,6 +10,33 @@ public class MySqlTypeMapperTest {
     private final MySqlTypeMapper mapper = new MySqlTypeMapper();
 
     @Test
+    public void mapsEveryBitWidthToAStarRocksTypeWithEnoughUnsignedRange() {
+        for (int width = 1; width <= 64; width++) {
+            String sourceType = "bit(" + width + ")";
+            String expected = width == 1 ? "BOOLEAN" : width <= 31 ? "INT" : width <= 63 ? "BIGINT" : "LARGEINT";
+            assertEquals(sourceType, expected, mapper.mapType("STARROCKS", sourceType));
+            assertFalse(sourceType, mapper.isLossyConversion("STARROCKS", sourceType));
+        }
+        assertEquals("INT", mapper.mapType("STARROCKS", "BIT(8)")); // 255 must fit, not signed TINYINT.
+        assertEquals("BOOLEAN", mapper.mapType("STARROCKS", "BIT")); // MySQL defaults to one bit.
+        assertEquals("LARGEINT", mapper.mapType("starrocks", "  bIt ( 64 )  "));
+        assertEquals("BIT(0)", mapper.mapType("STARROCKS", "BIT(0)"));
+        assertEquals("BIT(65)", mapper.mapType("STARROCKS", "BIT(65)"));
+    }
+
+    @Test
+    public void retainsExistingBitMappingsForOtherTargets() {
+        for (String target : new String[]{"MYSQL", "TIDB"}) {
+            assertEquals(target, "bit(64)", mapper.mapType(target, "bit(64)"));
+        }
+        assertEquals("BIT", mapper.mapType("SQLSERVER", "BIT(1)"));
+        assertEquals("VARBINARY(8)", mapper.mapType("SQLSERVER", "BIT(64)"));
+        assertEquals("BOOLEAN", mapper.mapType("POSTGRESQL", "BIT(1)"));
+        assertEquals("BIGINT", mapper.mapType("POSTGRESQL", "BIT(64)"));
+        assertEquals("NUMBER(10)", mapper.mapType("ORACLE", "BIT(64)"));
+    }
+
+    @Test
     public void mapsUnsignedIntegersToTypesThatRetainTheirFullRange() {
         String[][] mappings = {
                 {"tinyint(3)", "SMALLINT"},

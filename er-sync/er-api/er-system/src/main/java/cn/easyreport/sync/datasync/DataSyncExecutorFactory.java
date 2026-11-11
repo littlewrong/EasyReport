@@ -32,6 +32,10 @@ public class DataSyncExecutorFactory {
                 return new SqlServerDataSyncExecutor(transferMapper, logMapper, progressMapper);
             case "POSTGRESQL":
                 return new PostgreSqlDataSyncExecutor(transferMapper, logMapper, progressMapper);
+            case "KINGBASE":
+                return new KingbaseDataSyncExecutor(transferMapper, logMapper, progressMapper);
+            case "DM":
+                return new DmDataSyncExecutor(transferMapper, logMapper, progressMapper);
             case "ORACLE":
                 return new OracleDataSyncExecutor(transferMapper, logMapper, progressMapper);
             default:

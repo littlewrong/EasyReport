@@ -18,6 +18,8 @@ public class DatabaseStrategyFactory {
         register(new SqlServerStrategy());
         register(new PostgreSqlStrategy());
         register(new OracleStrategy());
+        register(new KingbaseStrategy());
+        register(new DmStrategy());
     }
 
     private static void register(DatabaseStrategy strategy) {

@@ -7,6 +7,8 @@ import cn.easyreport.sync.starrocks.StarRocksConnector;
 import cn.easyreport.sync.sqlserver.SqlServerConnector;
 import cn.easyreport.sync.postgresql.PostgreSqlConnector;
 import cn.easyreport.sync.oracle.OracleConnector;
+import cn.easyreport.sync.kingbase.KingbaseConnector;
+import cn.easyreport.sync.dm.DmConnector;
 
 /**
  * Simple factory that builds connector by datasource type.
@@ -31,6 +33,10 @@ public class ConnectorFactory {
                 return new PostgreSqlConnector(ds);
             case "ORACLE":
                 return new OracleConnector(ds);
+            case "KINGBASE":
+                return new KingbaseConnector(ds);
+            case "DM":
+                return new DmConnector(ds);
             default:
                 throw new UnsupportedOperationException("Unsupported datasource type: " + type);
         }

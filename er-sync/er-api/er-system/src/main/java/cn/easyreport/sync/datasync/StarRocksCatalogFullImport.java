@@ -26,7 +26,6 @@ import java.util.regex.Pattern;
 /** Reads an existing, shared JDBC Catalog. It never creates or removes Catalog objects. */
 final class StarRocksCatalogFullImport implements AutoCloseable {
     private static final Pattern TARGET = Pattern.compile("^`(?:``|[^`])+`\\.`(?:``|[^`])+`$");
-    private static final Pattern TARGET_PARTS = Pattern.compile("^`((?:``|[^`])+)`\\.`((?:``|[^`])+)`$");
     private static final Pattern PROPERTY = Pattern.compile(
             "[\\\"']([^\\\"']+)[\\\"']\\s*=\\s*[\\\"']((?:\\\\.|[^\\\"'\\\\])*)[\\\"']");
     private final Connection target;
@@ -85,23 +84,23 @@ final class StarRocksCatalogFullImport implements AutoCloseable {
         int threshold = thresholdWan == null ? 50 : thresholdWan;
         if (threshold < 1) throw new IllegalArgumentException("Catalog 整批导入阈值必须为正整数，单位为万条");
         WindowUnit unit = WindowUnit.of(windowUnit);
-        try {
-            String scope = dialect.scope(source, datasource, schema);
-            String actualTable = dialect == Dialect.ORACLE ? table.toUpperCase(Locale.ROOT) : table;
-            String sourceTable = dialect.sourceTable(source, datasource, schema, scope, actualTable);
-            String catalogTable = quote(catalog) + "." + quote(scope) + "." + quote(actualTable);
-            String timestampColumn = null;
-            if (timestampField != null && !timestampField.trim().isEmpty()) {
-                for (String column : sourceColumns) {
-                    if (column.equalsIgnoreCase(timestampField.trim())) timestampColumn = column;
-                }
-                if (timestampColumn == null) throw new IllegalArgumentException("配置的时间戳字段不在源表字段中");
+        String scope = dialect.scope(source, datasource, schema);
+        String actualTable = dialect == Dialect.ORACLE ? table.toUpperCase(Locale.ROOT) : table;
+        String sourceTable = dialect.sourceTable(source, datasource, schema, scope, actualTable);
+        String catalogTable = quote(catalog) + "." + quote(scope) + "." + quote(actualTable);
+        String timestampColumn = null;
+        if (timestampField != null && !timestampField.trim().isEmpty()) {
+            for (String column : sourceColumns) {
+                if (column.equalsIgnoreCase(timestampField.trim())) timestampColumn = column;
             }
+            if (timestampColumn == null) throw new IllegalArgumentException("配置的时间戳字段不在源表字段中");
+        }
+        try {
             // The application and StarRocks may reach the same source through public/private
             // endpoints. Validate the logical mapping before any destructive work.
             Map<String, String> catalogProperties = verifyCatalog(target, source, datasource, dialect, catalog, schema, cancellation);
-            if (dialect == Dialect.STARROCKS) verifyDistinctStarRocksTable(datasource, source, target,
-                    catalogProperties, scope, actualTable, targetTable, cancellation);
+            if (dialect == Dialect.STARROCKS) StarRocksTableIdentity.verifyDistinct(datasource, source, target,
+                    scope, actualTable, targetTable, catalogProperties.get("jdbc_uri"), cancellation);
             stopped(cancellation);
             Map<String, String> nativeTypes = nativeTypes(source, sourceTable, sourceColumns, dialect, cancellation);
             Projection projection = prepareProjection(target, catalogTable, quote("default_catalog") + "." + targetTable,
@@ -180,11 +179,8 @@ final class StarRocksCatalogFullImport implements AutoCloseable {
             return importer;
         } catch (SQLException failure) {
             stopped(cancellation);
-            // A pre-sanitized exception can acquire a raw close failure while unwinding an outer resource.
-            if (failure instanceof CatalogSQLException) throw new CatalogSQLException((CatalogSQLException) failure);
+            if (failure instanceof CatalogSQLException || failure instanceof StarRocksTableIdentity.IdentitySQLException) throw failure;
             throw safe("Catalog 导入预校验失败，尚未清空目标表；请检查 Catalog、版本支持、权限、驱动和字段类型", failure);
-        } catch (IllegalArgumentException | IllegalStateException failure) {
-            throw StarRocksExternalFullImport.safeValidationException(failure);
         }
     }
 
@@ -427,8 +423,6 @@ final class StarRocksCatalogFullImport implements AutoCloseable {
         } catch (SQLException failure) {
             stopped(cancellation);
             throw safe("Catalog INSERT SELECT 失败，同步进度未推进", failure);
-        } catch (IllegalArgumentException | IllegalStateException failure) {
-            throw StarRocksExternalFullImport.safeValidationException(failure);
         }
     }
 
@@ -485,49 +479,6 @@ final class StarRocksCatalogFullImport implements AutoCloseable {
         return value.replace("\\\"", "\"").replace("\\'", "'").replace("\\\\", "\\");
     }
 
-    private static void verifyDistinctStarRocksTable(ErDatasource datasource, Connection source, Connection target,
-            Map<String, String> properties, String scope, String table, String targetTable,
-            DataSyncCancellation cancellation) throws SQLException {
-        Matcher names = TARGET_PARTS.matcher(targetTable);
-        if (!names.matches() || !scope.equals(names.group(1).replace("``", "`"))
-                || !table.equals(names.group(2).replace("``", "`"))) return;
-        java.sql.DatabaseMetaData metadata = target.getMetaData();
-        String url = metadata == null ? null : metadata.getURL();
-        JdbcIdentity destination = null;
-        if (url != null) {
-            try { destination = JdbcIdentity.parse(url, Dialect.STARROCKS); }
-            catch (IllegalArgumentException unsupportedTargetUrl) { /* Compare actual cluster IDs below. */ }
-        }
-        boolean sameEndpoint = destination != null && (destination.sameEndpoint(JdbcIdentity.parse(datasource.getJdbcUrl(), Dialect.STARROCKS))
-                || destination.sameEndpoint(JdbcIdentity.parse(properties.get("jdbc_uri"), Dialect.STARROCKS)));
-        // Different FE nodes, DNS aliases and public/private addresses may all serve the same cluster.
-        // Check identity only when the database and table names coincide; other mappings need no extra privilege.
-        if (sameEndpoint || clusterId(source, cancellation) == clusterId(target, cancellation)) {
-            throw new IllegalArgumentException("StarRocks 源表与目标表为同一表，初始化清空会删除源数据，请更换目标表，尚未清空目标表");
-        }
-    }
-
-    private static long clusterId(Connection connection, DataSyncCancellation cancellation) throws SQLException {
-        stopped(cancellation);
-        Long clusterId = null;
-        try (Statement statement = connection.createStatement(); ResultSet rows = statement.executeQuery("SHOW FRONTENDS")) {
-            while (rows.next()) {
-                stopped(cancellation);
-                long value = rows.getLong("ClusterId");
-                if (rows.wasNull() || value <= 0 || (clusterId != null && clusterId != value)) {
-                    throw new IllegalArgumentException("无法确认 StarRocks 集群身份，不能初始化到同名库表，尚未清空目标表");
-                }
-                clusterId = value;
-            }
-        } catch (SQLException failure) {
-            stopped(cancellation);
-            throw safe("源和目标 StarRocks 库表同名，需要两端账号具有读取 SHOW FRONTENDS 的权限以核对集群身份；"
-                    + "也可改用不同目标库或表名，尚未清空目标表", failure);
-        }
-        if (clusterId == null) throw new IllegalArgumentException("无法读取 StarRocks 集群身份，不能初始化到同名库表，尚未清空目标表");
-        return clusterId;
-    }
-
     private static boolean equal(String a, String b) { return a == null ? b == null : a.equals(b); }
     private static boolean truth(String value) { return "true".equalsIgnoreCase(value) || "on".equalsIgnoreCase(value) || "1".equals(value); }
     private static String first(String... values) {
@@ -575,16 +526,12 @@ final class StarRocksCatalogFullImport implements AutoCloseable {
     }
 
     private static SQLException safe(String operation, SQLException failure) {
-        if (failure instanceof DataSyncCancellation.SyncStoppedException) return new DataSyncCancellation.SyncStoppedException();
+        if (failure instanceof DataSyncCancellation.SyncStoppedException) return failure;
         // Neither SHOW CREATE's JDBC properties nor driver messages may leak credentials to task logs.
         return new CatalogSQLException(operation, failure);
     }
 
     private static final class CatalogSQLException extends SQLException {
-        CatalogSQLException(CatalogSQLException failure) {
-            super(failure.getMessage(), failure.getSQLState(), failure.getErrorCode());
-        }
-
         CatalogSQLException(String operation, SQLException failure) {
             super(operation + "（SQLState=" + failure.getSQLState() + ", errorCode=" + failure.getErrorCode()
                     + "）", failure.getSQLState(), failure.getErrorCode());

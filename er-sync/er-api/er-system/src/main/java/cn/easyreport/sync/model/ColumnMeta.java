@@ -9,6 +9,8 @@ public class ColumnMeta {
     private String columnType;
     private boolean nullable;
     private String defaultValue;
+    /** null keeps the legacy default contract; true is literal text, false is SQL. */
+    private Boolean defaultValueLiteral;
     private boolean autoIncrement;
     private String comment;
     private Integer ordinalPosition;
@@ -45,6 +47,14 @@ public class ColumnMeta {
 
     public void setDefaultValue(String defaultValue) {
         this.defaultValue = defaultValue;
+    }
+
+    public Boolean getDefaultValueLiteral() {
+        return defaultValueLiteral;
+    }
+
+    public void setDefaultValueLiteral(Boolean defaultValueLiteral) {
+        this.defaultValueLiteral = defaultValueLiteral;
     }
 
     public boolean isAutoIncrement() {

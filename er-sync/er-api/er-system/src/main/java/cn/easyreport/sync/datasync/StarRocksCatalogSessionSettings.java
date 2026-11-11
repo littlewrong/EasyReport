@@ -24,6 +24,10 @@ final class StarRocksCatalogSessionSettings {
     private static final String TIMEZONE = "connectiontimezone";
     private static final Set<String> CREDENTIAL_SETTINGS = new HashSet<>(Arrays.asList(
             "user", "username", "password", "password1", "password2", "password3"));
+    private static final Set<String> ENDPOINT_SETTINGS = new HashSet<>(Arrays.asList(
+            "host", "port", "address", "protocol", "dbname", "database", "databasename",
+            "socketfactory", "socketfactoryarg", "socketfactoryclassname", "socksproxyhost", "socksproxyport",
+            "localsocketaddress", "dnssrv", "dnssrvservicename", "kerberosservername"));
     private static final Set<String> SENSITIVE_SETTINGS = new HashSet<>(Arrays.asList(
             "sessionvariables", "forceconnectiontimezonetosession", TIMEZONE, "preserveinstants",
             "connectioninitsql", "connectioninitsqls", "initsql", "initsqls", "init_sql", "initializationsql",
@@ -40,12 +44,24 @@ final class StarRocksCatalogSessionSettings {
 
     static void verify(Connection source, ErDatasource datasource, Map<String, String> catalogProperties,
             DataSyncCancellation cancellation) throws Exception {
+        verify(source, datasource, catalogProperties, cancellation, true);
+    }
+
+    /** Resource connections may use a different network route and database name. */
+    static void verifyResource(Connection source, ErDatasource datasource, Map<String, String> resourceProperties,
+            DataSyncCancellation cancellation) throws Exception {
+        verify(source, datasource, resourceProperties, cancellation, false);
+    }
+
+    private static void verify(Connection source, ErDatasource datasource, Map<String, String> catalogProperties,
+            DataSyncCancellation cancellation, boolean compareEndpointIdentity) throws Exception {
         stopped(cancellation);
-        Settings settings = settings(source, datasource, catalogProperties, cancellation);
+        Settings settings = settings(source, datasource, catalogProperties, cancellation, compareEndpointIdentity);
         for (String name : SENSITIVE_SETTINGS) {
             // Each connection owns its credentials. Still compare configured versus actual
             // source credentials in settings(), but do not require the Catalog account to match.
             if (CREDENTIAL_SETTINGS.contains(name)) continue;
+            if (!compareEndpointIdentity && ENDPOINT_SETTINGS.contains(name)) continue;
             String sourceValue = value(settings.source, name);
             String catalogValue = value(settings.catalog, name);
             // Driver timezone labels alone do not identify a MySQL session's effective timezone.
@@ -66,8 +82,26 @@ final class StarRocksCatalogSessionSettings {
     static void verifyTimestampSession(Connection source, ErDatasource datasource,
             Map<String, String> catalogProperties, DataSyncCancellation cancellation,
             LocalDate firstDay, LocalDate lastDay) throws Exception {
-        verify(source, datasource, catalogProperties, cancellation);
-        Settings settings = settings(source, datasource, catalogProperties, cancellation);
+        verifyTimestampSession(source, datasource, catalogProperties, cancellation, firstDay, lastDay, true);
+    }
+
+    static void verifyResourceTimestampSession(Connection source, ErDatasource datasource,
+            Map<String, String> resourceProperties, DataSyncCancellation cancellation) throws Exception {
+        LocalDate today = LocalDate.now();
+        verifyResourceTimestampSession(source, datasource, resourceProperties, cancellation, today, today);
+    }
+
+    static void verifyResourceTimestampSession(Connection source, ErDatasource datasource,
+            Map<String, String> resourceProperties, DataSyncCancellation cancellation,
+            LocalDate firstDay, LocalDate lastDay) throws Exception {
+        verifyTimestampSession(source, datasource, resourceProperties, cancellation, firstDay, lastDay, false);
+    }
+
+    private static void verifyTimestampSession(Connection source, ErDatasource datasource,
+            Map<String, String> catalogProperties, DataSyncCancellation cancellation,
+            LocalDate firstDay, LocalDate lastDay, boolean compareEndpointIdentity) throws Exception {
+        verify(source, datasource, catalogProperties, cancellation, compareEndpointIdentity);
+        Settings settings = settings(source, datasource, catalogProperties, cancellation, compareEndpointIdentity);
         if (!settings.mysql) return;
         if (firstDay == null || lastDay == null || firstDay.isAfter(lastDay)) {
             throw invalid("无法确认 TIMESTAMP 数据日期范围");
@@ -117,7 +151,8 @@ final class StarRocksCatalogSessionSettings {
     }
 
     private static Settings settings(Connection source, ErDatasource datasource,
-            Map<String, String> catalogProperties, DataSyncCancellation cancellation) throws Exception {
+            Map<String, String> catalogProperties, DataSyncCancellation cancellation,
+            boolean compareEndpointIdentity) throws Exception {
         if (source == null || datasource == null || catalogProperties == null) throw invalid("缺少 Catalog 会话校验配置");
         Map<String, String> configured = parameters(datasource.getJdbcUrl());
         stopped(cancellation);
@@ -128,6 +163,7 @@ final class StarRocksCatalogSessionSettings {
         Map<String, String> actual = actualUrl == null || actualUrl.trim().isEmpty()
                 ? configured : parameters(actualUrl);
         for (String name : SENSITIVE_SETTINGS) {
+            if (!compareEndpointIdentity && ENDPOINT_SETTINGS.contains(name)) continue;
             if (configured.containsKey(name) && !equal(value(configured, name), value(actual, name))) {
                 throw invalid("源 JDBC 实际连接设置与配置不一致，请确认连接初始化参数");
             }
@@ -143,6 +179,12 @@ final class StarRocksCatalogSessionSettings {
         if (url.regionMatches(true, 0, "jdbc:sqlserver:", 0, "jdbc:sqlserver:".length())) {
             int start = url.indexOf(';');
             if (start >= 0) parseSqlServerProperties(url.substring(start + 1), result);
+            // Microsoft's metadata URL expands driver defaults, but deliberately omits
+            // integratedSecurity. Compare their effective defaults rather than URL spelling.
+            String scheme = result.get("authenticationscheme");
+            result.put("authenticationscheme", scheme == null ? "nativeauthentication" : scheme.toLowerCase(Locale.ROOT));
+            result.putIfAbsent("jaasconfigurationname", "SQLJDBCDriver");
+            result.putIfAbsent("integratedsecurity", "false");
         } else {
             int start = url.indexOf('?');
             if (start >= 0) {

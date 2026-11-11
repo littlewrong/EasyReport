@@ -21,6 +21,10 @@ public class ExtractorFactory {
                 return new PostgreSqlSchemaExtractor(ds);
             case "ORACLE":
                 return new OracleSchemaExtractor(ds);
+            case "KINGBASE":
+                return new KingbaseSchemaExtractor(ds);
+            case "DM":
+                return new DmSchemaExtractor(ds);
             default:
                 throw new UnsupportedOperationException("Unsupported extractor type: " + type);
         }

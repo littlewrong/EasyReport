@@ -88,6 +88,12 @@ public abstract class DataSyncExecutor {
      * Subclasses can override to fix target schema incompatibilities (e.g., type widening for SQL Server).
      * Exceptions are caught by the caller and logged as warnings; data sync continues regardless.
      */
+    protected void prepareTargetSchema(ErDataTransfer task, ErDatasource sourceDs, Connection sourceConn, Connection targetConn,
+                                       String sourceSchema, String sourceTable,
+                                       String targetTableName) throws Exception {
+        prepareTargetSchema(sourceConn, targetConn, sourceSchema, sourceTable, targetTableName);
+    }
+
     protected void prepareTargetSchema(Connection sourceConn, Connection targetConn,
                                        String sourceSchema, String sourceTable,
                                        String targetTableName) throws Exception {
@@ -108,6 +114,12 @@ public abstract class DataSyncExecutor {
      */
     protected void afterBatchInsert(Connection targetConn, String tableName) throws Exception {
         // Default: do nothing
+    }
+
+    /** Validate source/target identity before any per-table target schema or data changes. */
+    protected void validateSourceTargetIdentity(ErDataTransfer task, ErDatasource sourceDs,
+            Connection sourceConn, Connection targetConn, String sourceSchema,
+            String sourceTable, String targetTable) throws Exception {
     }
 
     /**
@@ -572,6 +584,9 @@ public abstract class DataSyncExecutor {
         tr.log.setSyncMode(task.getSyncMode());
         tr.log.setStartTime(DateUtils.getNowDate());
 
+        validateSourceTargetIdentity(task, sourceDs, sourceConn, targetConn,
+                schema, table, targetTableSqlName);
+
         // 源列名（用于从源数据库读取数据）
         List<String> sourceCols = extractor.listColumns(sourceConn, schema, table);
         if (sourceCols.isEmpty()) {
@@ -596,11 +611,13 @@ public abstract class DataSyncExecutor {
 
         // 同步前修复目标表 schema（各子类可重写）
         try {
-            prepareTargetSchema(sourceConn, targetConn, schema, table, targetTableSqlName);
+            prepareTargetSchema(task, sourceDs, sourceConn, targetConn, schema, table, targetTableSqlName);
         } catch (Exception e) {
             checkStopped();
             System.out.println("[DataSyncExecutor] prepareTargetSchema 警告（忽略，继续同步）: " + e.getMessage());
         }
+
+        loader.prepareTarget(targetConn, targetTableSqlName);
 
         if ("0".equals(task.getSyncMode())) {
             tr = syncFull(task, sourceDs, schema, table, targetTableSqlName, sourceCols, targetCols, targetPk, extractor, loader, sourceConn, targetConn, batchSize, tsField, doInsert, doUpdate, callback);

@@ -232,545 +232,230 @@ public class StarRocksExternalTableImportIntegrationTest {
         assertEquals(1, Collections.frequency(f.events, "close-direct"));
     }
 
+
+    private static final List<String> RESOURCE_SOURCES = Arrays.asList("MYSQL", "TIDB", "STARROCKS", "KINGBASE", "DM",
+            "SQLSERVER", "POSTGRESQL", "ORACLE");
+
     @Test
-    public void absentOrDisabledSwitchLeavesTiDbAndMySqlOnExistingImportPath() throws Exception {
-        for (String enabled : new String[]{null, "0"}) {
-            assertStaysOnJdbcPath(externalTableTask(enabled, "0"), tlsSource("TIDB"),
-                    new TiDbDataSyncExtractor());
-            assertStaysOnJdbcPath(externalTableTask(enabled, "0"), tlsSource("MYSQL"),
-                    new MySqlDataSyncExtractor());
+    public void disabledAndIncrementalTasksRetainApplicationJdbcWithoutInspectingResource() throws Exception {
+        for (String type : RESOURCE_SOURCES) {
+            for (String[] config : new String[][] {{null, "0"}, {"0", "0"}, {"1", "1"}}) {
+                ErDataTransfer task = task(config[0], config[1], ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+                assertStaysOnJdbcPath(task, datasource(type), DataSyncFactory.buildExtractor(datasource(type)));
+            }
         }
     }
 
     @Test
-    public void enabledSwitchDoesNotChangeIncrementalImports() throws Exception {
-        assertStaysOnJdbcPath(externalTableTask("1", "1"), tlsSource("TIDB"),
-                new TiDbDataSyncExtractor());
-        assertStaysOnJdbcPath(externalTableTask("1", "1"), tlsSource("MYSQL"),
-                new MySqlDataSyncExtractor());
+    public void missingTaskOrModeCannotStartDirectImport() throws Exception {
+        assertStaysOnJdbcPath(null, datasource("MYSQL"), new MySqlDataSyncExtractor());
+        assertStaysOnJdbcPath(task("1", null, ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE),
+                datasource("MYSQL"), new MySqlDataSyncExtractor());
     }
 
     @Test
-    public void missingTaskOrSyncModeLeavesExistingImportPath() throws Exception {
-        assertStaysOnJdbcPath(null, tlsSource("TIDB"), new TiDbDataSyncExtractor());
-        assertStaysOnJdbcPath(externalTableTask("1", null), tlsSource("TIDB"),
-                new TiDbDataSyncExtractor());
-    }
-
-    @Test
-    public void starRocksLeavesNonMySqlOrTiDbSourcesOnExistingImportPath() throws Exception {
-        ErDataTransfer task = externalTableTask("1", "0");
-        assertStaysOnJdbcPath(task, tlsSource("POSTGRESQL"), new FallbackExtractor());
-        assertStaysOnJdbcPath(task, null, new TiDbDataSyncExtractor());
-    }
-
-    @Test
-    public void mismatchedSourceTypeAndExtractorLeavesExistingImportPath() throws Exception {
-        ErDataTransfer task = externalTableTask("1", "0");
-        assertStaysOnJdbcPath(task, tlsSource("TIDB"), new MySqlDataSyncExtractor());
-        assertStaysOnJdbcPath(task, tlsSource("MYSQL"), new TiDbDataSyncExtractor());
-        assertStaysOnJdbcPath(task, tlsSource("MYSQL"), new FallbackExtractor());
-        assertStaysOnJdbcPath(task, tlsSource("TIDB"), null);
-    }
-
-    @Test
-    public void tlsSourceFallsBackBeforeTouchingEitherDatabaseAndReportsJdbcPath() throws Exception {
-        assertTlsFallbackReportsJdbcPath("TIDB", new TiDbDataSyncExtractor());
-    }
-
-    @Test
-    public void enabledMySqlFullImportReachesExternalTableHelper() throws Exception {
-        assertTlsFallbackReportsJdbcPath("MYSQL", new MySqlDataSyncExtractor());
-    }
-
-    @Test
-    public void explicitExternalTableIgnoresLeftoverCatalogAndKeepsMysqlEnginePath() throws Exception {
-        for (String type : Arrays.asList("MYSQL", "TIDB")) {
-            Fixture f = new Fixture();
-            f.enableRealHelper(type);
-            f.task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
-            f.task.setCatalogName("leftover_catalog");
-            f.sourceCount = 17;
-            f.directCounts = new long[]{17};
-
-            f.run();
-
-            String create = f.directSql.stream().filter(sql -> sql.startsWith("CREATE EXTERNAL TABLE "))
-                    .findFirst().orElseThrow(() -> new AssertionError("The external-table route must create its owned table"));
-            assertTrue(create, create.contains("ENGINE=MYSQL"));
-            assertTrue(create, create.contains("\"database\"=\"erp_01\""));
-            assertFalse(f.directSql.toString(), f.directSql.stream().anyMatch(sql -> {
-                String normalized = sql.toUpperCase(java.util.Locale.ROOT);
-                return normalized.contains("CATALOG") || normalized.contains("PARTITIONS");
-            }));
-            assertBefore(f.events, "count", "create-external");
-            assertBefore(f.events, "create-external", "json-scan-preflight");
-            assertBefore(f.events, "json-scan-preflight", "truncate");
-            assertBefore(f.events, "truncate", "insert-select");
-            assertBefore(f.events, "insert-select", "drop-external");
-            assertBefore(f.events, "drop-external", "checkpoint");
-            assertEquals(1, f.directInserts);
-            assertEquals(0, f.sourceReads);
-            assertEquals(1, f.checkpoints.size());
+    public void legacyExternalTasksMustSupplyResourceInsteadOfSelectingMysqlEngineOrFallback() throws Exception {
+        for (String type : RESOURCE_SOURCES) {
+            for (String method : Arrays.asList(null, ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE)) {
+                ErDataTransfer task = task("1", "0", method);
+                if (method != null) task.setCatalogName("leftover_catalog");
+                List<String> messages = new ArrayList<>();
+                StarRocksDataSyncExecutor executor = new StarRocksDataSyncExecutor(null, null, null);
+                Connection unused = unusedConnection();
+                try {
+                    executor.prepareDirectFullImport(task, datasource(type), "erp_base", "orders",
+                            "`warehouse`.`orders`", COLUMNS, COLUMNS, DataSyncFactory.buildExtractor(datasource(type)),
+                            unused, unused, "time_stamp", (current, total, message) -> messages.add(message));
+                    fail("Legacy task must request a prebuilt Resource");
+                } catch (IllegalArgumentException expected) {
+                    assertTrue(expected.getMessage(), expected.getMessage().contains("Resource"));
+                    assertTrue(expected.getMessage(), expected.getMessage().contains("旧外部表任务"));
+                }
+                assertTrue("Missing Resource never chooses a different import path", messages.isEmpty());
+            }
         }
     }
 
     @Test
-    public void explicitExternalTableRejectsUnsupportedSourceWithoutJdbcFallback() throws Exception {
-        for (String type : Arrays.asList("POSTGRESQL", "ORACLE", "SQLSERVER", "STARROCKS")) {
-            ErDataTransfer task = externalTableTask("1", "0");
-            task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+    public void resourceWhiteListRejectsOtherSourcesOrMismatchedExtractorsBeforeConnections() throws Exception {
+        assertRejectedResourceSource(datasource("UNSUPPORTED"), new FallbackExtractor());
+        assertRejectedResourceSource(datasource("MYSQL"), new TiDbDataSyncExtractor());
+        assertRejectedResourceSource(datasource("TIDB"), new MySqlDataSyncExtractor());
+        assertRejectedResourceSource(datasource("STARROCKS"), new MySqlDataSyncExtractor());
+        assertRejectedResourceSource(datasource("DM"), new KingbaseDataSyncExtractor());
+        assertRejectedResourceSource(datasource("SQLSERVER"), new PostgreSqlDataSyncExtractor());
+        assertRejectedResourceSource(datasource("POSTGRESQL"), new OracleDataSyncExtractor());
+        assertRejectedResourceSource(datasource("ORACLE"), new SqlServerDataSyncExtractor());
+        assertRejectedResourceSource(null, null);
+    }
+
+    @Test
+    public void allEightSourcesReachResourceValidationAndNeverFallbackOnResourceFailure() throws Exception {
+        for (String type : RESOURCE_SOURCES) {
+            ErDataTransfer task = task("1", "0", ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+            task.setResourceName("jdbc_prebuilt");
             task.setCatalogName("leftover_catalog");
-            Connection unused = proxy(Connection.class, (method, args) -> {
-                throw new AssertionError("Unsupported explicit external-table source must fail before JDBC: " + method.getName());
+            List<String> sql = new ArrayList<>();
+            Connection target = proxy(Connection.class, (method, args) -> {
+                if ("createStatement".equals(method.getName())) return proxy(Statement.class, (call, values) -> {
+                    if ("close".equals(call.getName())) return null;
+                    assertEquals("executeQuery", call.getName());
+                    sql.add((String) values[0]);
+                    assertEquals("SHOW RESOURCES", values[0]);
+                    throw new SQLException("driver-secret-that-must-not-leak", "42000", 1044);
+                });
+                throw new AssertionError(method.getName());
             });
+            List<String> messages = new ArrayList<>();
+            try {
+                new StarRocksDataSyncExecutor(null, null, null).prepareDirectFullImport(task, datasource(type),
+                        "db", "orders", "`warehouse`.`orders`", COLUMNS, COLUMNS,
+                        DataSyncFactory.buildExtractor(datasource(type)), unusedConnection(), target,
+                        "time_stamp", (current, total, message) -> messages.add(message));
+                fail("Resource failure must propagate for " + type);
+            } catch (SQLException expected) {
+                assertTrue(expected.getMessage().contains("Resource"));
+                assertFalse(expected.getMessage().contains("driver-secret"));
+            }
+            assertEquals(Collections.singletonList("SHOW RESOURCES"), sql);
+            assertTrue(messages.isEmpty());
+        }
+    }
+
+    @Test
+    public void resourceSchemaPreservationOnlyAppliesToEnabledInitializationAcrossEightSources() throws Exception {
+        for (String type : RESOURCE_SOURCES) {
+            for (String[] config : new String[][] {
+                    {"1", "0", ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, "0"},
+                    {"1", "0", ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE, "0"},
+                    {"1", "0", ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG, "1"},
+                    {"1", "1", ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, "1"},
+                    {"0", "0", ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, "1"}}) {
+                int[] calls = {0};
+                StarRocksDataSyncExecutor executor = new StarRocksDataSyncExecutor(null, null, null) {
+                    @Override protected void prepareTargetSchema(Connection source, Connection target,
+                            String schema, String table, String destination) { calls[0]++; }
+                };
+                ErDataTransfer task = task(config[0], config[1], config[2]);
+                executor.prepareTargetSchema(task, datasource(type), unusedConnection(), unusedConnection(),
+                        "db", "orders", "`warehouse`.`orders`");
+                assertEquals(type + " " + Arrays.toString(config), Integer.parseInt(config[3]), calls[0]);
+            }
+        }
+    }
+
+    @Test
+    public void stoppedResourceImportsDoNotTouchAnyConnectionOrReportFallback() throws Exception {
+        for (String type : RESOURCE_SOURCES) {
             StarRocksDataSyncExecutor executor = new StarRocksDataSyncExecutor(null, null, null);
-            List<String> messages = new ArrayList<>();
-            try {
-                executor.prepareDirectFullImport(task, tlsSource(type), "db", "orders", "`warehouse`.`orders`",
-                        COLUMNS, COLUMNS, new FallbackExtractor(), unused, unused, "time_stamp",
-                        (current, total, message) -> messages.add(message));
-                fail("An explicitly selected external-table route must reject " + type);
-            } catch (IllegalArgumentException expected) {
-                assertTrue(expected.getMessage(), expected.getMessage().contains("MySQL"));
-                assertTrue(expected.getMessage(), expected.getMessage().contains("TiDB"));
-            }
-            assertTrue("Unsupported source selection must not be reported as a JDBC configuration fallback", messages.isEmpty());
-        }
-    }
-
-    @Test
-    public void explicitExternalTableTlsConfigurationStillReportsExistingJdbcFallback() throws Exception {
-        assertTlsFallbackReportsJdbcPath("MYSQL", new MySqlDataSyncExtractor(), ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
-        assertTlsFallbackReportsJdbcPath("TIDB", new TiDbDataSyncExtractor(), ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
-    }
-
-    @Test
-    public void stoppedExternalImportCannotFallBackToJdbcOrReportProgress() throws Exception {
-        for (String type : Arrays.asList("MYSQL", "TIDB")) {
-            StarRocksDataSyncExecutor executor = new StarRocksDataSyncExecutor(
-                    unusedMapper(ErDataTransferMapper.class), unusedMapper(ErDataTransferLogMapper.class),
-                    unusedMapper(ErDataTransferProgressMapper.class));
             executor.requestStop();
-            List<String> messages = new ArrayList<>();
-            Connection unused = proxy(Connection.class, (method, args) -> {
-                throw new AssertionError("Stopped import must not access JDBC: " + method.getName());
-            });
+            ErDataTransfer task = task("1", "0", ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+            task.setResourceName("jdbc_prebuilt");
             try {
-                executor.prepareDirectFullImport(externalTableTask("1", "0"), tlsSource(type), "db", "orders",
-                        "`warehouse`.`orders`", COLUMNS, COLUMNS,
-                        "MYSQL".equals(type) ? new MySqlDataSyncExtractor() : new TiDbDataSyncExtractor(),
-                        unused, unused, "time_stamp", (current, total, message) -> messages.add(message));
-                fail("Expected stopped import");
+                executor.prepareDirectFullImport(task, datasource(type), "db", "orders", "`warehouse`.`orders`",
+                        COLUMNS, COLUMNS, DataSyncFactory.buildExtractor(datasource(type)), unusedConnection(),
+                        unusedConnection(), "time_stamp", null);
+                fail("Expected stop");
             } catch (DataSyncCancellation.SyncStoppedException expected) {
-                assertTrue(messages.isEmpty());
-            }
+            } finally { executor.cancellationContext().close(); }
         }
     }
 
-    @Test
-    public void realCountFailureCannotFallBackToJdbcOrClearDestination() throws Exception {
-        for (String type : Arrays.asList("MYSQL", "TIDB")) {
-            Fixture f = new Fixture();
-            f.enableRealHelper(type);
-            f.countFailure = new SQLException("exact source count denied", "HY000", 321);
-
-            Throwable failure = f.failure();
-
-            assertTrue(failure instanceof SQLException);
-            assertEquals(321, ((SQLException) failure).getErrorCode());
-            assertTrue(f.events.contains("count"));
-            assertFalse(f.events.contains("truncate"));
-            assertFalse(f.events.contains("jdbc-read"));
-            assertFalse(f.events.contains("execute"));
-            assertTrue(f.checkpoints.isEmpty());
-            assertEquals(0, f.sourceReads);
-        }
+    private static void assertRejectedResourceSource(ErDatasource source, DataSyncExtractor extractor) throws Exception {
+        ErDataTransfer task = task("1", "0", ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+        task.setResourceName("jdbc_prebuilt");
+        try {
+            new StarRocksDataSyncExecutor(null, null, null).prepareDirectFullImport(task, source, "db", "orders",
+                    "`warehouse`.`orders`", COLUMNS, COLUMNS, extractor, unusedConnection(), unusedConnection(),
+                    "time_stamp", null);
+            fail("Unsupported Resource source/extractor must fail");
+        } catch (IllegalArgumentException expected) { assertTrue(expected.getMessage().contains("JDBC Resource")); }
     }
 
-    @Test
-    public void stopWhileCountingCannotFallBackToJdbcOrClearDestination() throws Exception {
-        for (String type : Arrays.asList("MYSQL", "TIDB")) {
-            Fixture f = new Fixture();
-            f.enableRealHelper(type);
-            f.stopDuringCount = true;
-
-            assertTrue(f.failure() instanceof DataSyncCancellation.SyncStoppedException);
-
-            assertTrue(f.events.contains("count"));
-            assertFalse(f.events.contains("truncate"));
-            assertFalse(f.events.contains("jdbc-read"));
-            assertFalse(f.events.contains("execute"));
-            assertTrue(f.checkpoints.isEmpty());
-            assertEquals(0, f.sourceReads);
-        }
+    private static void assertStaysOnJdbcPath(ErDataTransfer task, ErDatasource source, DataSyncExtractor extractor) throws Exception {
+        assertNull(new StarRocksDataSyncExecutor(null, null, null).prepareDirectFullImport(task, source,
+                "db", "orders", "`warehouse`.`orders`", COLUMNS, COLUMNS, extractor,
+                unusedConnection(), unusedConnection(), "time_stamp", null));
     }
 
-    @Test
-    public void mysqlAndTiDbJsonTablesUseInsertSelectAndKeepTheEffectiveRowThreshold() throws Exception {
-        for (String sourceType : Arrays.asList("MYSQL", "TIDB")) {
-            for (long sourceCount : new long[]{499999, 500000}) {
-                Fixture f = new Fixture();
-                f.enableRealHelper(sourceType);
-                f.jsonColumn = true;
-                f.sourceCount = sourceCount;
-                f.directCounts = sourceCount < 500000 ? new long[]{sourceCount} : new long[]{250000, 250000};
-
-                Object result = f.run();
-
-                assertTrue((Boolean) field(result, "success"));
-                assertEquals(MAX_TS, field(result, "maxTs"));
-                assertEquals(Long.valueOf(sourceCount), ((ErDataTransferLog) field(result, "log")).getSuccessCount());
-                assertEquals(sourceCount < 500000 ? 1 : 2, f.directInserts);
-                assertEquals(0, f.sourceReads);
-                assertTrue(f.writtenRows.isEmpty());
-                assertEquals(1, f.checkpoints.size());
-                assertEquals(String.valueOf(MAX_TS.getTime()), f.checkpoints.get(0).getLastSyncValue());
-                assertBefore(f.events, "json-probe", "truncate");
-                assertBefore(f.events, "truncate", "insert-select");
-                assertBefore(f.events, "drop-external", "checkpoint");
-                assertEquals(1, Collections.frequency(f.events, "drop-external"));
-                assertTrue(f.directSql.stream().filter(sql -> sql.startsWith("INSERT INTO"))
-                        .allMatch(sql -> sql.contains("JSON_QUERY(PARSE_JSON(CONCAT('[', `payload`, ']')), '$[0]')")));
-            }
-        }
-    }
-
-    @Test
-    public void taskPolicyReachesTheRealHelperForMySqlAndTiDb() throws Exception {
-        for (String sourceType : Arrays.asList("MYSQL", "TIDB")) {
-            Fixture f = new Fixture();
-            f.enableRealHelper(sourceType);
-            f.task.setExternalTableThresholdWan(10);
-            f.task.setExternalTableWindowUnit("MONTH");
-            f.sourceCount = 100000;
-            // December 2025 through October 2026, including empty natural windows.
-            f.directCounts = new long[11];
-            Arrays.fill(f.directCounts, 10000);
-            f.directCounts[10] = 0;
-
-            Object result = f.run();
-
-            assertTrue((Boolean) field(result, "success"));
-            assertEquals(11, f.directInserts);
-            assertEquals(Long.valueOf(100000), ((ErDataTransferLog) field(result, "log")).getSuccessCount());
-            List<String> inserts = new ArrayList<>();
-            for (String sql : f.directSql) if (sql.startsWith("INSERT INTO")) inserts.add(sql);
-            assertTrue(inserts.get(0).endsWith("WHERE `time_stamp` >= '2025-12-01 00:00:00' AND `time_stamp` < '2026-01-01 00:00:00'"));
-            assertTrue(inserts.get(10).endsWith("WHERE `time_stamp` >= '2026-10-01 00:00:00' AND `time_stamp` < '2026-11-01 00:00:00'"));
-            assertEquals(0, f.sourceReads);
-            assertEquals(1, f.checkpoints.size());
-            assertEquals(String.valueOf(MAX_TS.getTime()), f.checkpoints.get(0).getLastSyncValue());
-            assertBefore(f.events, "count", "truncate");
-            assertBefore(f.events, "drop-external", "checkpoint");
-        }
-    }
-
-    @Test
-    public void zeroEffectiveRowsWithCustomDailyPolicyDoesNotAdvanceTheCheckpoint() throws Exception {
-        Fixture f = new Fixture();
-        f.enableRealHelper("TIDB");
-        f.task.setExternalTableThresholdWan(1);
-        f.task.setExternalTableWindowUnit("DAY");
-        f.sourceCount = 0;
-        f.directCounts = new long[0];
-
-        Object result = f.run();
-
-        assertTrue((Boolean) field(result, "success"));
-        assertNull(field(result, "maxTs"));
-        assertEquals(0, f.directInserts);
-        assertTrue(f.checkpoints.isEmpty());
-        assertEquals(0, f.sourceReads);
-        assertEquals(1, Collections.frequency(f.events, "drop-external"));
-    }
-
-    @Test
-    public void jsonProbeAndExternalScanFailuresDoNotClearTargetOrAdvanceCheckpoint() throws Exception {
-        for (boolean failProbe : new boolean[]{true, false}) {
-            Fixture f = new Fixture();
-            f.enableRealHelper("MYSQL");
-            f.jsonColumn = true;
-            if (failProbe) f.jsonProbeFailure = new SQLException("JSON functions unavailable", "HY000", 614);
-            else f.jsonScanFailure = new SQLException("JSON conversion rejected", "HY000", 615);
-
-            SQLException failure = (SQLException) f.failure();
-
-            assertEquals(failProbe ? 614 : 615, failure.getErrorCode());
-            assertFalse(f.events.contains("truncate"));
-            assertFalse(f.events.contains("insert-select"));
-            assertTrue(f.checkpoints.isEmpty());
-            assertEquals(0, f.sourceReads);
-            assertEquals(failProbe ? 0 : 1, Collections.frequency(f.events, "drop-external"));
-            if (!failProbe) {
-                String created = f.directSql.stream().filter(sql -> sql.startsWith("CREATE EXTERNAL TABLE ")).findFirst().get();
-                String ownedTable = created.substring("CREATE EXTERNAL TABLE ".length()).split(" ", 2)[0];
-                assertTrue(f.directSql.contains("DROP TABLE IF EXISTS " + ownedTable));
-            }
-        }
-    }
-
-    @Test
-    public void jsonNullSemanticMismatchKeepsMySqlAndTiDbTargetsAndCheckpointsUntouched() throws Exception {
-        for (String sourceType : Arrays.asList("MYSQL", "TIDB")) {
-            Fixture f = new Fixture();
-            f.enableRealHelper(sourceType);
-            f.jsonColumn = true;
-            // Simulate a projection result that conflates JSON null with SQL NULL.
-            f.jsonProbeValues = new String[]{"123", "true", null, null};
-
-            try {
-                f.run();
-                fail("JSON null must remain distinct from SQL NULL before clearing the target");
-            } catch (IllegalStateException expected) {
-                assertTrue(expected.getMessage(), expected.getMessage().contains("JSON null"));
-                assertTrue(expected.getMessage(), expected.getMessage().contains("SQL NULL"));
-            }
-
-            assertTrue(f.events.contains("json-probe"));
-            assertFalse(f.events.contains("create-external"));
-            assertFalse(f.events.contains("truncate"));
-            assertFalse(f.events.contains("insert-select"));
-            assertFalse(f.events.contains("jdbc-read"));
-            assertTrue(f.checkpoints.isEmpty());
-            assertEquals(0, f.sourceReads);
-            assertEquals(0, Collections.frequency(f.events, "drop-external"));
-        }
-    }
-
-    @Test
-    public void stopAfterPreparingRealJsonImportDropsOwnedTableWithoutClearingTarget() throws Exception {
-        Fixture f = new Fixture();
-        f.enableRealHelper("TIDB");
-        f.jsonColumn = true;
-        f.stopAfterPrepare = true;
-
-        assertTrue(f.failure() instanceof DataSyncCancellation.SyncStoppedException);
-
-        assertFalse(f.events.contains("truncate"));
-        assertFalse(f.events.contains("insert-select"));
-        assertEquals(0, f.sourceReads);
-        assertTrue(f.checkpoints.isEmpty());
-        assertEquals(1, Collections.frequency(f.events, "drop-external"));
-    }
-
-    private static void assertStaysOnJdbcPath(ErDataTransfer task, ErDatasource source,
-            DataSyncExtractor extractor) throws Exception {
-        StarRocksDataSyncExecutor executor = new StarRocksDataSyncExecutor(
-                unusedMapper(ErDataTransferMapper.class), unusedMapper(ErDataTransferLogMapper.class),
-                unusedMapper(ErDataTransferProgressMapper.class));
-        List<String> messages = new ArrayList<>();
-        Connection unusedConnection = proxy(Connection.class, (method, args) -> {
-            throw new AssertionError("Rejected external import must not access JDBC: " + method.getName());
-        });
-
-        assertNull(executor.prepareDirectFullImport(task, source, "db", "orders",
-                "`warehouse`.`orders`", COLUMNS, COLUMNS, extractor,
-                unusedConnection, unusedConnection, "time_stamp",
-                (current, total, message) -> messages.add(message)));
-
-        assertTrue("Rejected imports must not reach the external-table helper: " + messages,
-                messages.isEmpty());
-    }
-
-    private static ErDataTransfer externalTableTask(String enabled, String syncMode) {
+    private static ErDataTransfer task(String enabled, String mode, String method) {
         ErDataTransfer task = new ErDataTransfer();
-        task.setTransferId(42L);
-        task.setExternalTableEnabled(enabled);
-        task.setSyncMode(syncMode);
+        task.setExternalTableEnabled(enabled); task.setSyncMode(mode); task.setDirectImportMethod(method);
         return task;
     }
 
-    private static ErDatasource tlsSource(String type) {
-        ErDatasource source = new ErDatasource();
-        source.setDatasourceType(type);
-        source.setJdbcUrl("jdbc:mysql://source.test:4000/db?sslMode=REQUIRED");
-        source.setHost("source.test");
-        source.setPort(4000);
-        source.setDatabaseName("db");
-        source.setUsername("import_reader");
-        source.setPassword("not-a-real-password");
-        return source;
+    private static ErDatasource datasource(String type) {
+        ErDatasource source = new ErDatasource(); source.setDatasourceType(type); return source;
     }
 
-    private static void assertTlsFallbackReportsJdbcPath(String type, DataSyncExtractor extractor)
-            throws Exception {
-        assertTlsFallbackReportsJdbcPath(type, extractor, null);
-    }
-
-    private static void assertTlsFallbackReportsJdbcPath(String type, DataSyncExtractor extractor,
-            String directImportMethod) throws Exception {
-        StarRocksDataSyncExecutor executor = new StarRocksDataSyncExecutor(
-                unusedMapper(ErDataTransferMapper.class), unusedMapper(ErDataTransferLogMapper.class),
-                unusedMapper(ErDataTransferProgressMapper.class));
-        ErDatasource source = tlsSource(type);
-        ErDataTransfer task = externalTableTask("1", "0");
-        task.setDirectImportMethod(directImportMethod);
-        if (directImportMethod != null) task.setCatalogName("leftover_catalog");
-        List<String> messages = new ArrayList<>();
-        Connection unusedConnection = proxy(Connection.class, (method, args) -> {
-            throw new AssertionError("TLS fallback must precede JDBC/DDL: " + method.getName());
-        });
-
-        assertNull(executor.prepareDirectFullImport(task, source, "db", "orders",
-                "`warehouse`.`orders`", COLUMNS, COLUMNS, extractor,
-                unusedConnection, unusedConnection, "time_stamp",
-                (current, total, message) -> messages.add(message)));
-
-        assertEquals(1, messages.size());
-        assertTrue(messages.get(0), messages.get(0).contains("原 JDBC 初始化"));
-        assertTrue(messages.get(0), messages.get(0).contains("TLS"));
-        assertFalse(messages.get(0), messages.get(0).contains(source.getPassword()));
+    private static Connection unusedConnection() {
+        return proxy(Connection.class, (method, args) -> { throw new AssertionError("Unexpected connection call: " + method.getName()); });
     }
 
     private static void assertBefore(List<String> events, String first, String second) {
         assertTrue(first + " missing: " + events, events.contains(first));
         assertTrue(second + " missing: " + events, events.contains(second));
-        assertTrue(first + " must precede " + second + ": " + events,
-                events.indexOf(first) < events.indexOf(second));
+        assertTrue(first + " must precede " + second + ": " + events, events.indexOf(first) < events.indexOf(second));
     }
 
     private static Object field(Object instance, String name) throws Exception {
-        Field field = instance.getClass().getDeclaredField(name);
-        field.setAccessible(true);
-        return field.get(instance);
+        Field field = instance.getClass().getDeclaredField(name); field.setAccessible(true); return field.get(instance);
     }
 
     private static class Fixture {
         final List<String> events = new ArrayList<>();
         final List<ErDataTransferProgress> checkpoints = new ArrayList<>();
         final List<Object[]> writtenRows = new ArrayList<>();
-        final List<String> directSql = new ArrayList<>();
-        final ErDatasource sourceDs = new ErDatasource();
+        final ErDatasource sourceDs = datasource("TIDB");
         final ErDataTransfer task = new ErDataTransfer();
         final LifecycleExecutor executor;
         boolean useDirectImport = true;
-        boolean stopAfterPrepare;
-        boolean stopAfterExecute;
-        boolean stopOnClose;
-        boolean realHelper;
-        boolean jsonColumn;
-        long sourceCount = 500000L;
-        long[] directCounts = {250000, 250000};
-        int directInserts;
-        SQLException jsonProbeFailure;
-        String[] jsonProbeValues = {"123", "true", "null", null};
-        SQLException jsonScanFailure;
-        boolean stopDuringCount;
-        SQLException countFailure;
-        SQLException prepareFailure;
-        SQLException executeFailure;
-        SQLException closeFailure;
-        SQLException clearFailure;
+        boolean stopAfterPrepare, stopAfterExecute, stopOnClose;
+        SQLException prepareFailure, executeFailure, closeFailure, clearFailure;
         ErDatasource preparedSource;
         long processed = 17;
         Timestamp maxTs = MAX_TS;
         int sourceReads;
 
         Fixture() {
-            task.setTransferId(42L);
-            task.setSyncMode("0");
-            sourceDs.setDatasourceType("TIDB");
+            task.setTransferId(42L); task.setSyncMode("0");
             executor = new LifecycleExecutor(this, proxy(ErDataTransferProgressMapper.class, (method, args) -> {
                 if ("upsert".equals(method.getName())) {
-                    events.add("checkpoint");
-                    checkpoints.add((ErDataTransferProgress) args[0]);
-                    return 1;
+                    events.add("checkpoint"); checkpoints.add((ErDataTransferProgress) args[0]); return 1;
                 }
-                throw new AssertionError("Unexpected progress mapper call: " + method.getName());
+                throw new AssertionError(method.getName());
             }));
         }
 
-        void enableRealHelper(String sourceType) {
-            realHelper = true;
-            task.setExternalTableEnabled("1");
-            sourceDs.setDatasourceType(sourceType);
-            sourceDs.setJdbcUrl("jdbc:mysql://source.test:4000/erp_01?useSSL=false");
-            sourceDs.setHost("source.test");
-            sourceDs.setPort(4000);
-            sourceDs.setDatabaseName("erp_01");
-            sourceDs.setUsername("import_reader");
-            sourceDs.setPassword("not-a-real-password");
-        }
-
-        List<String> columns() {
-            return jsonColumn ? Arrays.asList("id", "time_stamp", "payload") : COLUMNS;
-        }
-
         Object run() throws Exception {
-            Method method = DataSyncExecutor.class.getDeclaredMethod("syncFull", ErDataTransfer.class,
-                    ErDatasource.class, String.class, String.class, String.class, List.class, List.class,
-                    List.class, DataSyncExtractor.class, DataSyncLoader.class, Connection.class,
-                    Connection.class, int.class, String.class, boolean.class, boolean.class,
-                    SyncProgressCallback.class);
+            Method method = DataSyncExecutor.class.getDeclaredMethod("syncFull", ErDataTransfer.class, ErDatasource.class,
+                    String.class, String.class, String.class, List.class, List.class, List.class, DataSyncExtractor.class,
+                    DataSyncLoader.class, Connection.class, Connection.class, int.class, String.class,
+                    boolean.class, boolean.class, SyncProgressCallback.class);
             method.setAccessible(true);
             try {
-                return method.invoke(executor, task, sourceDs, "erp_01", "orders", "`warehouse`.`orders`",
-                        columns(), columns(), Collections.singletonList("id"), realHelper
-                                ? ("TIDB".equals(sourceDs.getDatasourceType()) ? new TiDbDataSyncExtractor() : new MySqlDataSyncExtractor())
-                                : new FallbackExtractor(),
-                        new FallbackLoader(), sourceConnection(), targetConnection(), 3000,
-                        "time_stamp", false, false, null);
-            } catch (InvocationTargetException e) {
-                Throwable cause = e.getCause();
-                if (cause instanceof Exception) throw (Exception) cause;
-                if (cause instanceof Error) throw (Error) cause;
-                throw e;
+                return method.invoke(executor, task, sourceDs, "erp_01", "orders", "`warehouse`.`orders`", COLUMNS,
+                        COLUMNS, Collections.singletonList("id"), new FallbackExtractor(), new FallbackLoader(),
+                        sourceConnection(), targetConnection(), 3000, "time_stamp", false, false, null);
+            } catch (InvocationTargetException failure) {
+                if (failure.getCause() instanceof Exception) throw (Exception) failure.getCause();
+                if (failure.getCause() instanceof Error) throw (Error) failure.getCause();
+                throw failure;
             }
         }
 
         Throwable failure() throws Exception {
-            try {
-                run();
-                throw new AssertionError("Import should fail");
-            } catch (SQLException e) {
-                return e;
-            }
+            try { run(); throw new AssertionError("Import should fail"); }
+            catch (SQLException expected) { return expected; }
         }
 
         Connection sourceConnection() {
             return proxy(Connection.class, (method, args) -> {
-                if (realHelper && "getMetaData".equals(method.getName())) {
-                    return proxy(DatabaseMetaData.class, (metadataMethod, metadataArgs) ->
-                            "getURL".equals(metadataMethod.getName()) ? sourceDs.getJdbcUrl()
-                                    : defaultValue(metadataMethod.getReturnType()));
-                }
-                if (realHelper && "createStatement".equals(method.getName())) {
-                    return proxy(Statement.class, (statementMethod, statementArgs) -> {
-                        if ("executeQuery".equals(statementMethod.getName())) {
-                            String sql = (String) statementArgs[0];
-                            if (sql.startsWith("SELECT COUNT(*)")) {
-                                assertEquals(jsonColumn
-                                        ? "SELECT COUNT(*), MAX(OCTET_LENGTH(CAST(`payload` AS CHAR CHARACTER SET utf8mb4))) FROM `erp_01`.`orders` WHERE `time_stamp` IS NOT NULL"
-                                        : "SELECT COUNT(*) FROM `erp_01`.`orders` WHERE `time_stamp` IS NOT NULL", sql);
-                                events.add("count");
-                                if (stopDuringCount) {
-                                    executor.requestStop();
-                                    throw new SQLException("COUNT cancelled", "HY000", 1317);
-                                }
-                                if (countFailure != null) throw countFailure;
-                                return jsonColumn ? valuesRow(sourceCount, 128L) : valuesRow(sourceCount);
-                            }
-                            if (sql.startsWith("SELECT MIN(")) return valuesRow(Timestamp.valueOf("2025-12-31 23:59:59"), MAX_TS);
-                            throw new AssertionError("Unexpected source SQL: " + sql);
-                        }
-                        return defaultValue(statementMethod.getReturnType());
-                    });
-                }
                 if ("prepareStatement".equals(method.getName())) {
-                    if (realHelper && ((String) args[0]).contains("information_schema.COLUMNS")) {
-                        return proxy(PreparedStatement.class, (statementMethod, statementArgs) ->
-                                "executeQuery".equals(statementMethod.getName()) ? sourceColumnMetadata()
-                                        : defaultValue(statementMethod.getReturnType()));
-                    }
-                    if (useDirectImport) throw new AssertionError("Direct import must not fetch source rows");
-                    return proxy(PreparedStatement.class, (statementMethod, statementArgs) -> {
-                        if ("executeQuery".equals(statementMethod.getName())) {
-                            sourceReads++;
-                            events.add("jdbc-read");
-                            return singleSourceRow();
-                        }
-                        return defaultValue(statementMethod.getReturnType());
+                    if (useDirectImport) throw new AssertionError("Direct import must not fetch application-side rows");
+                    return proxy(PreparedStatement.class, (call, values) -> {
+                        if ("executeQuery".equals(call.getName())) { sourceReads++; events.add("jdbc-read"); return singleSourceRow(); }
+                        return defaultValue(call.getReturnType());
                     });
                 }
                 return defaultValue(method.getReturnType());
@@ -779,112 +464,21 @@ public class StarRocksExternalTableImportIntegrationTest {
 
         Connection targetConnection() {
             return proxy(Connection.class, (method, args) -> {
-                if (realHelper && "createStatement".equals(method.getName())) {
-                    if (countFailure != null || stopDuringCount) throw new AssertionError("Failed/cancelled COUNT must precede any target statement");
-                    return proxy(Statement.class, (statementMethod, statementArgs) -> {
-                        if ("execute".equals(statementMethod.getName())) {
-                            String sql = (String) statementArgs[0]; directSql.add(sql);
-                            if (sql.startsWith("CREATE EXTERNAL TABLE")) events.add("create-external");
-                            if (sql.startsWith("DROP TABLE")) events.add("drop-external");
-                            return false;
-                        }
-                        if ("executeQuery".equals(statementMethod.getName())) {
-                            String sql = (String) statementArgs[0]; directSql.add(sql);
-                            if (sql.equals("DESCRIBE `warehouse`.`orders`")) return targetDescribe();
-                            if (sql.equals(StarRocksExternalFullImport.JSON_CONVERSION_PROBE_SQL)) {
-                                events.add("json-probe");
-                                if (jsonProbeFailure != null) throw jsonProbeFailure;
-                                return valuesRow((Object[]) jsonProbeValues);
-                            }
-                            if (sql.equals("SHOW VARIABLES LIKE 'enable_insert_strict'")) return valuesRow("enable_insert_strict", "true");
-                            if (sql.equals("SHOW VARIABLES LIKE 'query_timeout'")) return valuesRow("query_timeout", 3600L);
-                            if (sql.startsWith("EXPLAIN")) return valuesRow("INSERT PLAN");
-                            if (sql.startsWith("SELECT") && sql.contains("FROM `easyreport_import_tmp`.")) {
-                                events.add("json-scan-preflight");
-                                if (jsonScanFailure != null) throw jsonScanFailure;
-                                return valuesRow(7L, MAX_TS, "{\"中文\":[1,true,null]}");
-                            }
-                            throw new AssertionError("Unexpected target SQL: " + sql);
-                        }
-                        if ("executeLargeUpdate".equals(statementMethod.getName())) {
-                            directSql.add((String) statementArgs[0]);
-                            events.add("insert-select");
-                            return directCounts[directInserts++];
-                        }
-                        return defaultValue(statementMethod.getReturnType());
-                    });
-                }
-                if (realHelper && "prepareStatement".equals(method.getName())) {
-                    throw new AssertionError("External import must not use JDBC row writes");
-                }
-                if ("commit".equals(method.getName()) || "rollback".equals(method.getName())) {
-                    events.add(method.getName());
-                }
-                if ("prepareStatement".equals(method.getName())) {
-                    return proxy(PreparedStatement.class, (statementMethod, statementArgs) ->
-                            defaultValue(statementMethod.getReturnType()));
-                }
-                return defaultValue(method.getReturnType());
-            });
-        }
-
-        ResultSet targetDescribe() {
-            String[][] fields = {{"id", "BIGINT"}, {"time_stamp", "DATETIME"}, {"payload", "JSON"}};
-            int[] row = {-1};
-            return proxy(ResultSet.class, (method, args) -> {
-                if ("next".equals(method.getName())) return ++row[0] < fields.length;
-                if ("getString".equals(method.getName())) return "Field".equals(args[0]) ? fields[row[0]][0] : fields[row[0]][1];
-                if ("getMetaData".equals(method.getName())) throw new AssertionError("SR JSON protocol metadata is not the real column type");
-                return defaultValue(method.getReturnType());
-            });
-        }
-
-        ResultSet sourceColumnMetadata() {
-            int[] row = {-1};
-            return proxy(ResultSet.class, (method, args) -> {
-                switch (method.getName()) {
-                    case "next": return ++row[0] < columns().size();
-                    case "getString":
-                        switch ((String) args[0]) {
-                            case "COLUMN_NAME": return columns().get(row[0]);
-                            case "DATA_TYPE": return row[0] == 0 ? "bigint" : row[0] == 1 ? "datetime" : "json";
-                            case "COLUMN_TYPE": return row[0] == 0 ? "bigint(20)" : row[0] == 1 ? "datetime" : "json";
-                            case "IS_NULLABLE": return row[0] == 0 ? "NO" : "YES";
-                            default: throw new AssertionError("Unexpected metadata column: " + args[0]);
-                        }
-                    case "getInt": return "NUMERIC_PRECISION".equals(args[0]) && row[0] == 0 ? 20 : 0;
-                    default: return defaultValue(method.getReturnType());
-                }
-            });
-        }
-
-        ResultSet valuesRow(Object... values) {
-            int[] row = {-1};
-            boolean[] wasNull = {false};
-            return proxy(ResultSet.class, (method, args) -> {
-                if ("next".equals(method.getName())) return ++row[0] == 0;
-                if ("wasNull".equals(method.getName())) return wasNull[0];
-                if (method.getName().startsWith("get") && args != null && args.length > 0 && args[0] instanceof Integer) {
-                    Object value = values[(Integer) args[0] - 1];
-                    wasNull[0] = value == null;
-                    if ("getLong".equals(method.getName())) return value == null ? 0L : ((Number) value).longValue();
-                    if ("getString".equals(method.getName())) return value == null ? null : value.toString();
-                    return value;
-                }
+                if ("commit".equals(method.getName()) || "rollback".equals(method.getName())) events.add(method.getName());
+                if ("prepareStatement".equals(method.getName())) return proxy(PreparedStatement.class,
+                        (call, values) -> defaultValue(call.getReturnType()));
                 return defaultValue(method.getReturnType());
             });
         }
 
         ResultSet singleSourceRow() {
-            final int[] row = {-1};
+            int[] row = {-1};
             return proxy(ResultSet.class, (method, args) -> {
                 switch (method.getName()) {
                     case "next": return ++row[0] == 0;
-                    case "getMetaData": return proxy(ResultSetMetaData.class, (metaMethod, metaArgs) -> {
-                        if ("getColumnTypeName".equals(metaMethod.getName())) {
-                            return ((Integer) metaArgs[0]) == 1 ? "BIGINT" : "TIMESTAMP";
-                        }
-                        return defaultValue(metaMethod.getReturnType());
+                    case "getMetaData": return proxy(ResultSetMetaData.class, (call, values) -> {
+                        if ("getColumnTypeName".equals(call.getName())) return (Integer) values[0] == 1 ? "BIGINT" : "TIMESTAMP";
+                        return defaultValue(call.getReturnType());
                     });
                     case "findColumn": return "id".equals(args[0]) ? 1 : 2;
                     case "getObject": return "id".equals(args[0]) ? 7L : MAX_TS;
@@ -894,133 +488,73 @@ public class StarRocksExternalTableImportIntegrationTest {
         }
     }
 
+    /** Tests the shared DirectFullImport lifecycle independently of any physical scanner implementation. */
     private static class LifecycleExecutor extends StarRocksDataSyncExecutor {
-        private final Fixture fixture;
-
-        LifecycleExecutor(Fixture fixture, ErDataTransferProgressMapper progressMapper) {
-            super(unusedMapper(ErDataTransferMapper.class), unusedMapper(ErDataTransferLogMapper.class), progressMapper);
-            this.fixture = fixture;
+        final Fixture fixture;
+        LifecycleExecutor(Fixture fixture, ErDataTransferProgressMapper progress) {
+            super(unusedMapper(ErDataTransferMapper.class), unusedMapper(ErDataTransferLogMapper.class), progress); this.fixture = fixture;
         }
-
-        @Override
-        protected DirectFullImport prepareDirectFullImport(ErDataTransfer task, ErDatasource sourceDs,
-                String schema, String table, String targetTable, List<String> sourceCols,
-                List<String> targetCols, DataSyncExtractor extractor, Connection sourceConn,
-                Connection targetConn, String tsField, SyncProgressCallback callback) throws Exception {
-            fixture.events.add("prepare");
-            fixture.preparedSource = sourceDs;
-            if (fixture.realHelper) {
-                DirectFullImport direct = super.prepareDirectFullImport(task, sourceDs, schema, table, targetTable,
-                        sourceCols, targetCols, extractor, sourceConn, targetConn, tsField, callback);
-                if (fixture.stopAfterPrepare) requestStop();
-                return direct;
-            }
+        @Override protected DirectFullImport prepareDirectFullImport(ErDataTransfer task, ErDatasource source,
+                String schema, String table, String target, List<String> sourceColumns, List<String> targetColumns,
+                DataSyncExtractor extractor, Connection sourceConnection, Connection targetConnection,
+                String timestamp, SyncProgressCallback callback) throws Exception {
+            fixture.events.add("prepare"); fixture.preparedSource = source;
             if (fixture.prepareFailure != null) throw fixture.prepareFailure;
             if (!fixture.useDirectImport) return null;
             if (fixture.stopAfterPrepare) requestStop();
             return new DirectFullImport() {
-                @Override
-                public FullSyncStats execute() throws Exception {
+                @Override public FullSyncStats execute() throws Exception {
                     fixture.events.add("execute");
                     if (fixture.executeFailure != null) throw fixture.executeFailure;
-                    FullSyncStats stats = new FullSyncStats();
-                    stats.processed = fixture.processed;
-                    stats.maxTs = fixture.maxTs;
-                    if (fixture.stopAfterExecute) requestStop();
-                    return stats;
+                    FullSyncStats stats = new FullSyncStats(); stats.processed = fixture.processed; stats.maxTs = fixture.maxTs;
+                    if (fixture.stopAfterExecute) requestStop(); return stats;
                 }
-
-                @Override
-                public void close() throws Exception {
+                @Override public void close() throws Exception {
                     fixture.events.add("close-direct");
                     if (fixture.closeFailure != null) throw fixture.closeFailure;
                     if (fixture.stopOnClose) requestStop();
                 }
             };
         }
-
-        @Override
-        protected void clearTable(Connection conn, String tableName) throws Exception {
-            fixture.events.add("truncate");
-            if (fixture.clearFailure != null) throw fixture.clearFailure;
+        @Override protected void clearTable(Connection connection, String table) throws Exception {
+            fixture.events.add("truncate"); if (fixture.clearFailure != null) throw fixture.clearFailure;
         }
-
-        @Override
-        protected void beforeBatchInsert(Connection targetConn, String tableName) {
-            fixture.events.add("before");
-        }
-
-        @Override
-        protected void afterBatchInsert(Connection targetConn, String tableName) {
-            fixture.events.add("after");
-        }
-
-        @Override
-        protected void executeBufferedFullInsert(Connection conn, List<Object[]> rows,
-                String targetTable, List<String> cols, List<String> pkCols) {
-            fixture.events.add("jdbc-write");
-            for (Object[] row : rows) fixture.writtenRows.add(row.clone());
+        @Override protected void beforeBatchInsert(Connection connection, String table) { fixture.events.add("before"); }
+        @Override protected void afterBatchInsert(Connection connection, String table) { fixture.events.add("after"); }
+        @Override protected void executeBufferedFullInsert(Connection connection, List<Object[]> rows,
+                String table, List<String> columns, List<String> keys) {
+            fixture.events.add("jdbc-write"); for (Object[] row : rows) fixture.writtenRows.add(row.clone());
         }
     }
 
     private static class FallbackExtractor implements DataSyncExtractor {
-        @Override public List<String> listTables(DatabaseMetaData meta, String dbType, String schema, String table) {
-            throw new AssertionError("Table enumeration does not belong to the full-import hook");
-        }
-        @Override public List<String> listColumns(Connection conn, String schema, String table) {
-            return COLUMNS;
-        }
-        @Override public List<String> listPrimaryKeys(Connection conn, String schema, String table) {
-            return Collections.singletonList("id");
-        }
-        @Override public String buildSelectFull(String schema, String table, String tsField, List<String> pkCols) {
-            return "SELECT id,time_stamp FROM erp_01.orders";
-        }
-        @Override public String buildSelectIncremental(String schema, String table, String tsField, List<String> pkCols) {
-            throw new AssertionError("Full initialization must not use incremental selection");
-        }
+        @Override public List<String> listTables(DatabaseMetaData metadata, String type, String schema, String table) { throw new AssertionError("Unexpected enumeration"); }
+        @Override public List<String> listColumns(Connection connection, String schema, String table) { return COLUMNS; }
+        @Override public List<String> listPrimaryKeys(Connection connection, String schema, String table) { return Collections.singletonList("id"); }
+        @Override public String buildSelectFull(String schema, String table, String timestamp, List<String> keys) { return "SELECT id,time_stamp FROM erp_01.orders"; }
+        @Override public String buildSelectIncremental(String schema, String table, String timestamp, List<String> keys) { throw new AssertionError("Not incremental"); }
     }
-
     private static class FallbackLoader implements DataSyncLoader {
-        @Override public String buildUpsertSql(String table, List<String> columns, boolean upsert) {
-            assertFalse("Initialization uses INSERT into an emptied target", upsert);
-            return "INSERT INTO " + table + "(id,time_stamp) VALUES (?,?)";
-        }
-        @Override public String buildDeleteSql(String table, String pkColumn, List<String> ids) {
-            throw new AssertionError("Initialization must not execute incremental delete alignment");
-        }
+        @Override public String buildUpsertSql(String table, List<String> columns, boolean upsert) { assertFalse(upsert); return "INSERT INTO " + table + "(id,time_stamp) VALUES (?,?)"; }
+        @Override public String buildDeleteSql(String table, String key, List<String> ids) { throw new AssertionError("Not incremental"); }
     }
-
-    private interface Invocation {
-        Object invoke(Method method, Object[] args) throws Throwable;
-    }
-
+    private interface Invocation { Object invoke(Method method, Object[] args) throws Throwable; }
     private static <T> T proxy(Class<T> type, Invocation invocation) {
-        return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type},
-                (object, method, args) -> {
-                    if (method.getDeclaringClass() == Object.class) {
-                        if ("toString".equals(method.getName())) return type.getSimpleName() + " fixture";
-                        if ("hashCode".equals(method.getName())) return System.identityHashCode(object);
-                        if ("equals".equals(method.getName())) return object == args[0];
-                    }
-                    return invocation.invoke(method, args);
-                }));
+        return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type}, (object, method, args) -> {
+            if (method.getDeclaringClass() == Object.class) {
+                if ("toString".equals(method.getName())) return type.getSimpleName() + " fixture";
+                if ("hashCode".equals(method.getName())) return System.identityHashCode(object);
+                if ("equals".equals(method.getName())) return object == args[0];
+            }
+            return invocation.invoke(method, args);
+        }));
     }
-
-    private static <T> T unusedMapper(Class<T> type) {
-        return proxy(type, (method, args) -> { throw new AssertionError("Unexpected mapper call: " + method.getName()); });
-    }
-
+    private static <T> T unusedMapper(Class<T> type) { return proxy(type, (method, args) -> { throw new AssertionError(method.getName()); }); }
     private static Object defaultValue(Class<?> type) {
         if (!type.isPrimitive() || type == void.class) return null;
-        if (type == boolean.class) return false;
-        if (type == int.class) return 0;
-        if (type == long.class) return 0L;
-        if (type == double.class) return 0d;
-        if (type == float.class) return 0f;
-        if (type == short.class) return (short) 0;
-        if (type == byte.class) return (byte) 0;
-        if (type == char.class) return (char) 0;
-        throw new AssertionError("Unsupported primitive: " + type);
+        if (type == boolean.class) return false; if (type == int.class) return 0; if (type == long.class) return 0L;
+        if (type == double.class) return 0d; if (type == float.class) return 0f; if (type == short.class) return (short) 0;
+        if (type == byte.class) return (byte) 0; if (type == char.class) return (char) 0;
+        throw new AssertionError(type);
     }
 }

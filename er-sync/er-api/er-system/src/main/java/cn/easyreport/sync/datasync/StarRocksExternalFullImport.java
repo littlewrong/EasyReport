@@ -37,6 +37,10 @@ final class StarRocksExternalFullImport implements AutoCloseable {
     private static final String SQL_IDENTIFIER = "(?:`(?:``|[^`])+`|[a-zA-Z0-9_$\\u0080-\\uFFFF]+)";
     private static final Pattern TARGET_TABLE = Pattern.compile("^" + SQL_IDENTIFIER + "(?:\\." + SQL_IDENTIFIER + ")?$");
     private static final Pattern TARGET_VARCHAR = Pattern.compile("^VARCHAR\\s*\\(\\s*([0-9]+)\\s*\\)$");
+    private static final Pattern STARROCKS_DECIMAL = Pattern.compile(
+            "^(?:decimal(?:32|64|128|256|v2|v3)?|numeric)\\s*\\(\\s*([0-9]+)\\s*,\\s*([0-9]+)\\s*\\)$");
+    private static final Pattern TEXT_CAPACITY = Pattern.compile("^(?:var)?char\\s*\\(\\s*([0-9]+)\\s*\\)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern TYPE_PRECISION = Pattern.compile("^[a-z]+\\s*\\(\\s*([0-9]+)\\s*\\)$");
 
     private final Connection targetConn;
     private final String externalTable;
@@ -98,19 +102,6 @@ final class StarRocksExternalFullImport implements AutoCloseable {
             List<String> sourceCols, List<String> targetCols, String tsField, Long transferId,
             Integer thresholdWan, String unit, SyncProgressCallback callback,
             DataSyncCancellation cancellation) throws Exception {
-        try {
-            return prepareImport(sourceDs, sourceConn, targetConn, schema, sourceTable, targetTableSql,
-                    sourceCols, targetCols, tsField, transferId, thresholdWan, unit, callback, cancellation);
-        } catch (IllegalArgumentException | IllegalStateException failure) {
-            throw safeValidationException(failure);
-        }
-    }
-
-    private static StarRocksExternalFullImport prepareImport(ErDatasource sourceDs, Connection sourceConn,
-            Connection targetConn, String schema, String sourceTable, String targetTableSql,
-            List<String> sourceCols, List<String> targetCols, String tsField, Long transferId,
-            Integer thresholdWan, String unit, SyncProgressCallback callback,
-            DataSyncCancellation cancellation) throws Exception {
         checkStopped(cancellation);
         int effectiveThresholdWan = thresholdWan == null ? DEFAULT_THRESHOLD_WAN : thresholdWan;
         if (effectiveThresholdWan <= 0) {
@@ -138,20 +129,29 @@ final class StarRocksExternalFullImport implements AutoCloseable {
         if (sourceSchema == null || sourceSchema.trim().isEmpty()) sourceSchema = sourceDs.getDatabaseName();
         quoteIdentifier(sourceSchema);
 
-        Map<String, Column> metadata = readColumns(sourceConn, sourceSchema, sourceTable);
+        boolean starRocksSource = "STARROCKS".equalsIgnoreCase(sourceDs.getDatasourceType());
+        Map<String, Column> metadata = starRocksSource
+                ? readStarRocksColumns(sourceConn, sourceSchema, sourceTable)
+                : readColumns(sourceConn, sourceSchema, sourceTable);
         checkStopped(cancellation);
         StringBuilder columns = new StringBuilder();
         List<Integer> jsonIndexes = new ArrayList<>();
+        List<Integer> textIndexes = new ArrayList<>();
+        List<Integer> nullableTextIndexes = new ArrayList<>();
         boolean hasTimestamp = false;
         for (int index = 0; index < sourceCols.size(); index++) {
             String name = sourceCols.get(index);
             Column column = metadata.get(name.toLowerCase(Locale.ROOT));
             if (column == null) throw new IllegalArgumentException("源字段元数据不完整，无法安全创建导入外表");
             if (columns.length() > 0) columns.append(", ");
-            columns.append(quoteIdentifier(name)).append(' ').append(mapType(column))
+            columns.append(quoteIdentifier(name)).append(' ').append(starRocksSource ? mapStarRocksType(column) : mapType(column))
                     .append(column.nullable ? " NULL" : " NOT NULL");
             hasTimestamp |= "timestamp".equals(column.dataType);
             if ("json".equals(column.dataType)) jsonIndexes.add(index);
+            if (starRocksSource && isSourceText(column)) {
+                textIndexes.add(index);
+                if (column.nullable) nullableTextIndexes.add(index);
+            }
         }
         if (hasTimestamp) verifyTimestampTimeZone(sourceConn);
         checkStopped(cancellation);
@@ -179,11 +179,22 @@ final class StarRocksExternalFullImport implements AutoCloseable {
                 : " WHERE " + quoteIdentifier(timestampColumn) + " IS NOT NULL";
         StringBuilder countSql = new StringBuilder("SELECT COUNT(*)");
         for (int index : jsonIndexes) {
-            countSql.append(", MAX(OCTET_LENGTH(CAST(").append(quoteIdentifier(sourceCols.get(index)))
-                    .append(" AS CHAR CHARACTER SET utf8mb4)))");
+            String column = quoteIdentifier(sourceCols.get(index));
+            countSql.append(starRocksSource ? ", MAX(LENGTH(JSON_STRING(" + column + ")))"
+                    : ", MAX(OCTET_LENGTH(CAST(" + column + " AS CHAR CHARACTER SET utf8mb4)))");
+        }
+        for (int index : textIndexes) {
+            countSql.append(", MAX(LENGTH(").append(quoteIdentifier(sourceCols.get(index))).append("))");
+        }
+        for (int index : nullableTextIndexes) {
+            // The MYSQL scanner interprets the two literal bytes backslash + N as SQL NULL.
+            // HEX avoids dependence on SQL modes/backslash escaping in the source session.
+            countSql.append(", MAX(CASE WHEN HEX(").append(quoteIdentifier(sourceCols.get(index)))
+                    .append(") = '5C4E' THEN 1 ELSE 0 END)");
         }
         countSql.append(" FROM ").append(qualifiedSource).append(sourceFilter);
         Map<Integer, Long> jsonMaxBytes = new HashMap<>();
+        Map<Integer, Long> textMaxBytes = new HashMap<>();
         long sourceRowCount;
         try (Statement statement = sourceConn.createStatement();
                 ResultSet rows = statement.executeQuery(countSql.toString())) {
@@ -197,6 +208,27 @@ final class StarRocksExternalFullImport implements AutoCloseable {
                 if (rows.wasNull()) bytes = 0;
                 if (bytes < 0) throw new IllegalStateException("读取源 JSON 最大字节数失败，尚未清空目标表");
                 jsonMaxBytes.put(jsonIndexes.get(index), bytes);
+            }
+            for (int index = 0; index < textIndexes.size(); index++) {
+                long bytes = rows.getLong(jsonIndexes.size() + index + 2);
+                if (rows.wasNull()) bytes = 0;
+                int sourceIndex = textIndexes.get(index);
+                Column column = metadata.get(sourceCols.get(sourceIndex).toLowerCase(Locale.ROOT));
+                if (bytes < 0) throw new IllegalStateException("读取源文本字段最大字节数失败，尚未清空目标表");
+                if (bytes > sourceTextCapacity(column)) {
+                    throw new IllegalArgumentException("StarRocks 源文本字段 " + sourceCols.get(sourceIndex)
+                            + " 超出当前外表导入通道的安全容量（" + sourceTextCapacity(column)
+                            + " 字节，通道上限 1 MiB），尚未清空目标表");
+                }
+                textMaxBytes.put(sourceIndex, bytes);
+            }
+            for (int index = 0; index < nullableTextIndexes.size(); index++) {
+                long hasNullSentinel = rows.getLong(jsonIndexes.size() + textIndexes.size() + index + 2);
+                if (hasNullSentinel != 0 && !rows.wasNull()) {
+                    throw new IllegalArgumentException("StarRocks 源可空文本字段 "
+                            + sourceCols.get(nullableTextIndexes.get(index))
+                            + " 包含字面量 \\N，当前 MYSQL 外表会将其误读为 SQL NULL，尚未清空目标表");
+                }
             }
         } catch (SQLException ex) {
             checkStopped(cancellation);
@@ -240,7 +272,7 @@ final class StarRocksExternalFullImport implements AutoCloseable {
         }
 
         String sourceSelectSql = prepareSourceProjection(targetConn, targetTableSql, sourceCols, targetCols,
-                jsonIndexes, jsonMaxBytes, cancellation);
+                jsonIndexes, jsonMaxBytes, textIndexes, textMaxBytes, cancellation);
         StarRocksExternalFullImport importer = new StarRocksExternalFullImport(targetConn,
                 targetTableSql, sourceSelectSql, targetCols, timestampColumn, max, windowStart,
                 windowEndExclusive, windowUnit, transferId, sourceRowCount, callback, cancellation);
@@ -299,9 +331,6 @@ final class StarRocksExternalFullImport implements AutoCloseable {
             }
             return importer;
         } catch (Exception failure) {
-            if (failure instanceof IllegalArgumentException || failure instanceof IllegalStateException) {
-                failure = safeValidationException((RuntimeException) failure);
-            }
             try {
                 importer.close();
             } catch (Exception cleanupFailure) {
@@ -313,10 +342,11 @@ final class StarRocksExternalFullImport implements AutoCloseable {
 
     private static String prepareSourceProjection(Connection targetConn, String targetTable,
             List<String> sourceCols, List<String> targetCols, List<Integer> jsonIndexes,
-            Map<Integer, Long> jsonMaxBytes, DataSyncCancellation cancellation) throws SQLException {
+            Map<Integer, Long> jsonMaxBytes, List<Integer> textIndexes,
+            Map<Integer, Long> textMaxBytes, DataSyncCancellation cancellation) throws SQLException {
         List<String> expressions = new ArrayList<>();
         for (String column : sourceCols) expressions.add(quoteIdentifier(column));
-        if (jsonIndexes.isEmpty()) return String.join(", ", expressions);
+        if (jsonIndexes.isEmpty() && textIndexes.isEmpty()) return String.join(", ", expressions);
 
         checkStopped(cancellation);
         Map<String, String> targetTypes = new HashMap<>();
@@ -333,7 +363,25 @@ final class StarRocksExternalFullImport implements AutoCloseable {
             }
         } catch (SQLException ex) {
             checkStopped(cancellation);
-            throw safeSqlException("读取 JSON 导入目标字段类型失败，尚未清空目标表", ex);
+            throw safeSqlException("读取导入目标字段类型失败，尚未清空目标表", ex);
+        }
+        for (int index : textIndexes) {
+            checkStopped(cancellation);
+            String targetColumn = targetCols.get(index);
+            String targetType = targetTypes.get(targetColumn.toLowerCase(Locale.ROOT));
+            if (targetType == null) {
+                throw new IllegalArgumentException("无法找到源文本字段 " + sourceCols.get(index)
+                        + " 对应的目标字段 " + targetColumn + "，尚未清空目标表");
+            }
+            long capacity = targetTextCapacity(targetType);
+            if (capacity < 0) {
+                throw new IllegalArgumentException("StarRocks 源文本字段 " + sourceCols.get(index)
+                        + " 仅支持写入文本列，请检查目标字段 " + targetColumn + "，尚未清空目标表");
+            }
+            if (textMaxBytes.get(index) > capacity) {
+                throw new IllegalArgumentException("StarRocks 源文本字段 " + sourceCols.get(index)
+                        + " 超出目标字段 " + targetColumn + " 的容量（" + capacity + " 字节），尚未清空目标表");
+            }
         }
         boolean hasJsonTarget = false;
         for (int index : jsonIndexes) {
@@ -411,8 +459,6 @@ final class StarRocksExternalFullImport implements AutoCloseable {
         } catch (SQLException ex) {
             checkStopped(cancellation);
             throw safeSqlException("StarRocks JSON 导入表达式预校验失败，尚未清空目标表", ex);
-        } catch (IllegalArgumentException | IllegalStateException failure) {
-            throw safeValidationException(failure);
         }
         checkStopped(cancellation);
     }
@@ -465,8 +511,6 @@ final class StarRocksExternalFullImport implements AutoCloseable {
         } catch (SQLException ex) {
             checkStopped();
             throw safeSqlException("StarRocks INSERT SELECT 导入失败，同步进度未推进", ex);
-        } catch (IllegalArgumentException | IllegalStateException failure) {
-            throw safeValidationException(failure);
         }
     }
 
@@ -500,6 +544,123 @@ final class StarRocksExternalFullImport implements AutoCloseable {
             }
             closed = true;
         }
+    }
+
+    private static Map<String, Column> readStarRocksColumns(Connection sourceConn, String schema, String table) throws SQLException {
+        Map<String, Column> columns = new HashMap<>();
+        // MySQL protocol metadata can report JSON/LARGEINT as text. DESCRIBE preserves the stored type.
+        try (Statement statement = sourceConn.createStatement();
+                ResultSet rows = statement.executeQuery("DESCRIBE " + quoteIdentifier(schema) + "." + quoteIdentifier(table))) {
+            while (rows.next()) {
+                String name = rows.getString("Field");
+                if (name == null) throw new IllegalArgumentException("StarRocks 源字段元数据不完整，尚未清空目标表");
+                String nullable = rows.getString("Null");
+                if (!"YES".equalsIgnoreCase(nullable) && !"NO".equalsIgnoreCase(nullable)) {
+                    throw new IllegalArgumentException("无法确认 StarRocks 源字段 " + name + " 的可空属性，尚未清空目标表");
+                }
+                columns.put(name.toLowerCase(Locale.ROOT), starRocksColumn(rows.getString("Type"),
+                        "YES".equalsIgnoreCase(nullable)));
+            }
+        } catch (SQLException failure) {
+            throw safeSqlException("读取 StarRocks 源表原生字段类型失败，尚未清空目标表", failure);
+        }
+        return columns;
+    }
+
+    static Column starRocksColumn(String nativeType, boolean nullable) {
+        String raw = nativeType == null ? "" : nativeType.trim().toLowerCase(Locale.ROOT);
+        Matcher name = Pattern.compile("^[a-z][a-z0-9_]*").matcher(raw);
+        if (!name.find()) throw new IllegalArgumentException("无法确定 StarRocks 源字段的原生类型，尚未清空目标表");
+        String type = name.group();
+        int precision = 0;
+        int scale = 0;
+        int datetimePrecision = 0;
+        if (type.startsWith("decimal") || "numeric".equals(type)) {
+            Matcher decimal = STARROCKS_DECIMAL.matcher(raw);
+            if (!decimal.matches()) {
+                throw new IllegalArgumentException("无法确定 StarRocks DECIMAL 字段的精度和小数位，尚未清空目标表");
+            }
+            try {
+                precision = Integer.parseInt(decimal.group(1));
+                scale = Integer.parseInt(decimal.group(2));
+            } catch (NumberFormatException invalid) {
+                throw new IllegalArgumentException("StarRocks DECIMAL 字段精度元数据无效，尚未清空目标表");
+            }
+            type = "decimal";
+            raw = "decimal(" + precision + "," + scale + ")";
+        } else if ("tinyint(1)".equals(raw)) {
+            type = raw = "boolean";
+        } else if ("datetime".equals(type)) {
+            Matcher fraction = TYPE_PRECISION.matcher(raw);
+            if (fraction.matches()) {
+                try { datetimePrecision = Integer.parseInt(fraction.group(1)); }
+                catch (NumberFormatException invalid) {
+                    throw new IllegalArgumentException("StarRocks DATETIME 字段精度元数据无效，尚未清空目标表");
+                }
+            } else if (!"datetime".equals(raw)) {
+                throw new IllegalArgumentException("StarRocks DATETIME 字段精度元数据无效，尚未清空目标表");
+            }
+        }
+        return new Column(type, raw, precision, scale, datetimePrecision, nullable);
+    }
+
+    static String mapStarRocksType(Column column) {
+        switch (column.dataType) {
+            case "largeint": return "LARGEINT";
+            case "boolean": case "bool": return "BOOLEAN";
+            case "string": case "varchar": case "char": return "VARCHAR(" + sourceTextCapacity(column) + ")";
+            case "datetime":
+                if (column.datetimePrecision < 0 || column.datetimePrecision > 6) {
+                    throw new IllegalArgumentException("StarRocks DATETIME 字段精度超出当前外表通道支持范围，尚未清空目标表");
+                }
+                return column.datetimePrecision == 0 ? "DATETIME" : "DATETIME(" + column.datetimePrecision + ")";
+            case "json": case "tinyint": case "smallint": case "int": case "integer": case "bigint":
+            case "float": case "double": case "decimal": case "date":
+                if ("decimal".equals(column.dataType) && column.precision > 38) {
+                    throw new IllegalArgumentException("StarRocks DECIMAL 精度超出当前外表通道支持范围（最大 38 位），尚未清空目标表");
+                }
+                return mapType(column);
+            default:
+                // Do not downgrade complex/binary native values to text or an unverified JDBC fallback.
+                throw new IllegalArgumentException("StarRocks 源字段类型 " + column.columnType
+                        + " 不支持通过当前外表通道无损导入，尚未清空目标表");
+        }
+    }
+
+    private static boolean isSourceText(Column column) {
+        return "string".equals(column.dataType) || "varchar".equals(column.dataType) || "char".equals(column.dataType);
+    }
+
+    private static long sourceTextCapacity(Column column) {
+        Matcher capacity = TEXT_CAPACITY.matcher(column.columnType);
+        if (capacity.matches()) {
+            try {
+                long bytes = Long.parseLong(capacity.group(1));
+                if (bytes > 0) return Math.min(bytes, MAX_JSON_TEXT_BYTES);
+            } catch (NumberFormatException invalid) {
+                // Treat malformed metadata as a validation failure, not an implicit cast.
+            }
+            throw new IllegalArgumentException("StarRocks 源文本字段长度元数据无效，尚未清空目标表");
+        }
+        if ("string".equals(column.columnType) || "varchar".equals(column.columnType)) {
+            // A bare STRING does not identify the source server's configured length. Scan actual bytes,
+            // use the current channel's 1 MiB ceiling, and independently check target column capacity.
+            return MAX_JSON_TEXT_BYTES;
+        }
+        throw new IllegalArgumentException("无法确定 StarRocks 源文本字段长度，尚未清空目标表");
+    }
+
+    private static long targetTextCapacity(String type) {
+        if ("STRING".equals(type) || "VARCHAR".equals(type)) return SR_DEFAULT_STRING_BYTES;
+        Matcher capacity = TEXT_CAPACITY.matcher(type);
+        if (!capacity.matches()) return -1;
+        try {
+            long bytes = Long.parseLong(capacity.group(1));
+            if (bytes > 0) return bytes;
+        } catch (NumberFormatException invalid) {
+            // Fall through to the safe error below.
+        }
+        throw new IllegalArgumentException("目标文本字段长度元数据无效，尚未清空目标表");
     }
 
     private static Map<String, Column> readColumns(Connection sourceConn, String schema, String table) throws SQLException {
@@ -741,32 +902,10 @@ final class StarRocksExternalFullImport implements AutoCloseable {
     }
 
     private static SQLException safeSqlException(String operation, SQLException original) {
-        if (original instanceof DataSyncCancellation.SyncStoppedException) return new DataSyncCancellation.SyncStoppedException();
+        if (original instanceof DataSyncCancellation.SyncStoppedException) return original;
         // Deliberately do not retain message, cause, nextException or suppressed driver exceptions.
-        return new ImportSQLException(operation + "（SQLState=" + original.getSQLState()
-                + ", errorCode=" + original.getErrorCode() + "）", original);
-    }
-
-    /** Validation messages are ours; close failures attached by JDBC resources are not. */
-    static RuntimeException safeValidationException(RuntimeException failure) {
-        RuntimeException safe;
-        if (failure instanceof UnsupportedImportException) safe = new UnsupportedImportException(failure.getMessage());
-        else if (failure instanceof IllegalArgumentException) safe = new IllegalArgumentException(failure.getMessage());
-        else if (failure instanceof IllegalStateException) safe = new IllegalStateException(failure.getMessage());
-        else throw new IllegalArgumentException("Unsupported validation exception type");
-        for (Throwable suppressed : failure.getSuppressed()) {
-            // Keep the owned-table cleanup hint, but never retain a driver's exception object or chain.
-            if (suppressed instanceof ImportSQLException) {
-                safe.addSuppressed(new ImportSQLException(suppressed.getMessage(), (SQLException) suppressed));
-            }
-        }
-        return safe;
-    }
-
-    private static final class ImportSQLException extends SQLException {
-        ImportSQLException(String message, SQLException original) {
-            super(message, original.getSQLState(), original.getErrorCode());
-        }
+        return new SQLException(operation + "（SQLState=" + original.getSQLState()
+                + ", errorCode=" + original.getErrorCode() + "）", original.getSQLState(), original.getErrorCode());
     }
 
     static final class Endpoint {

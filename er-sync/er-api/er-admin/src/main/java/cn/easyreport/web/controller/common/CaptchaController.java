@@ -9,6 +9,7 @@ import javax.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.FastByteArrayOutputStream;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import com.google.code.kaptcha.Producer;
 import cn.easyreport.common.config.RuoYiConfig;
@@ -18,6 +19,7 @@ import cn.easyreport.common.core.domain.AjaxResult;
 import cn.easyreport.common.core.redis.RedisCache;
 import cn.easyreport.common.utils.sign.Base64;
 import cn.easyreport.common.utils.uuid.IdUtils;
+import cn.easyreport.framework.config.ErsyncCaptchaRenderer;
 import cn.easyreport.system.service.ISysConfigService;
 
 /**
@@ -43,7 +45,8 @@ public class CaptchaController
      * 生成验证码
      */
     @GetMapping("/captchaImage")
-    public AjaxResult getCode(HttpServletResponse response) throws IOException
+    public AjaxResult getCode(HttpServletResponse response,
+            @RequestParam(value = "style", defaultValue = "") String style) throws IOException
     {
         AjaxResult ajax = AjaxResult.success();
         boolean captchaEnabled = configService.selectCaptchaEnabled();
@@ -59,6 +62,7 @@ public class CaptchaController
 
         String capStr = null, code = null;
         BufferedImage image = null;
+        boolean ersyncStyle = "ersync".equals(style);
 
         // 生成验证码
         String captchaType = RuoYiConfig.getCaptchaType();
@@ -67,12 +71,12 @@ public class CaptchaController
             String capText = captchaProducerMath.createText();
             capStr = capText.substring(0, capText.lastIndexOf("@"));
             code = capText.substring(capText.lastIndexOf("@") + 1);
-            image = captchaProducerMath.createImage(capStr);
+            image = ersyncStyle ? ErsyncCaptchaRenderer.createImage(capStr) : captchaProducerMath.createImage(capStr);
         }
         else if ("char".equals(captchaType))
         {
             capStr = code = captchaProducer.createText();
-            image = captchaProducer.createImage(capStr);
+            image = ersyncStyle ? ErsyncCaptchaRenderer.createImage(capStr) : captchaProducer.createImage(capStr);
         }
 
         redisCache.setCacheObject(verifyKey, code, Constants.CAPTCHA_EXPIRATION, TimeUnit.MINUTES);
@@ -80,7 +84,7 @@ public class CaptchaController
         FastByteArrayOutputStream os = new FastByteArrayOutputStream();
         try
         {
-            ImageIO.write(image, "jpg", os);
+            ImageIO.write(image, ersyncStyle ? "png" : "jpg", os);
         }
         catch (IOException e)
         {
@@ -89,6 +93,10 @@ public class CaptchaController
 
         ajax.put("uuid", uuid);
         ajax.put("img", Base64.encode(os.toByteArray()));
+        if (ersyncStyle)
+        {
+            ajax.put("imageStyle", "ersync");
+        }
         return ajax;
     }
 }

@@ -6,6 +6,9 @@ import cn.easyreport.sync.domain.ErDataSyncLog;
 import cn.easyreport.sync.domain.ErDatasource;
 import cn.easyreport.sync.model.ColumnMeta;
 import cn.easyreport.sync.model.TableMeta;
+import cn.easyreport.sync.model.IndexMeta;
+import cn.easyreport.sync.dialect.KingbaseDialect;
+import cn.easyreport.sync.dialect.DmDialect;
 import cn.easyreport.sync.registry.DatabaseComponentRegistry;
 import org.junit.Before;
 import org.junit.Test;
@@ -15,6 +18,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ArrayList;
 
 import static org.junit.Assert.*;
 
@@ -27,7 +31,7 @@ public class TableSyncServiceTest {
 
     @Test
     public void loadsAllComponentsFromRegistryResource() {
-        List<String> databaseTypes = Arrays.asList("MYSQL", "TIDB", "STARROCKS", "SQLSERVER", "POSTGRESQL", "ORACLE");
+        List<String> databaseTypes = Arrays.asList("MYSQL", "TIDB", "STARROCKS", "SQLSERVER", "POSTGRESQL", "ORACLE", "KINGBASE", "DM");
         assertEquals(new HashSet<>(databaseTypes), new HashSet<>(DatabaseComponentRegistry.getRegisteredDatabaseTypes()));
         for (String databaseType : databaseTypes) {
             ErDatasource datasource = datasource(databaseType);
@@ -104,6 +108,115 @@ public class TableSyncServiceTest {
         assertEquals(connector.sql, result.getExecuteSql());
     }
 
+    @Test
+    public void executesKingbaseTableBeforeIndexesAndComments() {
+        RecordingConnector connector = new RecordingConnector(false);
+        TableSyncContext context = kingbaseContext(connector);
+
+        ErDataSyncLog result = new TableSyncService().syncTable(context);
+
+        assertEquals("0", result.getSyncResult());
+        assertEquals(4, connector.statements.size());
+        assertTrue(connector.statements.get(0).startsWith("CREATE TABLE IF NOT EXISTS \"Sales\".\"Orders\""));
+        assertTrue(connector.statements.get(1), connector.statements.get(1).startsWith("CREATE INDEX IF NOT EXISTS \"Orders_ix_note_"));
+        assertTrue(connector.statements.get(1), connector.statements.get(1).endsWith(" ON \"Sales\".\"Orders\" (\"note\")"));
+        assertEquals("COMMENT ON TABLE \"Sales\".\"Orders\" IS 'Order table'", connector.statements.get(2));
+        assertEquals("COMMENT ON COLUMN \"Sales\".\"Orders\".\"note\" IS 'Customer''s note'", connector.statements.get(3));
+        assertEquals(String.join(";\n", connector.statements), result.getExecuteSql());
+    }
+
+    @Test
+    public void reportsKingbasePostCreateFailureAndRetainsPlannedDdl() {
+        RecordingConnector connector = new RecordingConnector(false);
+        connector.failAtStatement = 2;
+
+        ErDataSyncLog result = new TableSyncService().syncTable(kingbaseContext(connector));
+
+        assertEquals("1", result.getSyncResult());
+        assertEquals("DDL rejected", result.getErrorMessage());
+        assertEquals(2, connector.statements.size());
+        assertTrue(result.getExecuteSql().contains("CREATE TABLE"));
+        assertTrue(result.getExecuteSql().contains("CREATE INDEX"));
+        assertTrue(result.getExecuteSql().contains("COMMENT ON COLUMN"));
+    }
+
+    @Test
+    public void executesDmNativeTableBeforeIndexesAndComments() {
+        RecordingConnector connector = new RecordingConnector(false);
+        TableSyncContext original = kingbaseContext(connector);
+        ErDatasource ds = datasource("DM");
+        ColumnMeta id = column("id", "BIGINT");
+        id.setAutoIncrement(true);
+        List<ColumnMeta> columns = new ArrayList<>(original.getTableMeta().getColumns());
+        columns.add(id);
+        original.getTableMeta().setColumns(columns);
+        TableSyncContext context = new TableSyncContext(original.getTask(), ds, ds, connector,
+            new DmDialect(), null, new TargetConfig(null, "Sales", "DM"), original.getTableMeta(), "Sales");
+
+        ErDataSyncLog result = new TableSyncService().syncTable(context);
+
+        assertEquals("0", result.getSyncResult());
+        assertEquals(4, connector.statements.size());
+        assertTrue(connector.statements.get(0).contains("\"id\" BIGINT IDENTITY(1,1) NOT NULL"));
+        assertTrue(connector.statements.get(1).startsWith("CREATE INDEX IF NOT EXISTS"));
+        assertTrue(connector.statements.get(2).startsWith("COMMENT ON TABLE"));
+        assertEquals(String.join(";\n", connector.statements), result.getExecuteSql());
+    }
+
+    @Test
+    public void dmPostCreateFailureKeepsCompletePlannedSqlForDiagnostics() {
+        RecordingConnector connector = new RecordingConnector(false);
+        connector.failAtStatement = 2;
+        TableSyncContext original = kingbaseContext(connector);
+        ErDatasource ds = datasource("DM");
+        TableSyncContext context = new TableSyncContext(original.getTask(), ds, ds, connector,
+            new DmDialect(), null, new TargetConfig(null, "Sales", "DM"), original.getTableMeta(), "Sales");
+
+        ErDataSyncLog result = new TableSyncService().syncTable(context);
+
+        assertEquals("1", result.getSyncResult());
+        assertEquals("DDL rejected", result.getErrorMessage());
+        assertTrue(result.getExecuteSql().contains("COMMENT ON COLUMN"));
+    }
+
+    @Test
+    public void invalidDmLobKeyDoesNotDropAnExistingTargetTable() {
+        RecordingConnector connector = new RecordingConnector(false);
+        TableSyncContext original = kingbaseContext(connector);
+        original.getTask().setIfExistsAction("1");
+        original.getTableMeta().setColumns(Collections.singletonList(column("id", "CLOB")));
+        original.getTableMeta().setPrimaryKey(Collections.singletonList("id"));
+        ErDatasource ds = datasource("DM");
+        TableSyncContext context = new TableSyncContext(original.getTask(), ds, ds, connector,
+            new DmDialect(), cn.easyreport.sync.strategy.DatabaseStrategyFactory.getStrategy("DM"),
+            new TargetConfig(null, "Sales", "DM"), original.getTableMeta(), "Sales");
+
+        ErDataSyncLog result = new TableSyncService().syncTable(context);
+
+        assertEquals("1", result.getSyncResult());
+        assertTrue(result.getErrorMessage().contains("主键"));
+        assertTrue(connector.statements.isEmpty());
+    }
+
+    private TableSyncContext kingbaseContext(RecordingConnector connector) {
+        ErDataSync task = new ErDataSync();
+        task.setSyncId(1L);
+        task.setIfExistsAction("0");
+        TableMeta table = new TableMeta();
+        table.setName("Orders");
+        table.setComment("Order table");
+        ColumnMeta note = column("note", "VARCHAR(100)");
+        note.setComment("Customer's note");
+        table.setColumns(Collections.singletonList(note));
+        IndexMeta index = new IndexMeta();
+        index.setName("ix_note");
+        index.setColumns(Collections.singletonList("note"));
+        table.setIndexes(Collections.singletonList(index));
+        ErDatasource ds = datasource("KINGBASE");
+        return new TableSyncContext(task, ds, ds, connector, new KingbaseDialect(), null,
+            new TargetConfig(null, "Sales", "KINGBASE"), table, "Sales");
+    }
+
     private TableSyncContext context(RecordingConnector connector) {
         ErDataSync task = new ErDataSync();
         task.setSyncId(1L);
@@ -139,6 +252,8 @@ public class TableSyncServiceTest {
     private static class RecordingConnector implements DataSourceConnector {
         private final boolean failExecution;
         private String sql;
+        private final List<String> statements = new ArrayList<>();
+        private int failAtStatement;
 
         private RecordingConnector(boolean failExecution) {
             this.failExecution = failExecution;
@@ -152,7 +267,8 @@ public class TableSyncServiceTest {
         @Override
         public void execute(String sql) throws SQLException {
             this.sql = sql;
-            if (failExecution) {
+            statements.add(sql);
+            if (failExecution || statements.size() == failAtStatement) {
                 throw new SQLException("DDL rejected");
             }
         }

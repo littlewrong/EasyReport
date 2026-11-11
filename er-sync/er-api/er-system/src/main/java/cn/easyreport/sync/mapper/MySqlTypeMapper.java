@@ -34,6 +34,8 @@ public class MySqlTypeMapper implements DatabaseTypeMapper {
         initializeSqlServerMappings();
         initializePostgreSqlMappings();
         initializeOracleMappings();
+        mappingRules.put("KINGBASE", KingbaseTargetMappings.from(SOURCE_DB_TYPE, mappingRules.get("POSTGRESQL")));
+        mappingRules.put("DM", DmTargetMappings.rules(SOURCE_DB_TYPE));
     }
 
     @Override
@@ -236,7 +238,7 @@ public class MySqlTypeMapper implements DatabaseTypeMapper {
      * 1. 不支持 MEDIUMINT，需要转换为 INT
      * 2. TEXT/BLOB 系列需要转换为 STRING 或 VARCHAR
      * 3. 不支持 ENUM/SET，转换为 VARCHAR
-     * 4. 不支持 BIT，转换为 TINYINT 或 INT
+     * 4. BIT 按位宽转换为 BOOLEAN、INT、BIGINT 或 LARGEINT，保留无符号数值范围
      */
     private void initializeStarRocksMappings() {
         List<TypeMappingRule> starrocksRules = new ArrayList<>();
@@ -350,14 +352,18 @@ public class MySqlTypeMapper implements DatabaseTypeMapper {
         starrocksRules.add(new TypeMappingRule("SET\\(.*\\)", "VARCHAR(1024)", 81, true,
                 "SET -> VARCHAR(1024) (有损转换)"));
 
-        // BIT 转换为 TINYINT 或 INT
-        starrocksRules.add(new TypeMappingRule("BIT\\(1\\)", "BOOLEAN", 82, false,
+        // BIT(n) 是无符号位串；目标使用足够宽的有符号类型，BIT(8) 的 255 不能降为 TINYINT。
+        starrocksRules.add(new TypeMappingRule("BIT(?:\\s*\\(\\s*1\\s*\\))?", "BOOLEAN", 82, false,
                 "BIT(1) -> BOOLEAN"));
-        starrocksRules.add(new TypeMappingRule("BIT\\((\\d+)\\)", "INT", 83, false,
-                "BIT(n) -> INT"));
+        starrocksRules.add(new TypeMappingRule("BIT\\s*\\(\\s*(?:[2-9]|[12]\\d|3[01])\\s*\\)", "INT", 83, false,
+                "BIT(2..31) -> INT (保留无符号范围)"));
+        starrocksRules.add(new TypeMappingRule("BIT\\s*\\(\\s*(?:3[2-9]|[45]\\d|6[0-3])\\s*\\)", "BIGINT", 84, false,
+                "BIT(32..63) -> BIGINT (保留无符号范围)"));
+        starrocksRules.add(new TypeMappingRule("BIT\\s*\\(\\s*64\\s*\\)", "LARGEINT", 85, false,
+                "BIT(64) -> LARGEINT (保留无符号范围)"));
 
         // BOOLEAN/BOOL -> BOOLEAN
-        starrocksRules.add(new TypeMappingRule("BOOL(?:EAN)?", "BOOLEAN", 84, false,
+        starrocksRules.add(new TypeMappingRule("BOOL(?:EAN)?", "BOOLEAN", 86, false,
                 "BOOLEAN 兼容"));
 
         // ==================== 通配符兜底规则 ====================

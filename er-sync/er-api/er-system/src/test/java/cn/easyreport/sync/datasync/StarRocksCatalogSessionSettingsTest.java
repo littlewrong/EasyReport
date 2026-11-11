@@ -18,6 +18,20 @@ import static org.junit.Assert.*;
 
 /** URL and session contract tests; no source or StarRocks server is contacted. */
 public class StarRocksCatalogSessionSettingsTest {
+    // Nonempty defaults emitted by mssql-jdbc 9.4.1 DatabaseMetaData.getURL for a plain connection.
+    // Credentials and integratedSecurity are intentionally absent from that metadata URL.
+    private static final String SQLSERVER_METADATA_URL = "jdbc:sqlserver://source:1433;databaseName=erp;"
+            + "TransparentNetworkIPResolution=true;applicationIntent=readwrite;applicationName=Microsoft JDBC Driver for SQL Server;"
+            + "authentication=NotSpecified;authenticationScheme=nativeAuthentication;cancelQueryTimeout=-1;"
+            + "columnEncryptionSetting=Disabled;connectRetryCount=1;connectRetryInterval=10;delayLoadingLobs=true;"
+            + "disableStatementPooling=true;enablePrepareOnFirstPreparedStatementCall=false;encrypt=false;fips=false;"
+            + "jaasConfigurationName=SQLJDBCDriver;lastUpdateCount=true;lockTimeout=-1;loginTimeout=15;maxResultBuffer=-1;"
+            + "multiSubnetFailover=false;packetSize=8000;queryTimeout=-1;replication=false;responseBuffering=adaptive;"
+            + "selectMethod=direct;sendStringParametersAsUnicode=true;sendTemporalDataTypesAsStringForBulkCopy=true;"
+            + "sendTimeAsDatetime=true;serverNameAsACE=false;serverPreparedStatementDiscardThreshold=10;socketTimeout=0;"
+            + "sslProtocol=TLS;statementPoolingCacheSize=0;trustServerCertificate=false;trustStoreType=JKS;"
+            + "useBulkCopyForBatchInsert=false;useFmtOnly=false;xopenStates=false;";
+
     @Test public void starRocksDatetimeDoesNotProbeMysqlSystemTimezoneVariables() throws Exception {
         Fixture f = new Fixture();
         f.datasource.setDatasourceType("STARROCKS");
@@ -237,6 +251,114 @@ public class StarRocksCatalogSessionSettingsTest {
         assertTrue(sqlServer.sql.isEmpty());
     }
 
+    @Test public void resourceAllowsEndpointDifferencesWithoutRelaxingCatalogComparisons() throws Exception {
+        for (String key : new String[]{"host", "port", "address", "protocol", "dbname", "database", "databaseName",
+                "socketFactory", "socketFactoryArg", "socketFactoryClassName", "socksProxyHost", "socksProxyPort",
+                "localSocketAddress", "dnsSrv", "dnsSrvServiceName", "kerberosServerName"}) {
+            Fixture resource = new Fixture();
+            resource.sourceUrl += "?" + key + "=configured";
+            resource.actualUrl = "jdbc:mysql://actual:3307/actual_db?" + key + "=actual";
+            resource.catalogUrl = "jdbc:mysql://resource:3308/resource_db?" + key + "=resource";
+            resource.verifyResource();
+            assertTrue(key, resource.sql.isEmpty());
+            reject(resource, "实际连接设置与配置不一致");
+
+            Fixture catalog = new Fixture();
+            catalog.sourceUrl += "?" + key + "=source";
+            catalog.catalogUrl += "?" + key + "=catalog";
+            reject(catalog, key.toLowerCase(java.util.Locale.ROOT));
+        }
+    }
+
+    @Test public void resourceAllowsSqlServerDatabaseNamesToDifferIncludingExpandedActualUrl() throws Exception {
+        Fixture f = sqlServerDefaults();
+        f.sourceUrl = "jdbc:sqlserver://configured:1444;databaseName=configured_db";
+        f.actualUrl = SQLSERVER_METADATA_URL.replace("databaseName=erp", "databaseName=actual_db");
+        f.catalogUrl = "jdbc:sqlserver://resource-private:1555;databaseName=resource_db";
+        f.verifyResource();
+        assertTrue(f.sql.isEmpty());
+    }
+
+    @Test public void resourceStillRejectsChangedReadSessionSettingsAtBothComparisonStages() throws Exception {
+        Fixture actual = new Fixture();
+        actual.sourceUrl += "?sessionVariables=time_zone%3D%27%2B08%3A00%27";
+        actual.actualUrl = "jdbc:mysql://actual:3307/other?sessionVariables=time_zone%3D%27UTC%27";
+        actual.catalogUrl = actual.sourceUrl;
+        rejectResource(actual, "实际连接设置与配置不一致");
+
+        Fixture resource = new Fixture();
+        resource.catalogUrl += "?preserveInstants=false";
+        rejectResource(resource, "preserveinstants");
+
+        Fixture pg = new Fixture();
+        pg.datasource.setDatasourceType("POSTGRESQL");
+        pg.sourceUrl = "jdbc:postgresql://source:5432/erp?options=-c%20DateStyle%3DISO";
+        pg.catalogUrl = "jdbc:postgresql://private:5433/import?options=-c%20DateStyle%3DSQL";
+        rejectResource(pg, "options");
+    }
+
+    @Test public void resourceTimestampRetainsRelaxedEndpointPolicyAndEffectiveTimezoneChecks() throws Exception {
+        Fixture f = new Fixture();
+        f.sourceUrl += "?host=configured&dbname=configured_db&serverTimezone=GMT%2B8";
+        f.actualUrl = "jdbc:mysql://actual:3307/actual_db?host=actual&dbname=actual_db&connectionTimeZone=GMT%2B8";
+        f.catalogUrl = "jdbc:mysql://private:3308/resource_db?host=private&dbname=resource_db&connectionTimeZone=GMT%2B8";
+        f.sessionZone = "+08:00";
+        f.globalZone = "+08:00";
+        LocalDate firstDay = LocalDate.of(2000, 1, 1);
+        LocalDate lastDay = LocalDate.of(2026, 10, 23);
+        f.verifyResourceTimestamp(firstDay, lastDay);
+        assertEquals(1, f.sql.size());
+        f.catalogUrl = f.catalogUrl.replace("connectionTimeZone=GMT%2B8", "connectionTimeZone=UTC");
+        try { f.verifyResourceTimestamp(firstDay, lastDay); fail("Expected Resource TIMESTAMP timezone mismatch"); }
+        catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("时区"));
+            assertTrue(expected.getMessage().contains("尚未清空目标表"));
+        }
+    }
+
+    @Test public void sqlServerExpandedMetadataDefaultsMatchOmittedAndExplicitConnectionDefaults() throws Exception {
+        Fixture f = sqlServerDefaults();
+        f.verify();
+        f.catalogUrl += ";authenticationScheme=NATIVEAUTHENTICATION;jaasConfigurationName=SQLJDBCDriver;integratedSecurity=false";
+        f.verify();
+        f.sourceUrl += ";authenticationScheme=NativeAuthentication;jaasConfigurationName=SQLJDBCDriver;integratedSecurity=false";
+        f.verify();
+        assertTrue(f.sql.isEmpty());
+    }
+
+    @Test public void sqlServerExplicitAuthenticationDifferencesRemainRejected() throws Exception {
+        Fixture scheme = sqlServerDefaults();
+        scheme.catalogUrl += ";authenticationScheme=JavaKerberos";
+        reject(scheme, "authenticationscheme");
+        Fixture jaas = sqlServerDefaults();
+        jaas.catalogUrl += ";jaasConfigurationName=CustomLogin";
+        reject(jaas, "jaasconfigurationname");
+        Fixture catalogIntegrated = sqlServerDefaults();
+        catalogIntegrated.catalogUrl += ";integratedSecurity=true";
+        reject(catalogIntegrated, "integratedsecurity");
+        Fixture sourceIntegrated = sqlServerDefaults();
+        sourceIntegrated.sourceUrl += ";integratedSecurity=true";
+        reject(sourceIntegrated, "实际连接设置与配置不一致");
+        Fixture sourceScheme = sqlServerDefaults();
+        sourceScheme.sourceUrl += ";authenticationScheme=JavaKerberos";
+        reject(sourceScheme, "实际连接设置与配置不一致");
+    }
+
+    @Test public void sqlServerDefaultsAreNotAppliedToOtherDriverUrls() throws Exception {
+        Fixture f = new Fixture();
+        f.sourceUrl += "?authenticationScheme=nativeAuthentication";
+        reject(f, "authenticationscheme");
+    }
+
+    private static Fixture sqlServerDefaults() {
+        Fixture f = new Fixture();
+        f.datasource.setDatasourceType("SQLSERVER");
+        f.sourceUrl = "jdbc:sqlserver://source:1433;databaseName=erp";
+        f.catalogUrl = f.sourceUrl;
+        f.actualUrl = SQLSERVER_METADATA_URL;
+        return f;
+    }
+
     @Test public void stopIsObservedBeforeMetadataOrQueries() throws Exception {
         Fixture f = new Fixture();
         DataSyncCancellation cancellation = new DataSyncCancellation();
@@ -269,6 +391,11 @@ public class StarRocksCatalogSessionSettingsTest {
         catch (IllegalArgumentException expected) { assertTrue(expected.getMessage(), expected.getMessage().contains(message)); }
     }
 
+    private static void rejectResource(Fixture f, String message) throws Exception {
+        try { f.verifyResource(); fail("Expected Resource session setting mismatch"); }
+        catch (IllegalArgumentException expected) { assertTrue(expected.getMessage(), expected.getMessage().contains(message)); }
+    }
+
     private static void rejectTimestamp(Fixture f, LocalDate minDate, LocalDate maxDate) throws Exception {
         try { f.verifyTimestamp(minDate, maxDate); fail("Expected TIMESTAMP timezone mismatch"); }
         catch (IllegalArgumentException expected) {
@@ -296,9 +423,13 @@ public class StarRocksCatalogSessionSettingsTest {
             return properties;
         }
         void verify() throws Exception { StarRocksCatalogSessionSettings.verify(connection(), datasource(), properties(), null); }
+        void verifyResource() throws Exception { StarRocksCatalogSessionSettings.verifyResource(connection(), datasource(), properties(), null); }
         void verifyTimestamp() throws Exception { StarRocksCatalogSessionSettings.verifyTimestampSession(connection(), datasource(), properties(), null); }
         void verifyTimestamp(LocalDate minDate, LocalDate maxDate) throws Exception {
             StarRocksCatalogSessionSettings.verifyTimestampSession(connection(), datasource(), properties(), null, minDate, maxDate);
+        }
+        void verifyResourceTimestamp(LocalDate minDate, LocalDate maxDate) throws Exception {
+            StarRocksCatalogSessionSettings.verifyResourceTimestampSession(connection(), datasource(), properties(), null, minDate, maxDate);
         }
         Connection connection() {
             return proxy(Connection.class, (method, args) -> {

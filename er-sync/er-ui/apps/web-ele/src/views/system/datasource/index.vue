@@ -122,7 +122,7 @@
         label="数据源类型"
         align="center"
         prop="datasourceType"
-        width="110"
+        width="140"
       >
         <template #default="scope">
           <el-tag

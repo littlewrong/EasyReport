@@ -75,11 +75,13 @@ export const useAuthStore = defineStore('auth', () => {
     };
   }
 
-  async function logout(redirect: boolean = true) {
-    try {
-      await logoutApi();
-    } catch {
-      // 不做任何处理
+  async function logout(redirect: boolean = true, notifyServer: boolean = true) {
+    if (notifyServer) {
+      try {
+        await logoutApi();
+      } catch {
+        // Local logout must still complete when the server is unavailable.
+      }
     }
     resetAllStores();
     resetRoutes();

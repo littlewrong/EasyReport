@@ -1,8 +1,13 @@
 package cn.easyreport.sync.datasync;
 
+import java.sql.Connection;
 import java.util.List;
 
 public interface DataSyncLoader {
+    /** Per-table target metadata setup. Existing loaders require no preparation. */
+    default void prepareTarget(Connection connection, String table) throws Exception {
+    }
+
     String buildUpsertSql(String table, List<String> columns, boolean upsert);
 
     /**

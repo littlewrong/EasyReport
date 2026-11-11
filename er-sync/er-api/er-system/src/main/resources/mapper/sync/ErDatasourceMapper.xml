@@ -69,7 +69,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="datasourceType != null and datasourceType != ''">datasource_type,</if>
             <if test="host != null and host != ''">host,</if>
             <if test="port != null">port,</if>
-            <if test="databaseName != null and databaseName != ''">database_name,</if>
+            <if test="databaseName != null and (databaseName != '' or datasourceType == 'DM')">database_name,</if>
             <if test="username != null and username != ''">username,</if>
             <if test="password != null">password,</if>
             <if test="driverClass != null">driver_class,</if>
@@ -88,7 +88,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="datasourceType != null and datasourceType != ''">#{datasourceType},</if>
             <if test="host != null and host != ''">#{host},</if>
             <if test="port != null">#{port},</if>
-            <if test="databaseName != null and databaseName != ''">#{databaseName},</if>
+            <if test="databaseName != null and (databaseName != '' or datasourceType == 'DM')">#{databaseName},</if>
             <if test="username != null and username != ''">#{username},</if>
             <if test="password != null">#{password},</if>
             <if test="driverClass != null">#{driverClass},</if>
@@ -111,7 +111,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="datasourceType != null and datasourceType != ''">datasource_type = #{datasourceType},</if>
             <if test="host != null and host != ''">host = #{host},</if>
             <if test="port != null">port = #{port},</if>
-            <if test="databaseName != null and databaseName != ''">database_name = #{databaseName},</if>
+            <if test="databaseName != null and (databaseName != '' or datasourceType == 'DM')">database_name = #{databaseName},</if>
             <if test="username != null and username != ''">username = #{username},</if>
             <if test="password != null">password = #{password},</if>
             <if test="driverClass != null">driver_class = #{driverClass},</if>

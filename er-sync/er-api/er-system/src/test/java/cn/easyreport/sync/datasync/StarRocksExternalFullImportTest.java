@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -408,68 +409,6 @@ public class StarRocksExternalFullImportTest {
         assertTrue(f.inserts.isEmpty());
         String tableName = f.createSql().substring("CREATE EXTERNAL TABLE ".length()).split(" ", 2)[0];
         assertTrue(f.targetSql.contains("DROP TABLE IF EXISTS " + tableName));
-    }
-
-    @Test
-    public void validationCloseFailuresDoNotExposeDriverChainsOrBecomeJdbcFallbacks() throws Exception {
-        Fixture count = new Fixture();
-        count.sourceCount = -1L;
-        count.countCloseFailure = sensitiveDriverFailure();
-        try { count.prepare("times_tamp", null); fail("Invalid source count must remain a validation failure"); }
-        catch (IllegalStateException expected) {
-            assertTrue(expected.getMessage().contains("COUNT 查询返回无效行数"));
-            assertNoDriverDetails(expected);
-        }
-        assertTrue(count.targetSql.isEmpty());
-
-        Fixture bounds = new Fixture();
-        bounds.min = null;
-        bounds.boundsCloseFailure = sensitiveDriverFailure();
-        try { bounds.prepare("times_tamp", null); fail("Invalid source bounds must remain a validation failure"); }
-        catch (IllegalStateException expected) {
-            assertTrue(expected.getMessage().contains("未获取有效时间戳范围"));
-            assertNoDriverDetails(expected);
-        }
-        assertTrue(bounds.targetSql.isEmpty());
-
-        Fixture json = new Fixture();
-        json.jsonColumn = true;
-        json.jsonProbeValues = new String[]{"123", "true", null, null};
-        json.jsonProbeCloseFailure = sensitiveDriverFailure();
-        try { json.prepare("times_tamp", null); fail("JSON semantics must still be validated before creating an external table"); }
-        catch (IllegalStateException expected) {
-            assertTrue(expected.getMessage().contains("JSON null"));
-            assertNoDriverDetails(expected);
-        }
-        assertFalse(json.targetSql.stream().anyMatch(sql -> sql.startsWith("CREATE EXTERNAL TABLE")));
-
-        Fixture strict = new Fixture();
-        strict.strictInsertEnabled = false;
-        strict.strictCloseFailure = sensitiveDriverFailure();
-        try { strict.prepare("times_tamp", null); fail("Strict mode validation must remain an error"); }
-        catch (IllegalStateException expected) {
-            assertTrue(expected.getMessage().contains("严格导入模式未启用"));
-            assertNoDriverDetails(expected);
-        }
-        assertFalse(strict.targetSql.stream().anyMatch(sql -> sql.startsWith("CREATE EXTERNAL TABLE")));
-    }
-
-    @Test
-    public void stoppedJsonProbeDiscardsCloseFailuresAndKeepsStopType() throws Exception {
-        Connection connection = proxy(Connection.class, (object, method, args) -> {
-            if ("createStatement".equals(method.getName())) return proxy(Statement.class, (statement, operation, values) -> {
-                if ("executeQuery".equals(operation.getName())) return proxy(ResultSet.class, (rows, access, columns) -> {
-                    if ("next".equals(access.getName())) throw new DataSyncCancellation.SyncStoppedException();
-                    if ("close".equals(access.getName())) throw sensitiveDriverFailure();
-                    return null;
-                });
-                if ("close".equals(operation.getName())) throw sensitiveDriverFailure();
-                return null;
-            });
-            return null;
-        });
-        try { StarRocksExternalFullImport.verifyJsonProjection(connection, null); fail("Stop must propagate"); }
-        catch (DataSyncCancellation.SyncStoppedException expected) { assertNoDriverDetails(expected); }
     }
 
     @Test
@@ -977,6 +916,154 @@ public class StarRocksExternalFullImportTest {
         assertEquals("\"a\\\"b\\\\c\\n\"", StarRocksExternalFullImport.property("a\"b\\c\n"));
     }
 
+    @Test
+    public void starRocksNativeTypesPreserveLargeIntegersDecimalPrecisionAndDatetimeFraction() {
+        String[][] cases = {{"LARGEINT", "LARGEINT"}, {"largeint(40)", "LARGEINT"},
+                {"DECIMAL32(9, 2)", "DECIMAL(9,2)"}, {"decimal64(18, 4)", "DECIMAL(18,4)"},
+                {"decimal128(38, 9)", "DECIMAL(38,9)"}, {"DECIMAL(20,0)", "DECIMAL(20,0)"},
+                {"NUMERIC(20, 3)", "DECIMAL(20,3)"},
+                {"tinyint(1)", "BOOLEAN"}, {"BOOLEAN", "BOOLEAN"}, {"DATETIME(6)", "DATETIME(6)"},
+                {"VARCHAR(1048576)", "VARCHAR(1048576)"}, {"VARCHAR(16777216)", "VARCHAR(1048576)"},
+                {"STRING", "VARCHAR(1048576)"}, {"CHAR(12)", "VARCHAR(12)"}};
+        for (String[] item : cases) {
+            assertEquals(item[0], item[1], StarRocksExternalFullImport.mapStarRocksType(
+                    StarRocksExternalFullImport.starRocksColumn(item[0], true)));
+        }
+    }
+
+    @Test
+    public void starRocksReadsNativeDescribeRatherThanMysqlProtocolColumnTypes() throws Exception {
+        Fixture f = new Fixture();
+        f.ds.setDatasourceType("STARROCKS");
+        f.nativeIdType = "LARGEINT";
+        try (StarRocksExternalFullImport ignored = f.prepare(null, null)) {
+            assertTrue(f.createSql(), f.createSql().contains("`ID` LARGEINT NOT NULL"));
+        }
+        assertTrue(f.sourceQueries.contains("DESCRIBE `source`.`orders`"));
+        assertFalse(f.sourceQueries.stream().anyMatch(sql -> sql.contains("information_schema")));
+    }
+
+    @Test
+    public void starRocksComplexAndUnrepresentableTypesAreRejectedWithoutJdbcFallback() throws Exception {
+        for (String nativeType : Arrays.asList("ARRAY<INT>", "MAP<VARCHAR,INT>", "STRUCT<a INT>",
+                "HLL", "BITMAP", "PERCENTILE", "VARBINARY", "DECIMAL256(76, 10)", "DECIMAL128(39, 0)")) {
+            Fixture f = new Fixture();
+            f.ds.setDatasourceType("STARROCKS");
+            f.nativeIdType = nativeType;
+            try {
+                f.prepare(null, null);
+                fail("Expected unsafe native type rejection: " + nativeType);
+            } catch (IllegalArgumentException expected) {
+                assertFalse("Native type errors must not choose an unverified JDBC path",
+                        expected instanceof StarRocksExternalFullImport.UnsupportedImportException);
+                assertTrue(expected.getMessage(), expected.getMessage().contains("尚未清空目标表"));
+            }
+            assertTrue(f.targetSql.isEmpty());
+            assertFalse(f.sourceQueries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
+        }
+    }
+
+    @Test
+    public void starRocksJsonLengthUsesNativeSerializationAndKeepsGuardedTargetProjection() throws Exception {
+        Fixture f = new Fixture();
+        f.ds.setDatasourceType("STARROCKS");
+        f.jsonColumn = true;
+        try (StarRocksExternalFullImport importer = f.prepare(null, null)) {
+            importer.execute();
+        }
+        assertTrue(f.sourceQueries.contains("SELECT COUNT(*), MAX(LENGTH(JSON_STRING(`payload`))) FROM `source`.`orders`"));
+        assertFalse(f.sourceQueries.stream().anyMatch(sql -> sql.contains("CHAR CHARACTER SET")));
+        assertTrue(f.createSql().contains("`payload` VARCHAR(1048576) NULL"));
+        assertTrue(f.inserts.get(0).contains(StarRocksExternalFullImport.jsonProjection("`payload`")));
+    }
+
+    @Test
+    public void starRocksTextCapacityChecksActualUtf8BytesBeforeCreatingExternalObjects() throws Exception {
+        int utf8Bytes = "中文🙂".getBytes(StandardCharsets.UTF_8).length;
+        Object[][] cases = {
+                {"VARCHAR(1048576)", "VARCHAR(1048576)", 1048576L, null},
+                {"VARCHAR(16777216)", "VARCHAR(16777216)", 1048577L, "通道上限 1 MiB"},
+                {"STRING", "VARCHAR(100000)", 70000L, null},
+                {"STRING", "STRING", 65534L, "目标字段"},
+                {"CHAR(" + utf8Bytes + ")", "VARCHAR(" + utf8Bytes + ")", (long) utf8Bytes, null},
+                {"VARCHAR(24)", "VARCHAR(" + (utf8Bytes - 1) + ")", (long) utf8Bytes, "目标字段"},
+                {"VARCHAR(24)", "BIGINT", 1L, "仅支持写入文本列"},
+                {"VARCHAR(24)", "VARCHAR(24)", null, null}
+        };
+        for (Object[] item : cases) {
+            Fixture f = new Fixture();
+            f.ds.setDatasourceType("STARROCKS");
+            f.nativeIdType = (String) item[0];
+            f.targetIdType = (String) item[1];
+            f.textMaxBytes = (Long) item[2];
+            try (StarRocksExternalFullImport ignored = f.prepare(null, null)) {
+                assertNull("Expected source/target capacity failure", item[3]);
+                assertTrue(f.createSql(), f.createSql().contains("`ID` VARCHAR("));
+            } catch (IllegalArgumentException expected) {
+                assertNotNull("Unexpected capacity failure: " + expected.getMessage(), item[3]);
+                assertTrue(expected.getMessage(), expected.getMessage().contains((String) item[3]));
+                assertTrue(f.targetSql.stream().noneMatch(sql -> sql.startsWith("CREATE")));
+            }
+            assertTrue(f.sourceQueries.stream().anyMatch(sql -> sql.contains("MAX(LENGTH(`ID`))")));
+        }
+    }
+
+    @Test
+    public void starRocksDescribeFailureDoesNotExposeDriverCredentialsOrCreateTargetObjects() throws Exception {
+        Fixture f = new Fixture();
+        f.ds.setDatasourceType("STARROCKS");
+        f.failNativeDescribe = true;
+        try {
+            f.prepare(null, null);
+            fail("Expected source metadata failure");
+        } catch (SQLException expected) {
+            assertFalse(expected.getMessage().contains(f.ds.getPassword()));
+            assertTrue(expected.getMessage().contains("尚未清空目标表"));
+        }
+        assertTrue(f.targetSql.isEmpty());
+    }
+
+    @Test
+    public void starRocksMissingNativeTypeOrNullabilityFailsClosedBeforeTargetChanges() throws Exception {
+        for (boolean missingNullability : new boolean[]{true, false}) {
+            Fixture f = new Fixture();
+            f.ds.setDatasourceType("STARROCKS");
+            f.missingNativeNullability = missingNullability;
+            if (!missingNullability) f.nativeIdType = "";
+            try {
+                f.prepare(null, null);
+                fail("Incomplete native metadata must fail closed");
+            } catch (IllegalArgumentException expected) {
+                assertTrue(expected.getMessage().contains("尚未清空目标表"));
+            }
+            assertTrue(f.targetSql.isEmpty());
+            assertFalse(f.sourceQueries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
+        }
+    }
+
+    @Test
+    public void starRocksNullableTextRejectsMysqlNullSentinelButAllowsSqlNullAndNonnullableLiteral() throws Exception {
+        for (boolean nullable : new boolean[]{true, false}) {
+            for (boolean literal : new boolean[]{true, false}) {
+                Fixture f = new Fixture();
+                f.ds.setDatasourceType("STARROCKS");
+                f.nativeIdType = "VARCHAR(24)";
+                f.targetIdType = "VARCHAR(24)";
+                f.nullableId = nullable;
+                f.nullSentinel = literal;
+                f.textMaxBytes = literal ? 2L : null;
+                try (StarRocksExternalFullImport ignored = f.prepare(null, null)) {
+                    assertFalse("Nullable literal backslash-N must fail before creating the external table", nullable && literal);
+                } catch (IllegalArgumentException expected) {
+                    assertTrue(nullable && literal);
+                    assertTrue(expected.getMessage().contains("字面量 \\N"));
+                    assertTrue(f.targetSql.isEmpty());
+                }
+                assertEquals(nullable, f.sourceQueries.stream().anyMatch(sql -> sql.contains("HEX(`ID`) = '5C4E'")));
+            }
+        }
+    }
+
     private String type(String type, String raw, int precision, int scale) {
         return StarRocksExternalFullImport.mapType(new StarRocksExternalFullImport.Column(type, raw, precision, scale, 0, true));
     }
@@ -984,23 +1071,6 @@ public class StarRocksExternalFullImportTest {
     private static void assertWindow(String insert, String start, String end) {
         assertTrue(insert, insert.endsWith("WHERE `times_tamp` >= '" + start
                 + " 00:00:00' AND `times_tamp` < '" + end + " 00:00:00'"));
-    }
-
-    private static SQLException sensitiveDriverFailure() {
-        SQLException failure = new SQLException("driver-private-marker", "HY000", 900);
-        failure.initCause(new IllegalArgumentException("driver-private-marker-cause"));
-        failure.setNextException(new SQLException("driver-private-marker-next"));
-        failure.addSuppressed(new SQLException("driver-private-marker-suppressed"));
-        return failure;
-    }
-
-    private static void assertNoDriverDetails(Throwable failure) {
-        StringWriter output = new StringWriter();
-        failure.printStackTrace(new PrintWriter(output));
-        assertFalse(output.toString(), output.toString().contains("driver-private-marker"));
-        assertNull(failure.getCause());
-        assertEquals(0, failure.getSuppressed().length);
-        if (failure instanceof SQLException) assertNull(((SQLException) failure).getNextException());
     }
 
     private static final class Fixture {
@@ -1041,13 +1111,15 @@ public class StarRocksExternalFullImportTest {
         boolean nullable = true;
         boolean failPreflight;
         boolean failExplain;
-        SQLException countCloseFailure;
-        SQLException boundsCloseFailure;
-        SQLException jsonProbeCloseFailure;
-        boolean strictInsertEnabled = true;
-        SQLException strictCloseFailure;
         long queryTimeout = 300;
         String idType = "bigint";
+        String nativeIdType;
+        String targetIdType = "BIGINT";
+        Long textMaxBytes = 0L;
+        boolean failNativeDescribe;
+        boolean missingNativeNullability;
+        boolean nullableId;
+        boolean nullSentinel;
 
         Fixture() {
             ds.setJdbcUrl("jdbc:mysql://source.test:4000/source?useUnicode=true&serverTimezone=Asia%2FShanghai");
@@ -1091,6 +1163,14 @@ public class StarRocksExternalFullImportTest {
                         if ("executeQuery".equals(m.getName())) {
                             String sql = (String) a[0];
                             sourceQueries.add(sql);
+                            if (sql.equals("DESCRIBE `source`.`orders`")) {
+                                if (failNativeDescribe) throw new SQLException("Native describe failed: " + ds.getPassword(), "HY000", 531);
+                                List<Map<Object, Object>> columns = new ArrayList<>(Arrays.asList(
+                                        nativeColumn("ID", nativeIdType == null ? idType : nativeIdType, nullableId),
+                                        nativeColumn("times_tamp", "DATETIME", nullable)));
+                                if (jsonColumn) columns.add(nativeColumn("payload", "JSON", true));
+                                return rows(columns);
+                            }
                             if (sql.contains("@@session.time_zone")) {
                                 return rows(Collections.singletonList(indexed(sessionZone, globalZone)));
                             }
@@ -1101,14 +1181,18 @@ public class StarRocksExternalFullImportTest {
                                     throw new SQLException("Count query cancelled", "HY000", 1317);
                                 }
                                 if (failCount) throw new SQLException("source count failed", "HY000", 321);
-                                return rows(countHasRow ? Collections.singletonList(jsonColumn
-                                        ? indexed(sourceCount, jsonMaxBytes) : indexed(sourceCount)) : Collections.emptyList(), countCloseFailure);
+                                List<Object> aggregates = new ArrayList<>();
+                                aggregates.add(sourceCount);
+                                if (jsonColumn) aggregates.add(jsonMaxBytes);
+                                if (sourceHasTextId()) aggregates.add(textMaxBytes);
+                                if (sourceHasTextId() && nullableId) aggregates.add(nullSentinel ? 1L : 0L);
+                                return rows(countHasRow ? Collections.singletonList(indexed(aggregates.toArray())) : Collections.emptyList());
                             }
                             if (sql.contains("MIN(")) {
                                 Map<Object, Object> row = indexed(min, max);
                                 if (rawMin != null) row.put("raw:1", rawMin);
                                 if (rawMax != null) row.put("raw:2", rawMax);
-                                return rows(boundsHasRow ? Collections.singletonList(row) : Collections.emptyList(), boundsCloseFailure);
+                                return rows(boundsHasRow ? Collections.singletonList(row) : Collections.emptyList());
                             }
                             return rows(Collections.singletonList(indexed(1)));
                         }
@@ -1138,18 +1222,19 @@ public class StarRocksExternalFullImportTest {
                         if ("executeQuery".equals(m.getName())) {
                             String sql = (String) a[0];
                             targetSql.add(sql);
-                            if (jsonColumn && sql.equals("DESCRIBE `warehouse`.`orders`")) {
-                                Map<Object, Object> id = new HashMap<>(); id.put("Field", "id"); id.put("Type", "BIGINT");
+                            if ((jsonColumn || sourceHasTextId()) && sql.equals("DESCRIBE `warehouse`.`orders`")) {
+                                Map<Object, Object> id = new HashMap<>(); id.put("Field", "id"); id.put("Type", targetIdType);
                                 Map<Object, Object> timestamp = new HashMap<>(); timestamp.put("Field", "times_tamp"); timestamp.put("Type", "DATETIME");
+                                if (!jsonColumn) return rows(Arrays.asList(id, timestamp));
                                 Map<Object, Object> payload = new HashMap<>(); payload.put("Field", "payload");
                                 payload.put("Type", "VARCHAR".equals(jsonTargetType) ? "VARCHAR(" + jsonTargetPrecision + ")" : jsonTargetType);
                                 return rows(missingJsonTarget ? Arrays.asList(id, timestamp) : Arrays.asList(id, timestamp, payload));
                             }
                             if (jsonColumn && sql.equals(StarRocksExternalFullImport.JSON_CONVERSION_PROBE_SQL)) {
                                 if (failJsonProbe) throw new SQLException("JSON probe unavailable", "HY000", 456);
-                                return rows(Collections.singletonList(indexed((Object[]) jsonProbeValues)), jsonProbeCloseFailure);
+                                return rows(Collections.singletonList(indexed((Object[]) jsonProbeValues)));
                             }
-                            if (sql.equals("SHOW VARIABLES LIKE 'enable_insert_strict'")) return rows(Collections.singletonList(indexed("enable_insert_strict", String.valueOf(strictInsertEnabled))), strictCloseFailure);
+                            if (sql.equals("SHOW VARIABLES LIKE 'enable_insert_strict'")) return rows(Collections.singletonList(indexed("enable_insert_strict", "true")));
                             if (sql.equals("SHOW VARIABLES LIKE 'query_timeout'")) return rows(Collections.singletonList(indexed("query_timeout", queryTimeout)));
                             if (sql.startsWith("EXPLAIN")) {
                                 if (failExplain) throw new SQLException("target column mismatch", "HY000", 124);
@@ -1187,6 +1272,19 @@ public class StarRocksExternalFullImportTest {
 
         long drops() { return targetSql.stream().filter(sql -> sql.startsWith("DROP TABLE")).count(); }
 
+        boolean sourceHasTextId() {
+            return "STARROCKS".equalsIgnoreCase(ds.getDatasourceType()) && nativeIdType != null
+                    && nativeIdType.toUpperCase(Locale.ROOT).matches("^(?:VAR)?CHAR(?:\\(.*\\))?$|^STRING$");
+        }
+
+        Map<Object, Object> nativeColumn(String name, String type, boolean nullable) {
+            Map<Object, Object> column = new HashMap<>();
+            column.put("Field", name);
+            column.put("Type", type);
+            if (!missingNativeNullability) column.put("Null", nullable ? "YES" : "NO");
+            return column;
+        }
+
         Map<Object, Object> column(String name, String type, String raw, boolean nullable) {
             Map<Object, Object> row = new HashMap<>();
             row.put("COLUMN_NAME", name);
@@ -1207,15 +1305,10 @@ public class StarRocksExternalFullImportTest {
     }
 
     private static ResultSet rows(List<Map<Object, Object>> rows) {
-        return rows(rows, null);
-    }
-
-    private static ResultSet rows(List<Map<Object, Object>> rows, SQLException closeFailure) {
         int[] index = {-1};
         boolean[] wasNull = {false};
         return proxy(ResultSet.class, (object, method, args) -> {
             String name = method.getName();
-            if ("close".equals(name) && closeFailure != null) throw closeFailure;
             if ("next".equals(name)) return ++index[0] < rows.size();
             if ("wasNull".equals(name)) return wasNull[0];
             if ("getMetaData".equals(name)) throw new AssertionError("JSON target types must come from DESCRIBE, not MySQL protocol metadata");

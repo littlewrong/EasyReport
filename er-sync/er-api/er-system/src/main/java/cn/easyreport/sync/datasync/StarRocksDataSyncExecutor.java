@@ -24,6 +24,17 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
     }
 
     @Override
+    protected void validateSourceTargetIdentity(ErDataTransfer task, ErDatasource sourceDs,
+            Connection sourceConn, Connection targetConn, String sourceSchema,
+            String sourceTable, String targetTable) throws Exception {
+        if (task != null && "0".equals(task.getSyncMode()) && sourceDs != null
+                && "STARROCKS".equalsIgnoreCase(sourceDs.getDatasourceType())) {
+            StarRocksTableIdentity.verifyDistinct(sourceDs, sourceConn, targetConn,
+                    sourceSchema, sourceTable, targetTable, null, cancellationContext());
+        }
+    }
+
+    @Override
     protected DirectFullImport prepareDirectFullImport(ErDataTransfer task, ErDatasource sourceDs,
             String schema, String table, String targetTable, List<String> sourceCols,
             List<String> targetCols, DataSyncExtractor extractor, Connection sourceConn,
@@ -32,6 +43,36 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
             return null;
         }
         String method = task.resolveDirectImportMethod();
+        if (ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE.equals(method)) {
+            if (task.getResourceName() == null || task.getResourceName().trim().isEmpty()) {
+                throw new IllegalArgumentException("JDBC Resource 导入必须填写已有的 Resource 名称；旧外部表任务请补填后重试，尚未清空目标表");
+            }
+            boolean supported = sourceDs != null
+                    && (("KINGBASE".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof KingbaseDataSyncExtractor)
+                        || ("DM".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof DmDataSyncExtractor)
+                        || ("MYSQL".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof MySqlDataSyncExtractor)
+                        || ("TIDB".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof TiDbDataSyncExtractor)
+                        || ("STARROCKS".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof StarRocksDataSyncExtractor)
+                        || ("SQLSERVER".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof SqlServerDataSyncExtractor)
+                        || ("POSTGRESQL".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof PostgreSqlDataSyncExtractor)
+                        || ("ORACLE".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof OracleDataSyncExtractor));
+            if (!supported) throw new IllegalArgumentException("JDBC Resource 导入的源数据库类型或提取器不匹配，尚未清空目标表");
+            checkStopped();
+            final StarRocksJdbcResourceFullImport resourceImport = StarRocksJdbcResourceFullImport.prepare(sourceDs,
+                    sourceConn, targetConn, task.getResourceName(), schema, table, targetTable, sourceCols,
+                    targetCols, tsField, task.getTransferId(), task.getExternalTableThresholdWan(),
+                    task.getExternalTableWindowUnit(), callback, cancellationContext());
+            return new DirectFullImport() {
+                @Override public FullSyncStats execute() throws Exception {
+                    StarRocksJdbcResourceFullImport.Result result = resourceImport.execute();
+                    FullSyncStats stats = new FullSyncStats();
+                    stats.processed = result.processed;
+                    stats.maxTs = result.maxTs;
+                    return stats;
+                }
+                @Override public void close() throws Exception { resourceImport.close(); }
+            };
+        }
         if (ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(method)) {
             if (task.getCatalogName() == null || task.getCatalogName().trim().isEmpty()) {
                 throw new IllegalArgumentException("Catalog 导入必须填写已有的 JDBC Catalog 名称，尚未清空目标表");
@@ -52,48 +93,20 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
                 @Override public void close() { catalogImport.close(); }
             };
         }
-        if (!ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE.equals(method)) {
-            throw new IllegalArgumentException("未知的数据湖导入方式，尚未清空目标表");
-        }
-        boolean supportedSource = sourceDs != null
-                && (("TIDB".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof TiDbDataSyncExtractor)
-                    || ("MYSQL".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof MySqlDataSyncExtractor));
-        if (!supportedSource) {
-            if (task.getDirectImportMethod() != null) {
-                throw new IllegalArgumentException("外部表导入仅支持 MySQL/TiDB 源，尚未清空目标表");
-            }
-            // Preserve the JDBC behavior of legacy records which have no explicit method.
-            return null;
-        }
-        checkStopped();
-        final StarRocksExternalFullImport externalImport;
-        try {
-            externalImport = StarRocksExternalFullImport.prepare(
-                    sourceDs, sourceConn, targetConn, schema, table, targetTable, sourceCols, targetCols,
-                    tsField, task.getTransferId(), task.getExternalTableThresholdWan(),
-                    task.getExternalTableWindowUnit(), callback, cancellationContext());
-        } catch (StarRocksExternalFullImport.UnsupportedImportException unsupported) {
-            checkStopped();
-            String message = "外部表不支持当前源配置，使用原 JDBC 初始化：" + unsupported.getMessage();
-            System.out.println("[StarRocksDataSyncExecutor] " + message);
-            if (callback != null) callback.onProgress(0, -1, message);
-            return null;
-        }
-        return new DirectFullImport() {
-            @Override
-            public FullSyncStats execute() throws Exception {
-                StarRocksExternalFullImport.Result result = externalImport.execute();
-                FullSyncStats stats = new FullSyncStats();
-                stats.processed = result.processed;
-                stats.maxTs = result.maxTs;
-                return stats;
-            }
+        throw new IllegalArgumentException("未知的数据湖导入方式，尚未清空目标表");
+    }
 
-            @Override
-            public void close() throws Exception {
-                externalImport.close();
-            }
-        };
+    @Override
+    protected void prepareTargetSchema(ErDataTransfer task, ErDatasource sourceDs, Connection sourceConn, Connection targetConn,
+                                       String sourceSchema, String sourceTable,
+                                       String targetTableName) throws Exception {
+        // Preserve native byte capacities on the Resource path. Other import
+        // methods and incremental tasks retain their existing schema preparation behavior.
+        if (task != null && "0".equals(task.getSyncMode()) && "1".equals(task.getExternalTableEnabled())) {
+            String method = task.resolveDirectImportMethod();
+            if (ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE.equals(method)) return;
+        }
+        super.prepareTargetSchema(task, sourceDs, sourceConn, targetConn, sourceSchema, sourceTable, targetTableName);
     }
 
     /**

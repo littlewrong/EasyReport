@@ -484,7 +484,7 @@ public class ErDataTransferExternalTableOptionsTest
     }
 
     @Test
-    public void editingEnabledLegacyConfigurationKeepsExternalTablesWithoutCatalog() throws Exception
+    public void editingEnabledLegacyConfigurationUsesResourceWithoutCatalog() throws Exception
     {
         Fixture fixture = new Fixture("MYSQL", "STARROCKS");
         fixture.oldTask.setExternalTableEnabled("1");
@@ -496,7 +496,7 @@ public class ErDataTransferExternalTableOptionsTest
 
         assertNull(fixture.saved.getExternalTableEnabled());
         assertNull(fixture.saved.getCatalogName());
-        assertEquals(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE, fixture.saved.getDirectImportMethod());
+        assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
         assertEquals(2, fixture.datasourceReads);
     }
 
@@ -530,49 +530,85 @@ public class ErDataTransferExternalTableOptionsTest
     @Test
     public void legacyClientInsertInfersRouteFromCatalogName() throws Exception
     {
-        for (String catalog : new String[] {null, "", "  ", " src_mysql "})
+        for (String sourceType : new String[] {"MYSQL", "STARROCKS"})
         {
-            Fixture fixture = new Fixture("MYSQL", "STARROCKS");
-            ErDataTransfer task = fixture.task();
-            task.setExternalTableEnabled("1");
-            task.setCatalogName(catalog);
+            for (String catalog : new String[] {null, "", "  ", " src_mysql "})
+            {
+                Fixture fixture = new Fixture(sourceType, "STARROCKS");
+                ErDataTransfer task = fixture.task();
+                task.setExternalTableEnabled("1");
+                task.setCatalogName(catalog);
 
-            fixture.service.insertErDataTransfer(task);
+                fixture.service.insertErDataTransfer(task);
 
-            assertEquals(catalog != null && !catalog.trim().isEmpty()
-                    ? ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG : ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE,
-                    fixture.saved.getDirectImportMethod());
+                assertEquals(catalog != null && !catalog.trim().isEmpty()
+                        ? ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG : ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE,
+                        fixture.saved.getDirectImportMethod());
+            }
         }
     }
 
     @Test
-    public void explicitExternalTablesAcceptMysqlAndTidbWithInactiveCatalogNames() throws Exception
+    public void resourceAcceptsMysqlTidbAndStarRocksWithInactiveCatalogNames() throws Exception
     {
-        for (String sourceType : new String[] {"MYSQL", "TIDB", "mysql", "tidb"})
+        for (String sourceType : new String[] {"MYSQL", "TIDB", "STARROCKS", "mysql", "tidb", "starrocks"})
         {
             Fixture fixture = new Fixture(sourceType, "STARROCKS");
             ErDataTransfer task = fixture.task();
             task.setExternalTableEnabled("1");
-            task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+            task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
             task.setCatalogName("src_retained");
 
             fixture.service.insertErDataTransfer(task);
 
-            assertEquals(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE, fixture.saved.getDirectImportMethod());
+            assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+            assertEquals("src_retained", fixture.saved.getCatalogName());
+            assertEquals("1", fixture.saved.getExternalTableEnabled());
+
+            fixture.saved = null;
+            fixture.service.updateErDataTransfer(task);
+
+            assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
             assertEquals("src_retained", fixture.saved.getCatalogName());
             assertEquals("1", fixture.saved.getExternalTableEnabled());
         }
     }
 
     @Test
-    public void explicitExternalTablesRejectOtherCatalogSourcesOnInsertAndUpdate() throws Exception
+    public void starRocksResourceWithoutCatalogKeepsItsPolicyOnInsertAndUpdate() throws Exception
     {
-        for (String sourceType : new String[] {"POSTGRESQL", "ORACLE", "SQLSERVER", "STARROCKS"})
+        for (boolean update : new boolean[] {false, true})
+        {
+            Fixture fixture = new Fixture("STARROCKS", "STARROCKS");
+            ErDataTransfer task = fixture.task();
+            task.setExternalTableEnabled("1");
+            task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+            task.setCatalogName(null);
+            task.setExternalTableThresholdWan(75);
+            task.setExternalTableWindowUnit("MONTH");
+            task.setBatchSize(3000);
+
+            if (update) fixture.service.updateErDataTransfer(task);
+            else fixture.service.insertErDataTransfer(task);
+
+            assertEquals("1", fixture.saved.getExternalTableEnabled());
+            assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+            assertNull(fixture.saved.getCatalogName());
+            assertEquals(Integer.valueOf(75), fixture.saved.getExternalTableThresholdWan());
+            assertEquals("MONTH", fixture.saved.getExternalTableWindowUnit());
+            assertEquals(Integer.valueOf(3000), fixture.saved.getBatchSize());
+        }
+    }
+
+    @Test
+    public void resourceRejectsUnsupportedSourcesOnInsertAndUpdate() throws Exception
+    {
+        for (String sourceType : new String[] {"DORIS", "SQLITE", "UNKNOWN"})
         {
             Fixture fixture = new Fixture(sourceType, "STARROCKS");
             ErDataTransfer task = fixture.task();
             task.setExternalTableEnabled("1");
-            task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+            task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
             expectRejected(fixture, task, false);
             expectRejected(fixture, task, true);
         }
@@ -581,28 +617,33 @@ public class ErDataTransferExternalTableOptionsTest
     @Test
     public void bothExplicitMethodsRequireFullSyncAndStarRocksTarget() throws Exception
     {
-        for (String method : new String[] {ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE,
-                ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG})
+        for (String sourceType : new String[] {"MYSQL", "STARROCKS"})
         {
-            Fixture wrongTarget = new Fixture("MYSQL", "POSTGRESQL");
-            ErDataTransfer task = wrongTarget.task();
-            task.setExternalTableEnabled("1");
-            task.setDirectImportMethod(method);
-            expectRejected(wrongTarget, task, false);
+            for (String method : new String[] {ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE,
+                    ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG})
+            {
+                Fixture wrongTarget = new Fixture(sourceType, "POSTGRESQL");
+                ErDataTransfer task = wrongTarget.task();
+                task.setExternalTableEnabled("1");
+                task.setDirectImportMethod(method);
+                expectRejected(wrongTarget, task, false);
+                expectRejected(wrongTarget, task, true);
 
-            Fixture incremental = new Fixture("MYSQL", "STARROCKS");
-            task = incremental.task();
-            task.setSyncMode("1");
-            task.setExternalTableEnabled("1");
-            task.setDirectImportMethod(method);
-            expectRejected(incremental, task, true);
+                Fixture incremental = new Fixture(sourceType, "STARROCKS");
+                task = incremental.task();
+                task.setSyncMode("1");
+                task.setExternalTableEnabled("1");
+                task.setDirectImportMethod(method);
+                expectRejected(incremental, task, false);
+                expectRejected(incremental, task, true);
+            }
         }
     }
 
     @Test
     public void unknownMethodsAreRejectedEvenWhenDirectImportIsDisabled() throws Exception
     {
-        for (String method : new String[] {"", "  ", "CATALOG", "external_table", "JDBC", "2"})
+        for (String method : new String[] {"", "  ", "CATALOG", "external_table", "JDBC", "RESOURCE", "2"})
         {
             Fixture fixture = new Fixture("MYSQL", "STARROCKS");
             ErDataTransfer task = fixture.task();
@@ -617,7 +658,7 @@ public class ErDataTransferExternalTableOptionsTest
     @Test
     public void disabledImportsCanStoreChoiceWithoutRequiringCatalogOrSupportedBinding() throws Exception
     {
-        for (String method : new String[] {ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE,
+        for (String method : new String[] {ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE,
                 ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG})
         {
             Fixture fixture = new Fixture("POSTGRESQL", "MYSQL");
@@ -634,7 +675,7 @@ public class ErDataTransferExternalTableOptionsTest
     }
 
     @Test
-    public void editingLegacyExternalNameDoesNotImplicitlySwitchToCatalog() throws Exception
+    public void editingLegacyResourceCatalogNameDoesNotSwitchToCatalog() throws Exception
     {
         Fixture fixture = new Fixture("MYSQL", "STARROCKS");
         fixture.oldTask.setExternalTableEnabled("1");
@@ -645,23 +686,23 @@ public class ErDataTransferExternalTableOptionsTest
 
         fixture.service.updateErDataTransfer(patch);
 
-        assertEquals(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE, fixture.saved.getDirectImportMethod());
+        assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
         assertEquals("src_saved_for_later", fixture.saved.getCatalogName());
         assertNull(fixture.saved.getExternalTableEnabled());
     }
 
     @Test
-    public void editingExplicitExternalRouteIgnoresRetainedCatalogName() throws Exception
+    public void editingExplicitResourceRouteIgnoresRetainedCatalogName() throws Exception
     {
         Fixture fixture = new Fixture("MYSQL", "STARROCKS");
         fixture.oldTask.setExternalTableEnabled("1");
-        fixture.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+        fixture.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
         ErDataTransfer patch = fixture.task();
         patch.setCatalogName(null);
 
         fixture.service.updateErDataTransfer(patch);
 
-        assertEquals(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE, fixture.saved.getDirectImportMethod());
+        assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
         assertNull(fixture.saved.getCatalogName());
         assertNull(fixture.saved.getExternalTableEnabled());
         assertEquals(2, fixture.datasourceReads);
@@ -670,54 +711,80 @@ public class ErDataTransferExternalTableOptionsTest
     @Test
     public void explicitMethodSwitchCanKeepInactiveCatalogOrSupplyRequiredCatalog() throws Exception
     {
-        Fixture catalogToExternal = new Fixture("MYSQL", "STARROCKS");
-        catalogToExternal.oldTask.setExternalTableEnabled("1");
-        catalogToExternal.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG);
-        ErDataTransfer patch = new ErDataTransfer();
-        patch.setTransferId(7L);
-        patch.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+        for (String sourceType : new String[] {"MYSQL", "STARROCKS"})
+        {
+            Fixture catalogToExternal = new Fixture(sourceType, "STARROCKS");
+            catalogToExternal.oldTask.setExternalTableEnabled("1");
+            catalogToExternal.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG);
+            ErDataTransfer patch = new ErDataTransfer();
+            patch.setTransferId(7L);
+            patch.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
 
-        catalogToExternal.service.updateErDataTransfer(patch);
+            catalogToExternal.service.updateErDataTransfer(patch);
 
-        assertEquals(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE, catalogToExternal.saved.getDirectImportMethod());
-        assertNull(catalogToExternal.saved.getCatalogName());
-        assertNull(catalogToExternal.saved.getExternalTableEnabled());
+            assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, catalogToExternal.saved.getDirectImportMethod());
+            assertNull(catalogToExternal.saved.getCatalogName());
+            assertNull(catalogToExternal.saved.getExternalTableEnabled());
 
-        Fixture externalToCatalog = new Fixture("MYSQL", "STARROCKS");
-        externalToCatalog.oldTask.setExternalTableEnabled("1");
-        externalToCatalog.oldTask.setCatalogName(null);
-        externalToCatalog.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
-        patch = new ErDataTransfer();
-        patch.setTransferId(7L);
-        patch.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG);
-        expectRejected(externalToCatalog, patch, true);
-        patch.setCatalogName(" src_explicit ");
+            Fixture externalToCatalog = new Fixture(sourceType, "STARROCKS");
+            externalToCatalog.oldTask.setExternalTableEnabled("1");
+            externalToCatalog.oldTask.setCatalogName(null);
+            externalToCatalog.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+            patch = new ErDataTransfer();
+            patch.setTransferId(7L);
+            patch.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG);
+            expectRejected(externalToCatalog, patch, true);
+            patch.setCatalogName(" src_explicit ");
 
-        externalToCatalog.service.updateErDataTransfer(patch);
+            externalToCatalog.service.updateErDataTransfer(patch);
 
-        assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG, externalToCatalog.saved.getDirectImportMethod());
-        assertEquals("src_explicit", externalToCatalog.saved.getCatalogName());
+            assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG, externalToCatalog.saved.getDirectImportMethod());
+            assertEquals("src_explicit", externalToCatalog.saved.getCatalogName());
+        }
     }
 
     @Test
-    public void explicitExternalMethodCannotBeSavedForEnabledOracleTask() throws Exception
+    public void changingResourceSourceToStarRocksKeepsItsRouteAndEnabledSwitch() throws Exception
     {
-        Fixture fixture = new Fixture("ORACLE", "STARROCKS");
+        Fixture fixture = new Fixture("MYSQL", "STARROCKS");
+        fixture.oldTask.setExternalTableEnabled("1");
+        fixture.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+        ErDatasource starRocks = new ErDatasource();
+        starRocks.setDatasourceType("STARROCKS");
+        fixture.sources.put(3L, starRocks);
+        ErDataTransfer patch = new ErDataTransfer();
+        patch.setTransferId(7L);
+        patch.setSourceDatasourceId(3L);
+
+        fixture.service.updateErDataTransfer(patch);
+
+        assertEquals(Long.valueOf(3L), fixture.saved.getSourceDatasourceId());
+        assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+        assertNull(fixture.saved.getExternalTableEnabled());
+        assertNull(fixture.saved.getCatalogName());
+        assertEquals("1", fixture.oldTask.getExternalTableEnabled());
+        assertEquals(2, fixture.datasourceReads);
+    }
+
+    @Test
+    public void explicitResourceMethodCannotBeSavedForUnsupportedSourceTask() throws Exception
+    {
+        Fixture fixture = new Fixture("DORIS", "STARROCKS");
         fixture.oldTask.setExternalTableEnabled("1");
         fixture.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG);
         ErDataTransfer patch = new ErDataTransfer();
         patch.setTransferId(7L);
-        patch.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+        patch.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
 
         expectRejected(fixture, patch, true);
     }
 
     @Test
-    public void inheritedExternalRouteDoesNotBecomeCatalogWhenChangingSource() throws Exception
+    public void inheritedResourceRouteRemainsEnabledWhenChangingSourceToOracle() throws Exception
     {
         Fixture fixture = new Fixture("MYSQL", "STARROCKS");
         fixture.oldTask.setExternalTableEnabled("1");
-        fixture.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+        fixture.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
         ErDatasource oracle = new ErDatasource();
         oracle.setDatasourceType("ORACLE");
         fixture.sources.put(3L, oracle);
@@ -727,9 +794,10 @@ public class ErDataTransferExternalTableOptionsTest
 
         fixture.service.updateErDataTransfer(patch);
 
-        assertEquals("0", fixture.saved.getExternalTableEnabled());
-        assertEquals(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE, fixture.saved.getDirectImportMethod());
+        assertNull(fixture.saved.getExternalTableEnabled());
+        assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
         assertNull(fixture.saved.getCatalogName());
+        assertEquals("1", fixture.oldTask.getExternalTableEnabled());
     }
 
     @Test
@@ -757,7 +825,7 @@ public class ErDataTransferExternalTableOptionsTest
     @Test
     public void statusAndPolicyPatchesDoNotFillOrOverwriteExplicitStoredMethods() throws Exception
     {
-        for (String method : new String[] {ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE,
+        for (String method : new String[] {ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE,
                 ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG})
         {
             Fixture fixture = new Fixture("MYSQL", "STARROCKS");
@@ -832,7 +900,7 @@ public class ErDataTransferExternalTableOptionsTest
 
                 fixture.service.updateErDataTransfer(patch);
 
-                assertEquals(catalog == null ? ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE
+                assertEquals(catalog == null ? ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE
                         : ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG, fixture.saved.getDirectImportMethod());
                 assertEquals(submittedSwitch, fixture.saved.getExternalTableEnabled());
                 assertEquals(patch.getCatalogName(), fixture.saved.getCatalogName());
@@ -878,6 +946,362 @@ public class ErDataTransferExternalTableOptionsTest
 
         expectRejected(fixture, patch, true);
         assertEquals(0, fixture.datasourceReads);
+    }
+
+    @Test
+    public void jdbcResourceAcceptsAllEightSourcesWithoutChangingInactiveCatalogOrPolicy() throws Exception
+    {
+        for (String sourceType : new String[] {"MYSQL", "TIDB", "STARROCKS", "KINGBASE", "DM", "POSTGRESQL", "ORACLE", "SQLSERVER",
+                "mysql", "tidb", "starrocks", "kingbase", "dm", "postgresql", "oracle", "sqlserver"})
+        {
+            for (boolean update : new boolean[] {false, true})
+            {
+                Fixture fixture = new Fixture(sourceType, "starrocks");
+                ErDataTransfer task = fixture.task();
+                task.setExternalTableEnabled("1");
+                task.setDirectImportMethod(" JDBC_RESOURCE ");
+                task.setResourceName(" src_resource ");
+                task.setExternalTableThresholdWan(75);
+                task.setExternalTableWindowUnit("MONTH");
+                task.setBatchSize(3000);
+
+                if (update) fixture.service.updateErDataTransfer(task);
+                else fixture.service.insertErDataTransfer(task);
+
+                assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+                assertEquals("src_resource", fixture.saved.getResourceName());
+                assertEquals("src_mysql", fixture.saved.getCatalogName());
+                assertEquals("1", fixture.saved.getExternalTableEnabled());
+                assertEquals(Integer.valueOf(75), fixture.saved.getExternalTableThresholdWan());
+                assertEquals("MONTH", fixture.saved.getExternalTableWindowUnit());
+                assertEquals(Integer.valueOf(3000), fixture.saved.getBatchSize());
+            }
+        }
+    }
+
+    @Test
+    public void enabledJdbcResourceRequiresSafeNameOnInsertAndUpdate() throws Exception
+    {
+        for (String name : new String[] {null, "", "  ", "1resource", "_resource", "src-name",
+                "src.name", "src'name", "src`name", "src\nname", repeat('r', 65)})
+        {
+            Fixture fixture = new Fixture("KINGBASE", "STARROCKS");
+            fixture.oldTask.setResourceName(null);
+            ErDataTransfer task = fixture.task();
+            task.setExternalTableEnabled("1");
+            task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+            task.setResourceName(name);
+            expectRejected(fixture, task, false);
+            expectRejected(fixture, task, true);
+        }
+
+        Fixture fixture = new Fixture("DM", "STARROCKS");
+        ErDataTransfer task = fixture.task();
+        task.setExternalTableEnabled("1");
+        task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+        task.setResourceName(repeat('r', 64));
+        fixture.service.insertErDataTransfer(task);
+        assertEquals(repeat('r', 64), fixture.saved.getResourceName());
+    }
+
+    @Test
+    public void resourceCannotUseOtherSourcesTargetsOrIncrementalModeAndKeepsOtherMethodLimits() throws Exception
+    {
+        for (String sourceType : new String[] {"DORIS", "SQLITE", "UNKNOWN"})
+        {
+            Fixture fixture = new Fixture(sourceType, "STARROCKS");
+            ErDataTransfer task = fixture.task();
+            task.setExternalTableEnabled("1");
+            task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+            task.setResourceName("src_resource");
+            expectRejected(fixture, task, false);
+            expectRejected(fixture, task, true);
+        }
+        for (String sourceType : new String[] {"KINGBASE", "DM"})
+        {
+            for (String method : new String[] {ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG})
+            {
+                Fixture fixture = new Fixture(sourceType, "STARROCKS");
+                ErDataTransfer task = fixture.task();
+                task.setExternalTableEnabled("1");
+                task.setDirectImportMethod(method);
+                task.setResourceName("src_resource");
+                expectRejected(fixture, task, false);
+                expectRejected(fixture, task, true);
+            }
+            for (boolean incremental : new boolean[] {false, true})
+            {
+                Fixture fixture = new Fixture(sourceType, incremental ? "STARROCKS" : "MYSQL");
+                ErDataTransfer task = fixture.task();
+                task.setSyncMode(incremental ? "1" : "0");
+                task.setExternalTableEnabled("1");
+                task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+                task.setResourceName("src_resource");
+                expectRejected(fixture, task, false);
+                expectRejected(fixture, task, true);
+            }
+        }
+    }
+
+    @Test
+    public void disabledResourceChoiceRetainsNamesWithoutValidatingInactiveBinding() throws Exception
+    {
+        for (String resourceName : new String[] {null, "", " src_resource "})
+        {
+            Fixture fixture = new Fixture("MYSQL", "MYSQL");
+            ErDataTransfer task = fixture.task();
+            task.setExternalTableEnabled("0");
+            task.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+            task.setResourceName(resourceName);
+
+            fixture.service.insertErDataTransfer(task);
+
+            assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+            assertEquals(resourceName == null ? null : resourceName.trim(), fixture.saved.getResourceName());
+            assertEquals("src_mysql", fixture.saved.getCatalogName());
+            assertEquals(0, fixture.datasourceReads);
+        }
+    }
+
+    @Test
+    public void resourceSparseEditsReuseSavedNameAndPreserveOmittedFields() throws Exception
+    {
+        Fixture fixture = new Fixture("DM", "STARROCKS");
+        fixture.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+        fixture.oldTask.setResourceName("src_saved");
+        fixture.oldTask.setExternalTableEnabled("0");
+        ErDataTransfer patch = new ErDataTransfer();
+        patch.setTransferId(7L);
+        patch.setExternalTableEnabled("1");
+        fixture.service.updateErDataTransfer(patch);
+        assertEquals("1", fixture.saved.getExternalTableEnabled());
+        assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+        assertNull(fixture.saved.getResourceName());
+        assertNull(fixture.saved.getCatalogName());
+
+        fixture.oldTask.setExternalTableEnabled("1");
+        patch = new ErDataTransfer();
+        patch.setTransferId(7L);
+        patch.setResourceName(" src_renamed ");
+        fixture.service.updateErDataTransfer(patch);
+        assertEquals("src_renamed", fixture.saved.getResourceName());
+        assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+        assertNull(fixture.saved.getExternalTableEnabled());
+        assertNull(fixture.saved.getCatalogName());
+        assertNull(fixture.saved.getExternalTableThresholdWan());
+
+        fixture.saved = null;
+        patch = new ErDataTransfer();
+        patch.setTransferId(7L);
+        patch.setResourceName("");
+        expectRejected(fixture, patch, true);
+
+        fixture.datasourceReads = 0;
+        patch = new ErDataTransfer();
+        patch.setTransferId(7L);
+        patch.setSyncStatus("1");
+        patch.setExternalTableWindowUnit("DAY");
+        fixture.service.updateErDataTransfer(patch);
+        assertNull(fixture.saved.getResourceName());
+        assertNull(fixture.saved.getDirectImportMethod());
+        assertNull(fixture.saved.getExternalTableEnabled());
+        assertNull(fixture.saved.getCatalogName());
+        assertEquals(0, fixture.datasourceReads);
+
+        patch = new ErDataTransfer();
+        patch.setTransferId(7L);
+        patch.setExternalTableEnabled("0");
+        patch.setResourceName("");
+        fixture.service.updateErDataTransfer(patch);
+        assertEquals("0", fixture.saved.getExternalTableEnabled());
+        assertEquals("", fixture.saved.getResourceName());
+        assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+        assertNull(fixture.saved.getCatalogName());
+        assertEquals(0, fixture.datasourceReads);
+    }
+
+    @Test
+    public void changingResourceBindingDisablesInheritedRouteInsteadOfSelectingAnotherMethod() throws Exception
+    {
+        for (int changedField = 0; changedField < 3; changedField++)
+        {
+            Fixture fixture = new Fixture("KINGBASE", "STARROCKS");
+            fixture.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+            fixture.oldTask.setExternalTableEnabled("1");
+            fixture.oldTask.setResourceName("src_saved");
+            ErDatasource other = new ErDatasource();
+            other.setDatasourceType("DORIS");
+            fixture.sources.put(3L, other);
+            ErDataTransfer patch = new ErDataTransfer();
+            patch.setTransferId(7L);
+            if (changedField == 0) patch.setSourceDatasourceId(3L);
+            else if (changedField == 1) patch.setTargetDatasourceId(3L);
+            else patch.setSyncMode("1");
+
+            fixture.service.updateErDataTransfer(patch);
+
+            assertEquals("0", fixture.saved.getExternalTableEnabled());
+            assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+            assertNull(fixture.saved.getResourceName());
+            assertNull(fixture.saved.getCatalogName());
+            assertEquals("src_saved", fixture.oldTask.getResourceName());
+        }
+    }
+
+    @Test
+    public void switchingResourceAndExistingMethodsKeepsBothInactiveNames() throws Exception
+    {
+        for (String otherMethod : new String[] {ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG})
+        {
+            Fixture fixture = new Fixture("KINGBASE", "STARROCKS");
+            fixture.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+            fixture.oldTask.setExternalTableEnabled("1");
+            fixture.oldTask.setResourceName("src_saved");
+            ErDatasource mysql = new ErDatasource();
+            mysql.setDatasourceType("MYSQL");
+            fixture.sources.put(3L, mysql);
+            ErDataTransfer patch = new ErDataTransfer();
+            patch.setTransferId(7L);
+            patch.setSourceDatasourceId(3L);
+            patch.setDirectImportMethod(otherMethod);
+            fixture.service.updateErDataTransfer(patch);
+            assertEquals(otherMethod, fixture.saved.getDirectImportMethod());
+            assertNull(fixture.saved.getResourceName());
+            assertNull(fixture.saved.getCatalogName());
+
+            fixture.oldTask.setDirectImportMethod(otherMethod);
+            fixture.oldTask.setSourceDatasourceId(3L);
+            patch = new ErDataTransfer();
+            patch.setTransferId(7L);
+            patch.setSourceDatasourceId(1L);
+            patch.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+            fixture.service.updateErDataTransfer(patch);
+            assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+            assertNull(fixture.saved.getResourceName());
+            assertNull(fixture.saved.getCatalogName());
+        }
+    }
+
+    @Test
+    public void resourceNameDoesNotChangeLegacyInferenceOrOverwriteAnExplicitChoice() throws Exception
+    {
+        for (String catalog : new String[] {null, "src_catalog"})
+        {
+            ErDataTransfer legacy = new ErDataTransfer();
+            legacy.setCatalogName(catalog);
+            legacy.setResourceName("src_resource");
+            String expected = catalog == null ? ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE
+                    : ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG;
+            assertEquals(expected, legacy.resolveDirectImportMethod());
+            legacy.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+            assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, legacy.resolveDirectImportMethod());
+
+            Fixture fixture = new Fixture("MYSQL", "STARROCKS");
+            fixture.oldTask.setCatalogName(catalog);
+            fixture.oldTask.setExternalTableEnabled("0");
+            ErDataTransfer patch = new ErDataTransfer();
+            patch.setTransferId(7L);
+            patch.setResourceName("src_resource");
+            fixture.service.updateErDataTransfer(patch);
+            assertEquals(expected, fixture.saved.getDirectImportMethod());
+            assertEquals("src_resource", fixture.saved.getResourceName());
+            assertEquals(0, fixture.datasourceReads);
+        }
+    }
+
+    @Test
+    public void legacyExternalAliasIsSavedAsResourceAndStillRequiresItsOwnName() throws Exception
+    {
+        for (String sourceType : new String[] {"MYSQL", "TIDB", "STARROCKS", "KINGBASE", "DM", "POSTGRESQL", "ORACLE", "SQLSERVER"})
+        {
+            for (boolean update : new boolean[] {false, true})
+            {
+                Fixture fixture = new Fixture(sourceType, "STARROCKS");
+                ErDataTransfer task = fixture.task();
+                task.setExternalTableEnabled("1");
+                task.setDirectImportMethod(" EXTERNAL_TABLE ");
+                task.setResourceName(" src_resource ");
+                if (update) fixture.service.updateErDataTransfer(task);
+                else fixture.service.insertErDataTransfer(task);
+                assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+                assertEquals("src_resource", fixture.saved.getResourceName());
+                assertEquals("src_mysql", fixture.saved.getCatalogName());
+            }
+            for (String legacyMethod : new String[] {null, ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE})
+            {
+                Fixture fixture = new Fixture(sourceType, "STARROCKS");
+                fixture.oldTask.setCatalogName(null);
+                fixture.oldTask.setResourceName(null);
+                fixture.oldTask.setDirectImportMethod(legacyMethod);
+                ErDataTransfer task = fixture.task();
+                task.setCatalogName(null);
+                task.setResourceName(null);
+                task.setExternalTableEnabled("1");
+                task.setDirectImportMethod(legacyMethod);
+                expectRejected(fixture, task, false);
+                expectRejected(fixture, task, true);
+            }
+        }
+    }
+
+    @Test
+    public void disabledAndStatusOnlyLegacyEditsNeverInventAResourceNameOrEnableTheTask() throws Exception
+    {
+        Fixture fixture = new Fixture("MYSQL", "STARROCKS");
+        fixture.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+        fixture.oldTask.setCatalogName("src_retained");
+        fixture.oldTask.setResourceName(null);
+        fixture.oldTask.setExternalTableEnabled("0");
+        assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.oldTask.resolveDirectImportMethod());
+        ErDataTransfer patch = new ErDataTransfer();
+        patch.setTransferId(7L);
+        patch.setSyncStatus("1");
+        fixture.service.updateErDataTransfer(patch);
+        assertNull(fixture.saved.getDirectImportMethod());
+        assertNull(fixture.saved.getResourceName());
+        assertNull(fixture.saved.getExternalTableEnabled());
+        assertEquals(0, fixture.datasourceReads);
+
+        patch = new ErDataTransfer();
+        patch.setTransferId(7L);
+        patch.setExternalTableEnabled("0");
+        patch.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_EXTERNAL_TABLE);
+        fixture.service.updateErDataTransfer(patch);
+        assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+        assertEquals("0", fixture.saved.getExternalTableEnabled());
+        assertNull(fixture.saved.getResourceName());
+        assertEquals(0, fixture.datasourceReads);
+    }
+
+    @Test
+    public void newlySupportedResourceSourcesKeepExistingExplicitCatalogUntilRequestedOtherwise() throws Exception
+    {
+        for (String sourceType : new String[] {"POSTGRESQL", "ORACLE", "SQLSERVER"})
+        {
+            Fixture fixture = new Fixture(sourceType, "STARROCKS");
+            fixture.oldTask.setExternalTableEnabled("1");
+            fixture.oldTask.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG);
+            fixture.oldTask.setResourceName("src_saved");
+            ErDataTransfer patch = new ErDataTransfer();
+            patch.setTransferId(7L);
+            patch.setCatalogName(" src_catalog_kept ");
+
+            fixture.service.updateErDataTransfer(patch);
+
+            assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG, fixture.saved.getDirectImportMethod());
+            assertEquals("src_catalog_kept", fixture.saved.getCatalogName());
+            assertNull(fixture.saved.getResourceName());
+            assertNull(fixture.saved.getExternalTableEnabled());
+
+            patch = new ErDataTransfer();
+            patch.setTransferId(7L);
+            patch.setDirectImportMethod(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE);
+            fixture.service.updateErDataTransfer(patch);
+            assertEquals(ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE, fixture.saved.getDirectImportMethod());
+            assertNull(fixture.saved.getResourceName());
+            assertNull(fixture.saved.getCatalogName());
+            assertNull(fixture.saved.getExternalTableEnabled());
+        }
     }
 
     private String repeat(char value, int count)
@@ -947,6 +1371,7 @@ public class ErDataTransferExternalTableOptionsTest
             task.setTargetDatasourceId(2L);
             task.setSyncMode("0");
             task.setCatalogName("src_mysql");
+            task.setResourceName("src_resource");
             return task;
         }
 

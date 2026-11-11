@@ -34,6 +34,8 @@ public class TiDbTypeMapper implements DatabaseTypeMapper {
         initializeSqlServerMappings();
         initializePostgreSqlMappings();
         initializeOracleMappings();
+        mappingRules.put("KINGBASE", KingbaseTargetMappings.from(SOURCE_DB_TYPE, mappingRules.get("POSTGRESQL")));
+        mappingRules.put("DM", DmTargetMappings.rules(SOURCE_DB_TYPE));
     }
 
     @Override
@@ -235,8 +237,18 @@ public class TiDbTypeMapper implements DatabaseTypeMapper {
      */
     private void initializeStarRocksMappings() {
         List<TypeMappingRule> starrocksRules = new ArrayList<>();
+        String integerWidth = "(?:\\s*\\(\\s*\\d+\\s*\\))?";
+        String unsignedModifiers = "(?:\\s+UNSIGNED(?:\\s+ZEROFILL)?|(?:\\s+SIGNED)?\\s+ZEROFILL)";
 
         // ==================== 整数类型 ====================
+        starrocksRules.add(new TypeMappingRule("TINYINT" + integerWidth + unsignedModifiers, "SMALLINT", 5, false,
+                "TINYINT UNSIGNED/ZEROFILL -> SMALLINT"));
+        starrocksRules.add(new TypeMappingRule("(?:SMALLINT|MEDIUMINT)" + integerWidth + unsignedModifiers, "INT", 6, false,
+                "SMALLINT/MEDIUMINT UNSIGNED/ZEROFILL -> INT"));
+        starrocksRules.add(new TypeMappingRule("(?:INT|INTEGER)" + integerWidth + unsignedModifiers, "BIGINT", 7, false,
+                "INT/INTEGER UNSIGNED/ZEROFILL -> BIGINT"));
+        starrocksRules.add(new TypeMappingRule("BIGINT" + integerWidth + unsignedModifiers, "DECIMAL(20,0)", 8, false,
+                "BIGINT UNSIGNED/ZEROFILL -> DECIMAL(20,0)"));
         starrocksRules.add(new TypeMappingRule("TINYINT(?:\\(\\d+\\))?(?:\\s+UNSIGNED)?", "TINYINT", 10, false,
                 "TINYINT 兼容"));
         starrocksRules.add(new TypeMappingRule("SMALLINT(?:\\(\\d+\\))?(?:\\s+UNSIGNED)?", "SMALLINT", 11, false,
@@ -321,11 +333,16 @@ public class TiDbTypeMapper implements DatabaseTypeMapper {
                 "ENUM -> VARCHAR(255) (有损转换)"));
         starrocksRules.add(new TypeMappingRule("SET\\(.*\\)", "VARCHAR(1024)", 81, true,
                 "SET -> VARCHAR(1024) (有损转换)"));
-        starrocksRules.add(new TypeMappingRule("BIT\\(1\\)", "BOOLEAN", 82, false,
+        // BIT(n) 是无符号位串；BIT(8) 必须保留 0..255，BIT(64) 需要 LARGEINT。
+        starrocksRules.add(new TypeMappingRule("BIT(?:\\s*\\(\\s*1\\s*\\))?", "BOOLEAN", 82, false,
                 "BIT(1) -> BOOLEAN"));
-        starrocksRules.add(new TypeMappingRule("BIT\\((\\d+)\\)", "INT", 83, false,
-                "BIT(n) -> INT"));
-        starrocksRules.add(new TypeMappingRule("BOOL(?:EAN)?", "BOOLEAN", 84, false,
+        starrocksRules.add(new TypeMappingRule("BIT\\s*\\(\\s*(?:[2-9]|[12]\\d|3[01])\\s*\\)", "INT", 83, false,
+                "BIT(2..31) -> INT (保留无符号范围)"));
+        starrocksRules.add(new TypeMappingRule("BIT\\s*\\(\\s*(?:3[2-9]|[45]\\d|6[0-3])\\s*\\)", "BIGINT", 84, false,
+                "BIT(32..63) -> BIGINT (保留无符号范围)"));
+        starrocksRules.add(new TypeMappingRule("BIT\\s*\\(\\s*64\\s*\\)", "LARGEINT", 85, false,
+                "BIT(64) -> LARGEINT (保留无符号范围)"));
+        starrocksRules.add(new TypeMappingRule("BOOL(?:EAN)?", "BOOLEAN", 86, false,
                 "BOOLEAN 兼容"));
 
         // ==================== 通配符兜底规则 ====================

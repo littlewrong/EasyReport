@@ -75,6 +75,7 @@ public final class FirstSchemaSupport {
             columnCopy.setColumnType(column.getColumnType());
             columnCopy.setNullable(column.isNullable());
             columnCopy.setDefaultValue(column.getDefaultValue());
+            columnCopy.setDefaultValueLiteral(column.getDefaultValueLiteral());
             columnCopy.setAutoIncrement(column.isAutoIncrement());
             columnCopy.setComment(column.getComment());
             columnCopy.setOrdinalPosition(column.getOrdinalPosition());

@@ -7,6 +7,7 @@ import cn.easyreport.sync.domain.ErDatasource;
 import cn.easyreport.sync.ConnectorFactory;
 import cn.easyreport.sync.DataSourceConnector;
 import cn.easyreport.sync.oracle.OracleConnector;
+import cn.easyreport.sync.dm.DmConnector;
 import cn.easyreport.sync.dialect.ExtendedDialectFactory;
 import cn.easyreport.sync.dialect.SchemaDialect;
 import cn.easyreport.sync.extractor.ExtendedExtractorFactory;
@@ -264,6 +265,10 @@ public class SchemaSyncExecutor {
         log.info("[createDatabaseIfNeeded] Attempting to create database '{}' for database type: {}", databaseName, dbType);
 
         try {
+            if ("DM".equalsIgnoreCase(dbType) && target instanceof DmConnector) {
+                ((DmConnector) target).ensureSchemaExists(databaseName);
+                return;
+            }
             // Oracle 特殊处理：通过 OracleConnector.ensureSchemaExists() 创建 Schema(User)
             if ("ORACLE".equalsIgnoreCase(dbType) && target instanceof OracleConnector) {
                 ((OracleConnector) target).ensureSchemaExists(databaseName);
