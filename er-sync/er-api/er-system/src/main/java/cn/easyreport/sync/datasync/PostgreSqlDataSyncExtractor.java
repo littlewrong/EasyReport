@@ -2,7 +2,10 @@ package cn.easyreport.sync.datasync;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * PostgreSQL数据同步提取器
@@ -20,6 +23,34 @@ public class PostgreSqlDataSyncExtractor implements DataSyncExtractor {
             }
         }
         return tables;
+    }
+
+    @Override
+    public List<String[]> listTableSpecs(Connection conn, List<String> schemaPatterns,
+                                         List<String> tablePatterns) throws SQLException {
+        DatabaseMetaData metadata = conn.getMetaData();
+        List<String> schemas = schemaPatterns.isEmpty() ? Collections.singletonList("public") : schemaPatterns;
+        List<String> tables = tablePatterns.isEmpty() ? Collections.singletonList("%") : tablePatterns;
+        Map<String, String[]> result = new LinkedHashMap<>();
+        for (String schema : schemas) {
+            String pattern = schema == null || schema.isEmpty() ? "public" : schema;
+            for (String table : tables) {
+                String tablePattern = table == null || table.isEmpty() ? "%" : table;
+                try (ResultSet rows = metadata.getTables(null, pattern, tablePattern, new String[]{"TABLE"})) {
+                    while (rows.next()) {
+                        String actualSchema = rows.getString("TABLE_SCHEM");
+                        String actualTable = rows.getString("TABLE_NAME");
+                        if (actualSchema == null || actualSchema.trim().isEmpty()) {
+                            throw new SQLException("PostgreSQL table metadata did not return TABLE_SCHEM for " + actualTable);
+                        }
+                        if ("pg_catalog".equalsIgnoreCase(actualSchema)
+                                || "information_schema".equalsIgnoreCase(actualSchema)) continue;
+                        result.put(actualSchema + '\0' + actualTable, new String[]{actualSchema, actualTable});
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(result.values());
     }
 
     @Override

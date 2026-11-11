@@ -180,6 +180,40 @@ public class StarRocksConnectorTest {
         assertTrue(state.executedSql.isEmpty());
     }
 
+    @Test
+    public void databaseNameComesFromTheLiveCatalogRatherThanDatasourceMetadata() throws Exception {
+        ConnectionState state = new ConnectionState();
+        state.catalog = "actual_warehouse";
+        open(state);
+        assertEquals("actual_warehouse", connector.getDatabaseName());
+        state.catalog = null;
+        assertNull("A missing live catalog must not fall back to a stale configured database", connector.getDatabaseName());
+    }
+
+    @Test
+    public void databaseNameRestoresSuccessfulUseAfterReconnect() throws Exception {
+        ConnectionState stale = new ConnectionState();
+        ConnectionState replacement = new ConnectionState();
+        open(stale, replacement);
+        connector.execute("USE `chosen_warehouse`");
+        stale.valid = false;
+        assertEquals("chosen_warehouse", connector.getDatabaseName());
+        assertEquals(Collections.singletonList("USE `chosen_warehouse`"), replacement.executedSql);
+        assertEquals(2, driver.openCount);
+    }
+
+    @Test
+    public void databaseNameRetriesAConnectionFailureWithoutExposingDriverDiagnostics() throws Exception {
+        ConnectionState stale = new ConnectionState();
+        stale.catalogFailure = new SQLException("private-driver-diagnostic", "08003");
+        ConnectionState replacement = new ConnectionState();
+        replacement.catalog = "replacement_warehouse";
+        open(stale, replacement);
+        assertEquals("replacement_warehouse", connector.getDatabaseName());
+        assertEquals(1, stale.closeCount);
+        assertEquals(2, driver.openCount);
+    }
+
     private void assertValidationReconnects(ConnectionState stale) throws Exception {
         ConnectionState replacement = new ConnectionState();
         open(stale, replacement);
@@ -200,6 +234,7 @@ public class StarRocksConnectorTest {
         datasource.setJdbcUrl(driver.url);
         datasource.setUsername("test");
         datasource.setPassword("test");
+        datasource.setDatabaseName("stale_configuration");
         connector = new StarRocksConnector(datasource);
     }
 
@@ -279,6 +314,8 @@ public class StarRocksConnectorTest {
         SQLException validationFailure;
         SQLException readFailure;
         SQLException executeFailure;
+        SQLException catalogFailure;
+        String catalog = "initial_warehouse";
         final List<Integer> validationTimeouts = new ArrayList<>();
         final List<String> executedSql = new ArrayList<>();
         final List<String> events = new ArrayList<>();
@@ -294,6 +331,9 @@ public class StarRocksConnectorTest {
                         return valid;
                     case "close": closed = true; closeCount++; return null;
                     case "getMetaData": return metadata();
+                    case "getCatalog":
+                        if (catalogFailure != null) throw catalogFailure;
+                        return catalog;
                     case "createStatement": return statement();
                     default: throw new UnsupportedOperationException(method.getName());
                 }
@@ -317,6 +357,10 @@ public class StarRocksConnectorTest {
                         events.add("execute");
                         executedSql.add((String) args[0]);
                         if (executeFailure != null) throw executeFailure;
+                        String sql = (String) args[0];
+                        if (sql.startsWith("USE `") && sql.endsWith("`")) {
+                            catalog = sql.substring("USE `".length(), sql.length() - 1).replace("``", "`");
+                        }
                         return false;
                     case "executeQuery": events.add("query"); return read();
                     case "close": return null;

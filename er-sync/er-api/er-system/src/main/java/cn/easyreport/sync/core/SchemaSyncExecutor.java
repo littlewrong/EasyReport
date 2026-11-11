@@ -101,7 +101,7 @@ public class SchemaSyncExecutor {
                     result.getPendingTables().add(formatName(actualSchema, tableMeta.getName()));
                 }
 
-                // 按实际 schema 分组，每个源库对应创建一个目标库（1:1 复制）
+                // 架构同步按实际源库/模式逐一创建目标命名空间。
                 java.util.LinkedHashMap<String, List<TableMeta>> tablesBySchema = new java.util.LinkedHashMap<>();
                 for (TableMeta t : tables) {
                     String sourceScope = FirstSchemaSupport.scopeOf(t, sourceDs.getDatasourceType());
@@ -113,7 +113,6 @@ public class SchemaSyncExecutor {
                     String actualSchema = entry.getKey();
                     List<TableMeta> schemaTables = entry.getValue();
 
-                    // 为当前实际库创建目标配置和目标库
                     TargetConfig schemaTargetConfig = TargetConfig.create(
                         actualSchema,
                         targetDs.getDatasourceType(),

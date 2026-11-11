@@ -560,7 +560,7 @@ public abstract class DataSyncExecutor {
         tr.log = new ErDataTransferLog();
         tr.log.setTransferId(task.getTransferId());
         tr.log.setSourceTable(schema != null && !schema.isEmpty() ? (schema + "." + table) : table);
-        // 目标表：若显式指定 schema.table 则使用；否则沿用源 schema（规范化大小写）
+        // 显式目标表优先；默认按实际源库/模式定位，与架构同步一致。
         String targetSchema = null;
         String targetTableName;
         if (task.getTargetTable() != null && !task.getTargetTable().isEmpty()) {

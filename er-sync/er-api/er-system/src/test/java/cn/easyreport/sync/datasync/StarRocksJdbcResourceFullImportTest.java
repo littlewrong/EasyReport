@@ -48,7 +48,7 @@ public class StarRocksJdbcResourceFullImportTest {
             assertTrue(ddl, ddl.contains("ENGINE=JDBC"));
             assertTrue(ddl, ddl.contains("\"resource\"=\"jdbc_prebuilt\""));
             assertTrue(ddl, ddl.toLowerCase(java.util.Locale.ROOT).contains("rf_user"));
-            assertTrue(ddl, ddl.toLowerCase(java.util.Locale.ROOT).contains("`id` bigint"));
+            assertTrue(ddl, ddl.toLowerCase(java.util.Locale.ROOT).contains("KINGBASE".equals(sourceType) ? "`er_c0` bigint" : "`id` bigint"));
             assertTrue(f.sourceSql.toString(), f.sourceSql.stream().anyMatch(sql -> sql.startsWith("SELECT ")
                     && sql.toLowerCase(java.util.Locale.ROOT).contains("rf_user") && sql.endsWith("WHERE 1=0")));
             assertEquals(1, f.inserts.size());
@@ -367,9 +367,343 @@ public class StarRocksJdbcResourceFullImportTest {
             try (StarRocksJdbcResourceFullImport importer = f.prepare(null, 50, "YEAR")) { importer.execute(); }
             assertTrue(f.targetSql.contains(StarRocksExternalFullImport.JSON_CONVERSION_PROBE_SQL));
             assertTrue(f.inserts.get(0), f.inserts.get(0).contains(StarRocksExternalFullImport.jsonProjection("`Name`")));
+            assertTrue("Only Kingbase receives the extra JSON semantic scan", f.jsonComparisonFetchSizes.isEmpty());
             assertFalse(f.targetSql.stream().anyMatch(sql -> sql.contains("ENGINE=MYSQL")));
             f.assertUserResourceUntouched();
         }
+    }
+
+    @Test
+    public void kingbaseJsonbDerivedScanUsesAliasesAndWritesOriginalTargetColumns() throws Exception {
+        Fixture f = new Fixture("KINGBASE");
+        f.kingbaseTextNativeType = "JSONB";
+        f.jsonColumn = true;
+
+        Object result = f.runFullSync("time_stamp", 50, "YEAR");
+
+        assertEquals(Long.valueOf(7), ((ErDataTransferLog) field(result, "log")).getSuccessCount());
+        String ddl = f.targetSql.stream().filter(sql -> sql.startsWith("CREATE EXTERNAL TABLE")).findFirst().get();
+        assertTrue(ddl, ddl.contains("`er_c0` BIGINT NULL"));
+        assertTrue(ddl, ddl.contains("`er_c1` VARCHAR(1048576) NULL"));
+        assertTrue(ddl, ddl.contains("`er_c2` DATETIME NULL"));
+        assertFalse(ddl, ddl.contains("`Name`"));
+        assertTrue(f.sourceSql.toString(), f.sourceSql.stream().anyMatch(sql -> sql.startsWith("SELECT er_c0")
+                && sql.contains("CAST(\"Name\" AS TEXT) AS er_c1") && sql.endsWith("WHERE 1=0")));
+        assertTrue(f.targetSql.contains(StarRocksExternalFullImport.JSON_CONVERSION_PROBE_SQL));
+        String insert = f.inserts.get(0);
+        assertTrue(insert, insert.startsWith("INSERT INTO `warehouse`.`users` (`Id`, `Name`, `time_stamp`) SELECT `er_c0`, "));
+        assertTrue(insert, insert.contains(StarRocksExternalFullImport.jsonProjection("`er_c1`")));
+        assertTrue(insert, insert.endsWith("WHERE `er_c2` IS NOT NULL"));
+        int clear = indexOf(f.targetSql, "TRUNCATE TABLE");
+        assertTrue(f.targetSql.subList(0, clear).stream().anyMatch(sql -> sql.startsWith("SELECT MAX(LENGTH(`er_c1`))")
+                && sql.endsWith("WHERE `er_c2` IS NOT NULL")));
+        assertTrue(f.targetSql.subList(0, clear).stream().anyMatch(sql -> sql.startsWith("EXPLAIN INSERT")));
+        assertEquals(1, f.dropCount());
+        f.assertUserResourceUntouched();
+    }
+
+    @Test
+    public void kingbaseJsonComparisonStreamsEveryEligibleValueBeforeClearing() throws Exception {
+        Fixture f = new Fixture("KINGBASE");
+        f.kingbaseTextNativeType = "JSONB";
+        f.jsonColumn = true;
+        f.jsonComparisons = Arrays.asList(
+                new String[] {null, null},
+                new String[] {"null", "null"},
+                new String[] {"123", "123.0"},
+                new String[] {"\"123\"", "\"123\""},
+                new String[] {"true", "true"},
+                new String[] {"{\"n\":1,\"items\":[true,\"2\",null]}", "{\"items\":[true,\"2\",null],\"n\":1.0}"});
+
+        f.runFullSync("time_stamp", 50, "YEAR");
+
+        String comparison = f.targetSql.stream().filter(sql -> sql.startsWith("SELECT `er_c1`, JSON_STRING(")).findFirst().get();
+        assertTrue(comparison, comparison.contains("JSON_STRING(" + StarRocksExternalFullImport.jsonProjection("`er_c1`") + ")"));
+        assertTrue(comparison, comparison.endsWith("WHERE `er_c2` IS NOT NULL"));
+        assertFalse(comparison, comparison.contains(" LIMIT "));
+        assertEquals(Collections.singletonList(Integer.MIN_VALUE), f.jsonComparisonFetchSizes);
+        int comparisonIndex = f.targetSql.indexOf(comparison);
+        assertTrue(comparisonIndex > indexOf(f.targetSql, "CREATE EXTERNAL TABLE"));
+        assertTrue(comparisonIndex < indexOf(f.targetSql, "TRUNCATE TABLE"));
+        assertEquals(f.jsonComparisons.size(), f.jsonComparisonRowsRead);
+        assertEquals(1, f.inserts.size());
+        assertEquals(1, f.dropCount());
+        f.assertUserResourceUntouched();
+    }
+
+    @Test
+    public void kingbaseJsonRoundingOrTypeChangesStopBeforeClearEvenAfterValidRows() throws Exception {
+        List<String[]> changedValues = Arrays.asList(
+                new String[] {"12345678901234567890.1234567890123456789", "1.2345678901234567e19"},
+                new String[] {"{\"amount\":1.0000000000000000000001}", "{\"amount\":1}"},
+                new String[] {"\"123\"", "123"},
+                new String[] {null, "null"},
+                new String[] {"null", null});
+        for (String[] changed : changedValues) {
+            Fixture f = new Fixture("KINGBASE");
+            f.kingbaseTextNativeType = "JSONB";
+            f.jsonColumn = true;
+            f.jsonComparisons = Arrays.asList(new String[] {"{\"ok\":1}", "{\"ok\":1}"}, changed);
+            try { f.runFullSync("time_stamp", 50, "YEAR"); fail("Every JSON row must retain its value before target clear"); }
+            catch (IllegalArgumentException expected) {
+                assertTrue(expected.getMessage(), expected.getMessage().contains("Name"));
+                assertTrue(expected.getMessage().contains("文本列"));
+                assertTrue(expected.getMessage().contains("尚未清空目标表"));
+                assertFalse(expected.getMessage().contains("er_c1"));
+            }
+            assertEquals(2, f.jsonComparisonRowsRead);
+            assertEquals(-1, indexOf(f.targetSql, "TRUNCATE TABLE"));
+            assertTrue(f.inserts.isEmpty());
+            assertTrue(f.checkpoints.isEmpty());
+            assertEquals(1, f.dropCount());
+            f.assertUserResourceUntouched();
+        }
+    }
+
+    @Test
+    public void kingbaseJsonTextDestinationKeepsRawTextWithoutSemanticScan() throws Exception {
+        Fixture f = new Fixture("KINGBASE");
+        f.kingbaseTextNativeType = "JSONB";
+        f.jsonColumn = true;
+        f.jsonTargetType = "VARCHAR(200000)";
+        f.jsonComparisons = Collections.singletonList(new String[] {"1.0000000000000000000001", "1"});
+        f.runFullSync("time_stamp", 50, "YEAR");
+        assertTrue(f.jsonComparisonFetchSizes.isEmpty());
+        assertEquals(0, f.jsonComparisonRowsRead);
+        assertFalse(f.targetSql.stream().anyMatch(sql -> sql.startsWith("SELECT `er_c1`, JSON_STRING(")));
+        assertFalse(f.inserts.get(0).contains("PARSE_JSON"));
+        assertTrue(f.inserts.get(0).contains("SELECT `er_c0`, `er_c1`, `er_c2` FROM"));
+    }
+
+    @Test
+    public void stopDuringKingbaseJsonStreamingPreflightStillDropsOwnedTableWithoutClearing() throws Exception {
+        Fixture f = new Fixture("KINGBASE");
+        f.kingbaseTextNativeType = "JSONB";
+        f.jsonColumn = true;
+        f.jsonComparisons = Arrays.asList(new String[] {"1", "1"}, new String[] {"2", "2"});
+        f.stopOnJsonComparisonRow = 1;
+        try { f.prepare("time_stamp", 50, "YEAR"); fail("Streaming JSON validation must observe cancellation"); }
+        catch (DataSyncCancellation.SyncStoppedException expected) { }
+        assertEquals(1, f.jsonComparisonRowsRead);
+        assertEquals(-1, indexOf(f.targetSql, "TRUNCATE TABLE"));
+        assertTrue(f.inserts.isEmpty());
+        assertEquals(1, f.dropCount());
+        f.assertUserResourceUntouched();
+    }
+
+    @Test
+    public void kingbaseByteaDerivedHexUsesTextCapacityAndOriginalDestinationNames() throws Exception {
+        Fixture f = new Fixture("KINGBASE");
+        f.kingbaseTextNativeType = "BYTEA";
+        f.targetTextType = "VARCHAR(4)";
+        f.actualTextBytes = 4L;
+        f.runFullSync("time_stamp", 50, "YEAR");
+        assertTrue(f.sourceSql.toString(), f.sourceSql.stream().anyMatch(sql -> sql.startsWith("SELECT er_c0")
+                && sql.contains("UPPER(ENCODE(\"Name\", 'hex')) AS er_c1")));
+        assertTrue(f.inserts.get(0), f.inserts.get(0).contains("(`Id`, `Name`, `time_stamp`) SELECT `er_c0`, `er_c1`, `er_c2` FROM"));
+        assertFalse(f.targetSql.contains(StarRocksExternalFullImport.JSON_CONVERSION_PROBE_SQL));
+        assertFalse(f.targetSql.contains(StarRocksJdbcResourceFullImport.BINARY_CONVERSION_PROBE_SQL));
+        assertFalse(f.inserts.get(0).contains("TO_BINARY"));
+
+        for (String nativeType : Arrays.asList("JSONB", "BYTEA")) {
+            Fixture narrow = new Fixture("KINGBASE");
+            narrow.kingbaseTextNativeType = nativeType;
+            narrow.jsonColumn = "JSONB".equals(nativeType);
+            narrow.jsonTargetType = "VARCHAR(3)";
+            narrow.targetTextType = "VARCHAR(3)";
+            narrow.actualTextBytes = 4L;
+            try { narrow.runFullSync("time_stamp", 50, "YEAR"); fail("Aliased text must fit the original destination column"); }
+            catch (IllegalArgumentException expected) {
+                assertTrue(expected.getMessage(), expected.getMessage().contains("Name"));
+                assertTrue(expected.getMessage().contains("超出目标字段容量"));
+                assertFalse(expected.getMessage().contains("er_c1"));
+            }
+            assertEquals(-1, indexOf(narrow.targetSql, "TRUNCATE TABLE"));
+            assertTrue(narrow.inserts.isEmpty());
+            assertTrue(narrow.checkpoints.isEmpty());
+            assertEquals(1, narrow.dropCount());
+            narrow.assertUserResourceUntouched();
+        }
+    }
+
+    @Test
+    public void binaryHexDecodesIntoExistingBinaryTargetsWithRoundTripAndCapacityGuards() throws Exception {
+        for (String type : Arrays.asList("BINARY", "VARBINARY", "BINARY(16)", "VARBINARY(16)")) {
+            Fixture f = new Fixture("KINGBASE");
+            f.kingbaseTextNativeType = "BYTEA";
+            f.targetTextType = type;
+            f.actualTextBytes = 32L;
+            f.actualBinaryBytes = 16L;
+            f.runFullSync("time_stamp", 50, "YEAR");
+            String insert = f.inserts.get(0);
+            long encodedCapacity = type.contains("(") ? 32 : 2_097_152;
+            assertTrue(insert, insert.contains("TO_BINARY(`er_c1`, 'hex')"));
+            assertTrue(insert, insert.contains("IF(ASSERT_TRUE(`er_c1` IS NULL OR (LENGTH(`er_c1`) <= " + encodedCapacity));
+            assertTrue(insert, insert.contains("IFNULL(HEX(TO_BINARY(`er_c1`, 'hex')) = UPPER(`er_c1`), FALSE)"));
+            assertFalse(insert, insert.contains("UNHEX("));
+            assertFalse(insert, insert.contains("AS VARBINARY"));
+            assertFalse(insert, insert.contains("AS BINARY"));
+            assertFalse(f.targetSql.stream().anyMatch(sql -> sql.startsWith("ALTER")));
+            String aggregate = f.targetSql.stream().filter(sql -> sql.startsWith("SELECT MAX(LENGTH(HEX(IF(ASSERT_TRUE(")).findFirst().get();
+            assertFalse(aggregate, aggregate.contains(" LIMIT "));
+            assertTrue(aggregate, aggregate.endsWith("WHERE `er_c2` IS NOT NULL"));
+            assertTrue(f.targetSql.indexOf(aggregate) < indexOf(f.targetSql, "TRUNCATE TABLE"));
+            assertTrue(f.targetSql.indexOf(StarRocksJdbcResourceFullImport.BINARY_CONVERSION_PROBE_SQL)
+                    < indexOf(f.targetSql, "CREATE EXTERNAL TABLE"));
+            assertEquals(1, f.inserts.size());
+            assertEquals(1, f.dropCount());
+            f.assertUserResourceUntouched();
+        }
+    }
+
+    @Test
+    public void binaryCapacityUsesDecodedBytesAndStillHonorsTheHexChannelLimit() throws Exception {
+        Fixture overflow = new Fixture("KINGBASE");
+        overflow.kingbaseTextNativeType = "BYTEA";
+        overflow.targetTextType = "VARBINARY(16)";
+        overflow.actualTextBytes = 34L;
+        overflow.expectPreclearFailure("time_stamp", "解码后超出目标字段容量（16 字节）");
+        assertTrue(overflow.inserts.isEmpty());
+        assertEquals(1, overflow.dropCount());
+
+        Fixture channel = new Fixture("KINGBASE");
+        channel.kingbaseTextNativeType = "BYTEA";
+        channel.targetTextType = "VARBINARY";
+        channel.actualTextBytes = StarRocksExternalFullImport.MAX_JSON_TEXT_BYTES + 2L;
+        channel.expectPreclearFailure("time_stamp", "超出外表通道容量");
+        assertTrue(channel.inserts.isEmpty());
+        assertEquals(1, channel.dropCount());
+    }
+
+    @Test
+    public void binaryGuardScansLaterRowsAndKeepsDriverErrorsSafeBeforeClear() throws Exception {
+        for (String invalidHex : Arrays.asList("GG", "F", "00 FF")) {
+            Fixture f = new Fixture("KINGBASE");
+            f.kingbaseTextNativeType = "BYTEA";
+            f.targetTextType = "VARBINARY(16)";
+            f.actualTextBytes = (long) invalidHex.length();
+            f.binaryGuardFailure = new SQLException("private-binary-value-" + invalidHex, "HY000", 712);
+            try { f.runFullSync("time_stamp", 50, "YEAR"); fail("A later invalid HEX row must fail before clear"); }
+            catch (SQLException expected) {
+                assertTrue(expected.getMessage().contains("实际读取预检失败"));
+                assertFalse(expected.getMessage().contains("private-binary-value"));
+                assertNull(expected.getCause());
+            }
+            assertTrue(f.targetSql.stream().anyMatch(sql -> sql.startsWith("SELECT `er_c0`, IF(ASSERT_TRUE(")));
+            assertTrue(f.targetSql.stream().anyMatch(sql -> sql.startsWith("SELECT MAX(LENGTH(HEX(IF(ASSERT_TRUE(")));
+            assertEquals(-1, indexOf(f.targetSql, "TRUNCATE TABLE"));
+            assertTrue(f.inserts.isEmpty());
+            assertTrue(f.checkpoints.isEmpty());
+            assertEquals(1, f.dropCount());
+            f.assertUserResourceUntouched();
+        }
+    }
+
+    @Test
+    public void binaryTargetsPreserveNullAndEmptyAndVerifyDecoderSemanticsBeforeCreatingTable() throws Exception {
+        for (Long bytes : Arrays.asList(null, 0L)) {
+            Fixture f = new Fixture("KINGBASE");
+            f.kingbaseTextNativeType = "BYTEA";
+            f.targetTextType = "BINARY(16)";
+            f.actualTextBytes = bytes;
+            f.actualBinaryBytes = bytes;
+            f.runFullSync("time_stamp", 50, "YEAR");
+            assertEquals(1, f.inserts.size());
+            assertTrue(f.inserts.get(0).contains("`er_c1` IS NULL OR"));
+            assertEquals(1, f.dropCount());
+        }
+        for (String broken : Arrays.asList("hex", "empty", "null")) {
+            Fixture f = new Fixture("KINGBASE");
+            f.kingbaseTextNativeType = "BYTEA";
+            f.targetTextType = "VARBINARY(16)";
+            f.brokenBinaryDecoderSemantic = broken;
+            f.expectPreclearFailure("time_stamp", "TO_BINARY 未保留");
+            assertEquals(0, f.dropCount());
+            assertFalse(f.targetSql.stream().anyMatch(sql -> sql.startsWith("CREATE EXTERNAL TABLE")));
+        }
+    }
+
+    @Test
+    public void binaryTargetsRejectInvalidCapacitiesAndNonBinarySourcesBeforeCreatingTable() throws Exception {
+        for (String type : Arrays.asList("VARBINARY(0)", "BINARY(1048577)", "VARBINARY(999999999999999999999)", "BINARY(-1)")) {
+            Fixture f = new Fixture("KINGBASE");
+            f.kingbaseTextNativeType = "BYTEA";
+            f.targetTextType = type;
+            f.expectPreclearFailure(null, "目标二进制字段容量无效");
+            assertEquals(0, f.dropCount());
+        }
+        for (String source : Arrays.asList("text", "JSONB", "TIME(6)")) {
+            Fixture f = new Fixture("KINGBASE");
+            if (!"text".equals(source)) f.kingbaseTextNativeType = source;
+            f.jsonColumn = "JSONB".equals(source);
+            f.jsonTargetType = "VARBINARY(16)";
+            f.targetTextType = "VARBINARY(16)";
+            f.expectPreclearFailure(null, "文本列");
+            assertEquals(0, f.dropCount());
+        }
+    }
+
+    @Test
+    public void kingbaseTimeUsesExistingDriverTextProjectionAndValidatesDestinationCapacity() throws Exception {
+        Fixture f = new Fixture("KINGBASE");
+        f.kingbaseTextNativeType = "TIME(6)";
+        f.targetTextType = "VARCHAR(40)";
+        f.targetSampleText = "23:59:59.123456";
+        f.actualTextBytes = (long) f.targetSampleText.length();
+        f.runFullSync("time_stamp", 50, "YEAR");
+        assertEquals("com.kingbase8.Driver", f.properties.get("driver_class"));
+        assertTrue(f.sourceSql.toString(), f.sourceSql.stream().anyMatch(sql -> sql.startsWith("SELECT er_c0")
+                && sql.contains("CAST(\"Name\" AS TEXT) AS er_c1")));
+        assertTrue(f.inserts.get(0).contains("SELECT `er_c0`, `er_c1`, `er_c2` FROM"));
+        assertFalse(f.inserts.get(0).contains("TO_BINARY"));
+        assertFalse(f.targetSql.contains(StarRocksJdbcResourceFullImport.BINARY_CONVERSION_PROBE_SQL));
+
+        Fixture narrow = new Fixture("KINGBASE");
+        narrow.kingbaseTextNativeType = "TIME(6)";
+        narrow.targetTextType = "VARCHAR(8)";
+        narrow.actualTextBytes = 15L;
+        narrow.expectPreclearFailure("time_stamp", "超出目标字段容量");
+        assertEquals(1, narrow.dropCount());
+        assertTrue(narrow.inserts.isEmpty());
+    }
+
+    @Test
+    public void kingbaseJsonbSemanticOrAliasScanFailuresDoNotClearDestination() throws Exception {
+        Fixture semantics = new Fixture("KINGBASE");
+        semantics.kingbaseTextNativeType = "JSONB";
+        semantics.jsonColumn = true;
+        semantics.jsonProbeValid = false;
+        semantics.expectPreclearFailure("time_stamp", "JSON 导入表达式未保留");
+        assertEquals(0, semantics.dropCount());
+
+        Fixture scan = new Fixture("KINGBASE");
+        scan.kingbaseTextNativeType = "JSONB";
+        scan.jsonColumn = true;
+        scan.probeFailure = new SQLException("private-driver-alias-syntax", "42601", 0);
+        try { scan.runFullSync("time_stamp", 50, "YEAR"); fail("The actual Resource read must pass before clearing"); }
+        catch (SQLException expected) {
+            assertEquals("42601", expected.getSQLState());
+            assertTrue(expected.getMessage().contains("实际读取预检失败"));
+            assertFalse(expected.getMessage().contains("private-driver"));
+        }
+        assertEquals(-1, indexOf(scan.targetSql, "TRUNCATE TABLE"));
+        assertTrue(scan.inserts.isEmpty());
+        assertTrue(scan.checkpoints.isEmpty());
+        assertEquals(1, scan.dropCount());
+        scan.assertUserResourceUntouched();
+    }
+
+    @Test
+    public void kingbaseIntegerRangeGuardsReferenceScanAliasAndKeepLogicalTargetColumn() throws Exception {
+        Fixture f = new Fixture("KINGBASE");
+        f.targetIdType = "TINYINT";
+        f.runFullSync("time_stamp", 50, "YEAR");
+        assertTrue(f.targetSql.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(`er_c0`)")
+                && sql.contains("MIN(CAST(`er_c0` AS LARGEINT))")));
+        String insert = f.inserts.get(0);
+        assertTrue(insert, insert.startsWith("INSERT INTO `warehouse`.`users` (`Id`, `Name`, `time_stamp`)"));
+        assertTrue(insert, insert.contains("assert_true(`er_c0` IS NULL OR"));
+        assertFalse(insert, insert.contains("CAST(`Id` AS LARGEINT)"));
     }
 
     @Test
@@ -599,7 +933,7 @@ public class StarRocksJdbcResourceFullImportTest {
         ascii.actualTextBytes = 36L;
         ascii.targetTextType = "VARCHAR(36)";
         try (StarRocksJdbcResourceFullImport ignored = ascii.prepare(null, 50, "YEAR")) { }
-        assertTrue(ascii.targetSql.stream().anyMatch(sql -> sql.startsWith("SELECT MAX(LENGTH(`Name`))")));
+        assertTrue(ascii.targetSql.stream().anyMatch(sql -> sql.startsWith("SELECT MAX(LENGTH(`er_c1`))")));
         Fixture chinese = new Fixture("DM");
         chinese.textBytes = 36 * 4;
         chinese.actualTextBytes = (long) String.join("", Collections.nCopies(36, "中"))
@@ -757,6 +1091,15 @@ public class StarRocksJdbcResourceFullImportTest {
         boolean largeIntegerText;
         boolean unsignedTinyint;
         String compatibleTextNativeType;
+        String kingbaseTextNativeType;
+        List<String[]> jsonComparisons = Collections.singletonList(new String[] {"{\"small\":1}", "{\"small\":1}"});
+        final List<Integer> jsonComparisonFetchSizes = new ArrayList<>();
+        int jsonComparisonRowsRead;
+        int stopOnJsonComparisonRow = -1;
+        Long actualBinaryBytes;
+        String brokenBinaryDecoderSemantic;
+        SQLException binaryGuardFailure;
+        String targetSampleText = "verified";
         int unsignedBitWidth;
         String actualIntegerMin = "0";
         String actualIntegerMax = "127";
@@ -911,9 +1254,11 @@ public class StarRocksJdbcResourceFullImportTest {
                             }
                             return rows(fields);
                         }
-                        if (sql.endsWith("WHERE 1=0")) return sourceMetadataRows();
-                        if (sql.startsWith("SELECT COUNT(*)") || sql.startsWith("SELECT COUNT_BIG(*)")) return rows(Collections.singletonList(indexed(sourceCount,
-                                sourceCount == 0 ? null : textBytes)));
+                        if (sql.endsWith("WHERE 1=0")) return sourceMetadataRows(sql.startsWith("SELECT er_c"));
+                        if (sql.startsWith("SELECT COUNT(*)") || sql.startsWith("SELECT COUNT_BIG(*)")) return rows(Collections.singletonList(
+                                "BYTEA".equals(kingbaseTextNativeType)
+                                        ? indexed(sourceCount, sourceCount == 0 ? null : textBytes, 0L)
+                                        : indexed(sourceCount, sourceCount == 0 ? null : textBytes)));
                         if (sql.startsWith("SELECT MIN(")) return rows(Collections.singletonList(
                                 "ORACLE".equals(datasource.getDatasourceType())
                                         ? indexed(min, max, min == null ? null : min.toString(), max == null ? null : max.toString())
@@ -929,27 +1274,33 @@ public class StarRocksJdbcResourceFullImportTest {
             });
         }
 
-        ResultSet sourceMetadataRows() {
+        ResultSet sourceMetadataRows(boolean scanProjection) {
             return proxy(ResultSet.class, (method, args) -> {
                 if (method.getName().equals("getMetaData")) return proxy(ResultSetMetaData.class, (call, values) -> {
                     if (call.getName().equals("getColumnCount")) return 3;
                     int index = values != null && values.length > 0 && values[0] instanceof Integer ? (Integer) values[0] : 1;
+                    boolean kingbaseTime = kingbaseTextNativeType != null && kingbaseTextNativeType.startsWith("TIME");
                     switch (call.getName()) {
                         case "getColumnType": return index == 1 ? (unsignedBitWidth > 0 ? Types.BIT : unsignedTinyint ? Types.TINYINT : largeIntegerText ? Types.VARCHAR : Types.BIGINT)
-                                : index == 2 ? (compatibleTextNativeType != null
+                                : index == 2 ? (kingbaseTextNativeType != null ? scanProjection ? Types.LONGVARCHAR
+                                        : kingbaseTime ? Types.TIME : "BYTEA".equals(kingbaseTextNativeType) ? Types.BINARY : Types.OTHER
+                                        : compatibleTextNativeType != null
                                         ? compatibleTextNativeType.startsWith("TIME") ? Types.TIME : Types.VARBINARY
                                         : jsonColumn ? Types.LONGVARCHAR : Types.VARCHAR) : Types.TIMESTAMP;
                         case "getColumnTypeName": return index == 1 ? (unsignedBitWidth > 0 ? "BIT" : unsignedTinyint ? "TINYINT UNSIGNED" : largeIntegerText ? "VARCHAR" : "BIGINT")
-                                : index == 2 ? (compatibleTextNativeType != null ? compatibleTextNativeType : jsonColumn ? "JSON" : "VARCHAR")
+                                : index == 2 ? (kingbaseTextNativeType != null ? scanProjection ? "TEXT" : kingbaseTextNativeType
+                                        : compatibleTextNativeType != null ? compatibleTextNativeType : jsonColumn ? "JSON" : "VARCHAR")
                                     : "SQLSERVER".equals(datasource.getDatasourceType()) ? "DATETIME2"
                                     : mysqlProtocol() && !mysqlTimestamp ? "DATETIME" : "TIMESTAMP";
                         case "getColumnClassName": return index == 1 ? (unsignedBitWidth > 0 ? "java.lang.Boolean" : unsignedTinyint ? "java.lang.Integer" : largeIntegerText ? "java.lang.String" : "java.lang.Long")
-                                : index == 2 ? (compatibleTextNativeType != null
+                                : index == 2 ? (kingbaseTextNativeType != null ? scanProjection ? "java.lang.String"
+                                        : kingbaseTime ? "java.sql.Time" : "BYTEA".equals(kingbaseTextNativeType) ? "[B" : "com.kingbase8.util.KBobject"
+                                        : compatibleTextNativeType != null
                                         ? compatibleTextNativeType.startsWith("TIME") ? "java.sql.Time" : "[B"
                                         : "java.lang.String") : "java.sql.Timestamp";
-                        case "getColumnName": case "getColumnLabel": return sourceColumns().get(index - 1);
+                        case "getColumnName": case "getColumnLabel": return scanProjection ? "er_c" + (index - 1) : sourceColumns().get(index - 1);
                         case "getPrecision": return index == 1 ? (unsignedBitWidth > 0 ? 1 : unsignedTinyint ? 3 : largeIntegerText ? 40 : 19) : index == 2 ? 200000 : 29;
-                        case "getScale": return index == 3 ? 6 : 0;
+                        case "getScale": return index == 3 || index == 2 && kingbaseTime && !scanProjection ? 6 : 0;
                         case "isNullable": return ResultSetMetaData.columnNullable;
                         default: return defaultValue(call.getReturnType());
                     }
@@ -961,10 +1312,13 @@ public class StarRocksJdbcResourceFullImportTest {
         Connection target() {
             return proxy(Connection.class, (method, args) -> {
                 if (method.getName().equals("getAutoCommit")) return false;
-                if (method.getName().equals("createStatement")) return proxy(Statement.class, (call, values) -> {
+                if (method.getName().equals("createStatement")) {
+                    int[] fetchSize = {0};
+                    return proxy(Statement.class, (call, values) -> {
                     if ("SQLSERVER".equals(datasource.getDatasourceType()) && call.getName().equals("setMaxRows")) {
                         throw new AssertionError("Connector/J setMaxRows can reintroduce a pushed LIMIT");
                     }
+                    if (call.getName().equals("setFetchSize")) { fetchSize[0] = (Integer) values[0]; return null; }
                     if (call.getName().startsWith("execute")) {
                         String sql = (String) values[0]; targetSql.add(sql);
                         if (call.getName().equals("execute")) {
@@ -996,7 +1350,12 @@ public class StarRocksJdbcResourceFullImportTest {
                         if (sql.equals(StarRocksExternalFullImport.JSON_CONVERSION_PROBE_SQL)) {
                             return rows(Collections.singletonList(indexed(jsonProbeValid ? "123" : "\"123\"", "true", "null", null)));
                         }
-                        if (sql.startsWith("SELECT COUNT(`Id`)") && sql.contains("`easyreport_import_tmp`.")) {
+                        if (sql.equals(StarRocksJdbcResourceFullImport.BINARY_CONVERSION_PROBE_SQL)) {
+                            return rows(Collections.singletonList(indexed("hex".equals(brokenBinaryDecoderSemantic) ? "30304646" : "00FF",
+                                    "empty".equals(brokenBinaryDecoderSemantic) ? null : 0L,
+                                    !"null".equals(brokenBinaryDecoderSemantic))));
+                        }
+                        if ((sql.startsWith("SELECT COUNT(`Id`)") || sql.startsWith("SELECT COUNT(`er_c0`)")) && sql.contains("`easyreport_import_tmp`.")) {
                             assertFalse("Integer range scans must not have a pushed LIMIT", sql.contains(" LIMIT "));
                             long count = actualIntegerCount == null ? sourceCount : actualIntegerCount;
                             long converted = actualIntegerConvertedCount == null ? count : actualIntegerConvertedCount;
@@ -1011,11 +1370,22 @@ public class StarRocksJdbcResourceFullImportTest {
                                     sampleVisible ? 2L : null, sampleVisible ? actualTextBytes : null,
                                     sampleVisible ? 26L : null)));
                         }
+                        if (sql.startsWith("SELECT MAX(LENGTH(HEX(IF(ASSERT_TRUE(")) {
+                            assertFalse("Binary round-trip guards must inspect every eligible row", sql.contains(" LIMIT "));
+                            if (binaryGuardFailure != null) throw binaryGuardFailure;
+                            return rows(Collections.singletonList(indexed(actualBinaryBytes != null ? Long.valueOf(actualBinaryBytes * 2)
+                                    : actualTextBytes)));
+                        }
                         if (sql.startsWith("SELECT MAX(LENGTH(")) {
                             return rows(Collections.singletonList(indexed(sourceCount == 0 ? null : actualTextBytes)));
                         }
                         if (sql.startsWith("SELECT MIN(") && sql.contains("`easyreport_import_tmp`.")) {
                             return rows(Collections.singletonList(indexed(targetMinText, targetMaxText)));
+                        }
+                        if (sql.startsWith("SELECT `er_c1`, JSON_STRING(") && sql.contains("`easyreport_import_tmp`.")) {
+                            assertEquals("JSON comparison must stream using Connector/J's fetch mode", Integer.MIN_VALUE, fetchSize[0]);
+                            jsonComparisonFetchSizes.add(fetchSize[0]);
+                            return jsonComparisonRows();
                         }
                         if (sql.startsWith("SELECT ") && sql.contains("`easyreport_import_tmp`.")) {
                             if (stopDuringProbe) { cancellation.requestStop(); throw new SQLException("driver-secret-on-cancel", "57014"); }
@@ -1024,12 +1394,37 @@ public class StarRocksJdbcResourceFullImportTest {
                                 throw new SQLException("driver-secret-window", "42000", 333);
                             }
                             return rows(sampleVisible ? Collections.singletonList(indexed(unsignedBitWidth > 0
-                                    ? BigInteger.ONE.shiftLeft(unsignedBitWidth).subtract(BigInteger.ONE) : 7L, "verified", MAX_TS)) : Collections.emptyList());
+                                    ? BigInteger.ONE.shiftLeft(unsignedBitWidth).subtract(BigInteger.ONE) : 7L, targetSampleValue(), MAX_TS)) : Collections.emptyList());
                         }
                         throw new AssertionError("Unexpected target SQL: " + sql);
                     }
                     return defaultValue(call.getReturnType());
-                });
+                    });
+                }
+                return defaultValue(method.getReturnType());
+            });
+        }
+
+        Object targetSampleValue() {
+            if (targetTextType.startsWith("BINARY") || targetTextType.startsWith("VARBINARY")) {
+                return actualTextBytes == null ? null : actualTextBytes == 0 ? new byte[0] : new byte[] {0, (byte) 255};
+            }
+            return targetSampleText;
+        }
+
+        ResultSet jsonComparisonRows() {
+            int[] cursor = {-1};
+            return proxy(ResultSet.class, (method, args) -> {
+                if (method.getName().equals("next")) {
+                    cursor[0]++;
+                    if (cursor[0] == stopOnJsonComparisonRow) cancellation.requestStop();
+                    return cursor[0] < jsonComparisons.size();
+                }
+                if (method.getName().equals("getString")) {
+                    int index = (Integer) args[0];
+                    if (index == 2) jsonComparisonRowsRead++;
+                    return jsonComparisons.get(cursor[0])[index - 1];
+                }
                 return defaultValue(method.getReturnType());
             });
         }

@@ -30,7 +30,11 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
     private static final String IDENTIFIER = "(?:`(?:``|[^`])+`|[a-zA-Z0-9_$\\u0080-\\uFFFF]+)";
     private static final Pattern TARGET = Pattern.compile("^" + IDENTIFIER + "(?:\\." + IDENTIFIER + ")?$");
     private static final Pattern TEXT_CAPACITY = Pattern.compile("^(?:VAR)?CHAR\\s*\\(\\s*([0-9]+)\\s*\\)$");
+    private static final Pattern BINARY_CAPACITY = Pattern.compile("^(?:VAR)?BINARY(?:\\s*\\(\\s*([0-9]+)\\s*\\))?$");
     private static final long DEFAULT_TEXT_CAPACITY = 65_533;
+    private static final long MAX_BINARY_CAPACITY = 1_048_576;
+    static final String BINARY_CONVERSION_PROBE_SQL = "SELECT HEX(TO_BINARY('00FF', 'hex')), "
+            + "LENGTH(HEX(TO_BINARY('', 'hex'))), TO_BINARY(NULL, 'hex') IS NULL";
 
     private final Connection target;
     private final String resourceName;
@@ -42,6 +46,8 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
     private final List<String> selectExpressions;
     private final boolean jsonProjection;
     private final Map<Integer, Long> targetTextCapacities;
+    private final Map<Integer, Long> targetBinaryCapacities;
+    private final List<Integer> targetJsonColumns;
     private final List<IntegerNarrowing> integerNarrowings;
     private final StarRocksJdbcResourceSource.Plan source;
     private final LocalDate firstWindow;
@@ -64,6 +70,8 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
         this.targetTable = targetTable;
         this.targetColumns = joinColumns(targetColumns);
         this.targetTextCapacities = new LinkedHashMap<>(projection.textCapacities);
+        this.targetBinaryCapacities = new LinkedHashMap<>(projection.binaryCapacities);
+        this.targetJsonColumns = new ArrayList<>(projection.jsonColumns);
         this.integerNarrowings = new ArrayList<>(projection.integerNarrowings);
         this.selectColumns = projection.sql;
         this.selectExpressions = new ArrayList<>(projection.expressions);
@@ -124,6 +132,7 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
         try {
             importer.prepareTargetSession();
             if (importer.jsonProjection) StarRocksExternalFullImport.verifyJsonProjection(target, cancellation);
+            importer.verifyBinaryDecoderSemantics();
             stopped(cancellation);
             try (Statement statement = target.createStatement()) {
                 statement.execute("CREATE DATABASE IF NOT EXISTS " + quote(StarRocksExternalFullImport.IMPORT_DATABASE));
@@ -199,6 +208,8 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
         validateActualIntegerRanges();
         probe(source.timestampColumn == null ? null : quote(source.timestampColumn) + " IS NOT NULL", true);
         validateActualTextCapacity();
+        verifyBinaryTargetValues();
+        verifyKingbaseJsonValues();
         verifyTimestampWallClocks();
         if (firstWindow != null) {
             for (LocalDate start = firstWindow; start.isBefore(endExclusive); start = unit.next(start)) {
@@ -210,6 +221,83 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
         try (Statement statement = target.createStatement();
                 ResultSet rows = statement.executeQuery("EXPLAIN " + insertSql("1=0"))) {
             while (rows.next()) stopped(cancellation);
+        }
+        stopped(cancellation);
+    }
+
+    private void verifyBinaryDecoderSemantics() throws SQLException {
+        if (targetBinaryCapacities.isEmpty()) return;
+        stopped(cancellation);
+        try (Statement statement = target.createStatement(); ResultSet rows = statement.executeQuery(BINARY_CONVERSION_PROBE_SQL)) {
+            if (!rows.next()) throw new IllegalStateException("StarRocks 二进制解码预检未返回结果，尚未清空目标表");
+            String decodedHex = rows.getString(1);
+            long emptyBytes = rows.getLong(2);
+            boolean emptyIsNull = rows.wasNull();
+            boolean preservesNull = rows.getBoolean(3);
+            if (!"00FF".equals(decodedHex) || emptyIsNull || emptyBytes != 0 || !preservesNull || rows.wasNull()) {
+                throw new IllegalStateException("StarRocks TO_BINARY 未保留 HEX、空二进制或 NULL 语义，尚未清空目标表");
+            }
+        } catch (SQLException failure) {
+            stopped(cancellation);
+            throw safe("StarRocks 二进制 HEX 解码预检失败，尚未清空目标表", failure);
+        }
+        stopped(cancellation);
+    }
+
+    private void verifyBinaryTargetValues() throws SQLException {
+        if (targetBinaryCapacities.isEmpty()) return;
+        List<String> aggregates = new ArrayList<>();
+        for (int index : targetBinaryCapacities.keySet()) {
+            aggregates.add("MAX(LENGTH(HEX(" + selectExpressions.get(index) + ")))");
+        }
+        String filter = source.timestampColumn == null ? "" : " WHERE " + quote(source.timestampColumn) + " IS NOT NULL";
+        stopped(cancellation);
+        // LIMIT 1 cannot prove later rows contain valid HEX. Evaluate the same guarded
+        // decoder over every eligible value before clearing the destination.
+        try (Statement statement = target.createStatement(); ResultSet rows = statement.executeQuery(
+                "SELECT " + String.join(", ", aggregates) + " FROM " + externalTable + filter)) {
+            if (!rows.next()) throw new IllegalStateException("JDBC Resource 二进制实际读取预检未返回结果，尚未清空目标表");
+            int resultIndex = 1;
+            for (Map.Entry<Integer, Long> entry : targetBinaryCapacities.entrySet()) {
+                stopped(cancellation);
+                long encodedBytes = rows.getLong(resultIndex++);
+                if (!rows.wasNull() && (encodedBytes < 0 || encodedBytes > entry.getValue() * 2)) {
+                    throw new IllegalArgumentException("JDBC Resource 源二进制字段 " + source.columns.get(entry.getKey()).name
+                            + " 解码后超出目标字段容量（" + entry.getValue() + " 字节），尚未清空目标表");
+                }
+            }
+        }
+        stopped(cancellation);
+    }
+
+    private void verifyKingbaseJsonValues() throws SQLException {
+        if (!"KINGBASE".equals(source.sourceType) || targetJsonColumns.isEmpty()) return;
+        String filter = source.timestampColumn == null ? "" : " WHERE " + quote(source.timestampColumn) + " IS NOT NULL";
+        for (int index : targetJsonColumns) {
+            stopped(cancellation);
+            StarRocksJdbcResourceSource.Column column = source.columns.get(index);
+            String scanColumn = quote(column.scanName);
+            String sql = "SELECT " + scanColumn + ", JSON_STRING("
+                    + StarRocksExternalFullImport.jsonProjection(scanColumn) + ") FROM " + externalTable + filter;
+            try (Statement statement = target.createStatement()) {
+                // Connector/J's streaming mode keeps a full-column verification from
+                // buffering all JSON documents in the application before the first row.
+                statement.setFetchSize(Integer.MIN_VALUE);
+                stopped(cancellation);
+                try (ResultSet rows = statement.executeQuery(sql)) {
+                    while (rows.next()) {
+                        stopped(cancellation);
+                        String original = rows.getString(1);
+                        String normalized = rows.getString(2);
+                        stopped(cancellation);
+                        StarRocksJdbcResourceJsonValues.requireEquivalent(original, normalized, column.name);
+                    }
+                }
+            } catch (SQLException failure) {
+                stopped(cancellation);
+                throw safe("金仓 JSON 字段 " + column.name
+                        + " 的逐行语义预检读取失败，请改用目标文本列以保留原值，尚未清空目标表", failure);
+            }
         }
         stopped(cancellation);
     }
@@ -254,7 +342,7 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
         for (StarRocksJdbcResourceSource.Column column : source.columns) {
             if (!column.mysqlTimestamp) continue;
             stopped(cancellation);
-            String name = quote(column.name);
+            String name = quote(column.scanName);
             try (Statement statement = target.createStatement(); ResultSet rows = statement.executeQuery(
                     "SELECT MIN(" + name + "), MAX(" + name + ") FROM " + externalTable + filter)) {
                 if (!rows.next()) throw new IllegalStateException("JDBC Resource TIMESTAMP 墙钟预检未返回结果，尚未清空目标表");
@@ -284,7 +372,7 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
         stopped(cancellation);
         List<String> lengths = new ArrayList<>();
         for (int index : targetTextCapacities.keySet()) {
-            lengths.add("MAX(LENGTH(" + quote(source.columns.get(index).name) + "))");
+            lengths.add("MAX(LENGTH(" + quote(source.columns.get(index).scanName) + "))");
         }
         String filter = source.timestampColumn == null ? "" : " WHERE " + quote(source.timestampColumn) + " IS NOT NULL";
         // Source LENGTH*4 is only a conservative bound. In particular, ASCII VARCHAR(36)
@@ -301,8 +389,14 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
                 if (bytes < 0) throw new IllegalStateException("JDBC Resource 文本实际字节数无效，尚未清空目标表");
                 if (bytes > column.externalTextCapacity) throw new IllegalArgumentException("JDBC Resource 源文本字段 "
                         + column.name + " 的实际 UTF-8 字节数超出外表通道容量，尚未清空目标表");
-                if (bytes > entry.getValue()) throw new IllegalArgumentException("JDBC Resource 源文本字段 " + column.name
-                        + " 的实际 UTF-8 字节数超出目标字段容量（" + entry.getValue() + " 字节），尚未清空目标表");
+                if (bytes > entry.getValue()) {
+                    if (targetBinaryCapacities.containsKey(entry.getKey())) {
+                        throw new IllegalArgumentException("JDBC Resource 源二进制字段 " + column.name
+                                + " 解码后超出目标字段容量（" + targetBinaryCapacities.get(entry.getKey()) + " 字节），尚未清空目标表");
+                    }
+                    throw new IllegalArgumentException("JDBC Resource 源文本字段 " + column.name
+                            + " 的实际 UTF-8 字节数超出目标字段容量（" + entry.getValue() + " 字节），尚未清空目标表");
+                }
             }
         }
         stopped(cancellation);
@@ -485,6 +579,8 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
         if (source.columns.size() != targetColumns.size()) throw new IllegalArgumentException("JDBC Resource 源目标字段数量不一致");
         Map<String, String> types = new HashMap<>();
         Map<Integer, Long> textCapacities = new LinkedHashMap<>();
+        Map<Integer, Long> binaryCapacities = new LinkedHashMap<>();
+        List<Integer> jsonColumns = new ArrayList<>();
         List<IntegerNarrowing> integerNarrowings = new ArrayList<>();
         List<String> expressions = new ArrayList<>();
         boolean jsonProjection = false;
@@ -504,13 +600,14 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
             StarRocksJdbcResourceSource.Column column = source.columns.get(index);
             String targetType = types.get(targetColumns.get(index).toLowerCase(Locale.ROOT));
             if (targetType == null) throw new IllegalArgumentException("JDBC Resource 导入缺少目标字段 " + targetColumns.get(index) + "，尚未清空目标表");
-            String expression = quote(column.name);
+            String expression = quote(column.scanName);
             if (column.largeIntegerText) expression = "CAST(" + expression + " AS LARGEINT)";
             if (column.json) {
                 if ("JSON".equals(targetType)) {
-                    expression = StarRocksExternalFullImport.jsonProjection(quote(column.name));
+                    expression = StarRocksExternalFullImport.jsonProjection(quote(column.scanName));
                     // SR 3.1's CONCAT limit includes the two bytes used by the JSON scalar wrapper.
                     textCapacities.put(index, (long) StarRocksExternalFullImport.MAX_JSON_TEXT_BYTES - 2);
+                    jsonColumns.add(index);
                     jsonProjection = true;
                 } else {
                     long capacity = textCapacity(targetType);
@@ -520,13 +617,20 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
                 }
             } else if (column.externalTextCapacity >= 0) {
                 long capacity = textCapacity(targetType);
-                if (capacity < 0) throw new IllegalArgumentException("JDBC Resource 源文本字段 " + column.name + " 必须写入目标文本列，尚未清空目标表");
-                textCapacities.put(index, capacity);
+                long binaryCapacity = column.binaryHex ? binaryCapacity(targetType) : -1;
+                if (binaryCapacity >= 0) {
+                    binaryCapacities.put(index, binaryCapacity);
+                    textCapacities.put(index, binaryCapacity * 2);
+                    expression = binaryProjection(quote(column.scanName), binaryCapacity);
+                } else {
+                    if (capacity < 0) throw new IllegalArgumentException("JDBC Resource 源文本字段 " + column.name + " 必须写入目标文本列，尚未清空目标表");
+                    textCapacities.put(index, capacity);
+                }
             } else {
                 StarRocksJdbcResourceTargetTypes.IntegerRange range =
                         StarRocksJdbcResourceTargetTypes.integerNarrowing(column, targetType);
                 if (range != null) {
-                    IntegerNarrowing narrowing = new IntegerNarrowing(quote(column.name), range);
+                    IntegerNarrowing narrowing = new IntegerNarrowing(quote(column.scanName), range);
                     integerNarrowings.add(narrowing);
                     expression = narrowing.guardedExpression();
                 }
@@ -534,7 +638,32 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
             expressions.add(expression);
         }
         stopped(cancellation);
-        return new TargetProjection(expressions, textCapacities, integerNarrowings, jsonProjection);
+        return new TargetProjection(expressions, textCapacities, binaryCapacities, integerNarrowings, jsonColumns, jsonProjection);
+    }
+
+    private static String binaryProjection(String column, long capacity) {
+        String decoded = "TO_BINARY(" + column + ", 'hex')";
+        return "IF(ASSERT_TRUE(" + column + " IS NULL OR (LENGTH(" + column + ") <= " + (capacity * 2)
+                + " AND IFNULL(HEX(" + decoded + ") = UPPER(" + column + "), FALSE)), 'binary hex conversion failed'), "
+                + decoded + ", NULL)";
+    }
+
+    private static long binaryCapacity(String type) {
+        Matcher matcher = BINARY_CAPACITY.matcher(type);
+        if (!matcher.matches()) {
+            if (type.startsWith("BINARY") || type.startsWith("VARBINARY")) {
+                throw new IllegalArgumentException("JDBC Resource 目标二进制字段容量无效（须为 1 至 1048576 字节），尚未清空目标表");
+            }
+            return -1;
+        }
+        if (matcher.group(1) == null) return MAX_BINARY_CAPACITY;
+        try {
+            long capacity = Long.parseLong(matcher.group(1));
+            if (capacity >= 1 && capacity <= MAX_BINARY_CAPACITY) return capacity;
+        } catch (NumberFormatException invalidCapacity) {
+            // Invalid metadata must not silently use a default size.
+        }
+        throw new IllegalArgumentException("JDBC Resource 目标二进制字段容量无效（须为 1 至 1048576 字节），尚未清空目标表");
     }
 
     private static long textCapacity(String type) {
@@ -591,13 +720,17 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
         final String sql;
         final List<String> expressions;
         final Map<Integer, Long> textCapacities;
+        final Map<Integer, Long> binaryCapacities;
+        final List<Integer> jsonColumns;
         final List<IntegerNarrowing> integerNarrowings;
         final boolean json;
-        TargetProjection(List<String> expressions, Map<Integer, Long> textCapacities,
-                List<IntegerNarrowing> integerNarrowings, boolean json) {
+        TargetProjection(List<String> expressions, Map<Integer, Long> textCapacities, Map<Integer, Long> binaryCapacities,
+                List<IntegerNarrowing> integerNarrowings, List<Integer> jsonColumns, boolean json) {
             this.expressions = new ArrayList<>(expressions);
             this.sql = String.join(", ", expressions);
             this.textCapacities = textCapacities;
+            this.binaryCapacities = new LinkedHashMap<>(binaryCapacities);
+            this.jsonColumns = new ArrayList<>(jsonColumns);
             this.integerNarrowings = integerNarrowings;
             this.json = json;
         }

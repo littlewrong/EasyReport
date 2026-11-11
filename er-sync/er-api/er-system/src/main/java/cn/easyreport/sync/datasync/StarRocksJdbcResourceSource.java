@@ -37,6 +37,7 @@ final class StarRocksJdbcResourceSource {
     private static final Pattern MYSQL_BIT_TYPE = Pattern.compile("^BIT\\s*\\(\\s*(\\d+)\\s*\\)$");
     private static final Pattern MYSQL_BINARY_TYPE = Pattern.compile("^(?:BINARY|VARBINARY)(?:\\s*\\(\\s*\\d+\\s*\\))?$|^(?:TINY|MEDIUM|LONG)?BLOB$");
     private static final Pattern MYSQL_TIME_TYPE = Pattern.compile("^TIME(?:\\s*\\(\\s*([0-6])\\s*\\))?$");
+    private static final Pattern KINGBASE_TIME_TYPE = Pattern.compile("^TIME(?:\\s*\\(\\s*([0-6])\\s*\\))?(?: WITHOUT TIME ZONE)?$");
     private static final Set<String> READ_SESSION_PARAMETERS = new HashSet<>(Arrays.asList(
             "options", "initparams", "timezone", "sessiontimezone", "datestyle", "serveroption", "server_option"));
 
@@ -49,6 +50,7 @@ final class StarRocksJdbcResourceSource {
         stopped(cancellation);
         String type = datasource == null ? "" : value(datasource.getDatasourceType()).toUpperCase(Locale.ROOT);
         boolean mysqlProtocol = isMySqlProtocol(type);
+        boolean kingbaseProjection = "KINGBASE".equals(type);
         if (!Arrays.asList("KINGBASE", "DM", "POSTGRESQL", "ORACLE", "SQLSERVER").contains(type) && !mysqlProtocol) {
             throw invalid("JDBC Resource 导入不支持该源数据库类型");
         }
@@ -87,10 +89,11 @@ final class StarRocksJdbcResourceSource {
             }
         }
         // In 3.1.5 the BE uses the raw table property and raw column names for non-MySQL URLs.
-        // Exercise precisely that SQL against the source instead of guessing its identifier folding.
+        // Exercise that SQL against the source. Kingbase uses the quoted derived
+        // projection below so its scanner sees safe aliases instead of physical names.
         String qualified = mysqlProtocol ? mysqlQuote(actualSchema) + "." + mysqlQuote(table)
                 : "SQLSERVER".equals(type) ? bracket(actualSchema) + ".[dbo]." + bracket(table)
-                : "POSTGRESQL".equals(type) || "ORACLE".equals(type) ? quote(actualSchema) + "." + quote(table)
+                : kingbaseProjection || "POSTGRESQL".equals(type) || "ORACLE".equals(type) ? quote(actualSchema) + "." + quote(table)
                 : actualSchema + "." + table;
         Set<String> names = new HashSet<>();
         List<String> selected = new ArrayList<>();
@@ -100,7 +103,7 @@ final class StarRocksJdbcResourceSource {
                 throw invalid("StarRocks 3.1.5 JDBC Resource 裸列名无法安全读取字段 " + value(column)
                         + "，首版仅支持无 SQL 片段的普通列名");
             }
-            selected.add(mysqlProtocol ? mysqlQuote(column) : column);
+            selected.add(mysqlProtocol ? mysqlQuote(column) : kingbaseProjection ? quote(column) : column);
         }
         Map<String, String> nativeTypes = mysqlProtocol
                 ? starRocksTypes(source, qualified, cancellation) : Collections.emptyMap();
@@ -109,7 +112,7 @@ final class StarRocksJdbcResourceSource {
         for (String column : sourceColumns) physicalSelections.add("SQLSERVER".equals(type) ? bracket(column) : quote(column));
         String physicalTable = "SQLSERVER".equals(type) || "POSTGRESQL".equals(type) || "ORACLE".equals(type)
                 ? qualified : quote(actualSchema) + "." + quote(table);
-        List<Column> physicalColumns = mysqlProtocol ? null : readColumns(source, "SELECT " + String.join(", ", physicalSelections)
+        List<Column> physicalColumns = mysqlProtocol || kingbaseProjection ? null : readColumns(source, "SELECT " + String.join(", ", physicalSelections)
                 + " FROM " + physicalTable + " WHERE 1=0", sourceColumns, type, parameters, nativeTypes, bitCompatibleResource, resourceV2, cancellation);
         List<Column> columns = readColumns(source, emptyQuery, sourceColumns, type, parameters, nativeTypes, bitCompatibleResource, resourceV2, cancellation);
         if (physicalColumns == null) physicalColumns = columns;
@@ -123,6 +126,8 @@ final class StarRocksJdbcResourceSource {
                 throw invalid("JDBC Resource 裸标识符解析到的字段或类型与源物理字段不一致：" + raw.name);
             }
         }
+        String kingbaseTableProperty = kingbaseProjection
+                ? prepareKingbaseProjection(source, qualified, columns, cancellation) : null;
         String timestamp = null;
         if (timestampField != null && !timestampField.trim().isEmpty()) {
             for (Column column : columns) {
@@ -141,7 +146,7 @@ final class StarRocksJdbcResourceSource {
         for (Column column : columns) {
             if (column.externalTextCapacity >= 0) {
                 texts.add(column);
-                String field = sourceColumn(column.name, type);
+                String field = sourceTextExpression(column, type);
                 if (mysqlProtocol) {
                     if ("STARROCKS".equals(type)) count.append(", MAX(LENGTH(").append(column.json ? "JSON_STRING(" + field + ")" : field).append("))");
                     else if (column.binaryHex) count.append(", MAX(OCTET_LENGTH(").append(field).append(")) * 2");
@@ -160,6 +165,21 @@ final class StarRocksJdbcResourceSource {
                     // receive exact source-side streaming validation before an external table exists.
                     count.append(", MAX(LENGTH(").append(field).append(") * 4)");
                 }
+            }
+        }
+        List<Column> kingbaseBinaries = new ArrayList<>();
+        if (kingbaseProjection) {
+            for (Column column : columns) {
+                if (!column.binaryHex) continue;
+                kingbaseBinaries.add(column);
+                String raw = sourceColumn(column.name, type);
+                String encoded = sourceTextExpression(column, type);
+                // Some compatibility settings collapse empty text to NULL. Preserve the
+                // distinction between NULL BYTEA and an existing zero-length byte value.
+                count.append(", SUM(CASE WHEN ").append(raw).append(" IS NOT NULL AND (")
+                        .append(encoded).append(" IS NULL OR LENGTH(").append(encoded)
+                        .append(") <> CAST(OCTET_LENGTH(").append(raw)
+                        .append(") AS BIGINT) * 2) THEN 1 ELSE 0 END)");
             }
         }
         count.append(" FROM ").append(qualified).append(filter);
@@ -181,6 +201,13 @@ final class StarRocksJdbcResourceSource {
                 }
                 column.maxTextBytes = bytes;
                 if (!exactUtf8 && bytes > column.externalTextCapacity) ambiguousTexts.add(column);
+            }
+            for (int index = 0; index < kingbaseBinaries.size(); index++) {
+                long invalidValues = rows.getLong(2 + texts.size() + index);
+                if (!rows.wasNull() && invalidValues != 0) {
+                    throw invalid("金仓 BYTEA 字段 " + kingbaseBinaries.get(index).name
+                            + " 的 HEX 转换未保留空字节值或原始字节长度，请检查源兼容模式");
+                }
             }
         } catch (SQLException failure) {
             stopped(cancellation);
@@ -261,14 +288,19 @@ final class StarRocksJdbcResourceSource {
             }
         }
         stopped(cancellation);
-        String property = mysqlProtocol ? actualSchema.replace("`", "``") + "`.`" + table.replace("`", "``") : qualified;
-        return new Plan(type, actualSchema, table, property, columns, timestamp, sourceRowCount, min, max,
+        String property = kingbaseProjection ? kingbaseTableProperty
+                : mysqlProtocol ? actualSchema.replace("`", "``") + "`.`" + table.replace("`", "``") : qualified;
+        String scanTimestamp = timestamp;
+        if (kingbaseProjection && timestamp != null) {
+            for (Column column : columns) if (column.name.equals(timestamp)) scanTimestamp = column.scanName;
+        }
+        return new Plan(type, actualSchema, table, property, columns, scanTimestamp, sourceRowCount, min, max,
                 min == null ? null : wallDay(minText), max == null ? null : wallDay(maxText));
     }
 
     private static void verifyAmbiguousText(Connection source, String table, String filter, Column column, String type,
             DataSyncCancellation cancellation) throws SQLException {
-        String field = sourceColumn(column.name, type);
+        String field = sourceTextExpression(column, type);
         String candidate = "SQLSERVER".equals(type)
                 ? "DATALENGTH(CONVERT(NVARCHAR(MAX), " + field + ")) > " + (MAX_TEXT_BYTES / 2)
                 : "LENGTH(" + field + ") > " + (MAX_TEXT_BYTES / 4);
@@ -295,6 +327,68 @@ final class StarRocksJdbcResourceSource {
         // Smaller, unscanned rows have a four-byte upper bound <= 1 MiB. The BE later obtains
         // exact UTF-8 byte maxima for destination capacity, so this remains a safe upper bound.
         column.maxTextBytes = MAX_TEXT_BYTES;
+    }
+
+    /**
+     * The 3.1.5 non-MySQL scanner inserts the table property directly into FROM.
+     * A read-only derived table lets the existing Kingbase driver return String
+     * for JSON/BYTEA and avoids bare reserved words or folded physical names.
+     */
+    private static String prepareKingbaseProjection(Connection source, String table, List<Column> columns,
+            DataSyncCancellation cancellation) throws SQLException {
+        List<String> selections = new ArrayList<>();
+        List<String> aliases = new ArrayList<>();
+        for (int index = 0; index < columns.size(); index++) {
+            Column column = columns.get(index);
+            if (!column.name.equals(column.physicalName)) {
+                throw invalid("金仓源字段 " + column.name + " 的物理列名与配置不一致");
+            }
+            column.scanName = "er_c" + index;
+            aliases.add(column.scanName);
+            selections.add(sourceTextExpression(column, "KINGBASE") + " AS " + column.scanName);
+        }
+        String derived = "(SELECT " + String.join(", ", selections) + " FROM " + table + ") er_source";
+        stopped(cancellation);
+        try (Statement statement = source.createStatement(); ResultSet rows = statement.executeQuery(
+                "SELECT " + String.join(", ", aliases) + " FROM " + derived + " WHERE 1=0")) {
+            ResultSetMetaData metadata = rows.getMetaData();
+            if (metadata.getColumnCount() != columns.size()) throw invalid("金仓 Resource 投影字段数量与源表不一致");
+            for (int index = 0; index < columns.size(); index++) {
+                stopped(cancellation);
+                Column column = columns.get(index);
+                int jdbcIndex = index + 1;
+                // Unquoted aliases and scanner references undergo the same server folding.
+                if (!column.scanName.equalsIgnoreCase(metadata.getColumnLabel(jdbcIndex))) {
+                    throw invalid("金仓 Resource 字段 " + column.name + " 的安全别名未正确解析");
+                }
+                if (column.json || column.binaryHex || column.timeText) {
+                    int jdbcType = metadata.getColumnType(jdbcIndex);
+                    if (!"java.lang.String".equals(metadata.getColumnClassName(jdbcIndex))
+                            || !Arrays.asList(Types.CHAR, Types.VARCHAR, Types.LONGVARCHAR,
+                                    Types.NCHAR, Types.NVARCHAR, Types.LONGNVARCHAR).contains(jdbcType)) {
+                        throw invalid("金仓字段 " + column.name + " 转为文本后未以 String 返回，无法使用现有 Resource 驱动读取");
+                    }
+                } else if (metadata.getColumnType(jdbcIndex) != column.jdbcType
+                        || !column.javaClassName.equals(metadata.getColumnClassName(jdbcIndex))
+                        || metadata.getPrecision(jdbcIndex) != column.precision
+                        || metadata.getScale(jdbcIndex) != column.scale) {
+                    throw invalid("金仓 Resource 字段 " + column.name + " 的投影改变了源标量类型或精度");
+                }
+            }
+        } catch (SQLException failure) {
+            stopped(cancellation);
+            throw safe("校验金仓 JDBC Resource 文本转换及字段别名失败", failure);
+        }
+        return derived;
+    }
+
+    private static String sourceTextExpression(Column column, String sourceType) {
+        String field = sourceColumn(column.name, sourceType);
+        if ("KINGBASE".equals(sourceType)) {
+            if (column.json || column.timeText) return "CAST(" + field + " AS TEXT)";
+            if (column.binaryHex) return "UPPER(ENCODE(" + field + ", 'hex'))";
+        }
+        return field;
     }
 
     private static List<Column> readColumns(Connection source, String sql, List<String> sourceColumns,
@@ -329,17 +423,20 @@ final class StarRocksJdbcResourceSource {
         int precision = metadata.getPrecision(index);
         int scale = metadata.getScale(index);
         boolean mysql = "MYSQL".equals(sourceType) || "TIDB".equals(sourceType);
-        boolean binaryHex = mysql && MYSQL_BINARY_TYPE.matcher(nativeType).matches();
-        boolean timeText = mysql && MYSQL_TIME_TYPE.matcher(nativeType).matches();
+        boolean kingbaseBinary = "KINGBASE".equals(sourceType) && "BYTEA".equals(nativeType);
+        boolean binaryHex = kingbaseBinary || mysql && MYSQL_BINARY_TYPE.matcher(nativeType).matches();
+        boolean kingbaseTime = "KINGBASE".equals(sourceType) && KINGBASE_TIME_TYPE.matcher(nativeType).matches();
+        boolean timeText = kingbaseTime || mysql && MYSQL_TIME_TYPE.matcher(nativeType).matches();
         if (binaryHex) {
-            requireCompatibleV2(resourceV2, name, "二进制/BLOB");
+            if (!kingbaseBinary) requireCompatibleV2(resourceV2, name, "二进制/BLOB");
             if (!Arrays.asList(Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB).contains(jdbcType)
-                    || !Arrays.asList("[B", "java.sql.Blob", "com.mysql.cj.jdbc.Blob", "com.mysql.jdbc.Blob").contains(javaClass)) {
+                    || !(kingbaseBinary ? "[B".equals(javaClass)
+                        : Arrays.asList("[B", "java.sql.Blob", "com.mysql.cj.jdbc.Blob", "com.mysql.jdbc.Blob").contains(javaClass))) {
                 throw invalid("源二进制/BLOB 字段 " + name + " 的 JDBC 类型或驱动返回类尚未验证可无损转换为 HEX 文本");
             }
         }
         if (timeText) {
-            requireCompatibleV2(resourceV2, name, "TIME");
+            if (!kingbaseTime) requireCompatibleV2(resourceV2, name, "TIME");
             if (jdbcType != Types.TIME || !Arrays.asList("java.sql.Time", "java.lang.String", "java.time.LocalTime").contains(javaClass)
                     || scale < 0 || scale > 6) {
                 throw invalid("源 TIME 字段 " + name + " 的 JDBC 类型、精度或驱动返回类尚未验证可保留原始文本");
@@ -364,7 +461,8 @@ final class StarRocksJdbcResourceSource {
         int nullability = metadata.isNullable(index);
         String physicalName = metadata.getColumnName(index);
         if (physicalName == null || physicalName.isEmpty()) throw invalid("源字段 " + name + " 未返回物理列名");
-        boolean json = isMySqlProtocol(sourceType) && "JSON".equals(nativeType);
+        boolean kingbaseJson = "KINGBASE".equals(sourceType) && ("JSON".equals(nativeType) || "JSONB".equals(nativeType));
+        boolean json = kingbaseJson || isMySqlProtocol(sourceType) && "JSON".equals(nativeType);
         boolean largeInteger = "STARROCKS".equals(sourceType) && nativeType.matches("LARGEINT(?:\\(\\d+\\))?");
         Matcher nativeDecimal = Pattern.compile("^DECIMAL(?:32|64|128)?\\((\\d+),\\s*(\\d+)\\)$").matcher(nativeType);
         if ("STARROCKS".equals(sourceType) && nativeDecimal.matches()) {
@@ -388,12 +486,14 @@ final class StarRocksJdbcResourceSource {
         if (unsignedBitWidth > 0) {
             externalType = "LARGEINT";
         } else if (binaryHex || timeText) {
-            // The v2 Resource driver performs these conversions in the BE before SR reads
-            // the value: binary bytes -> uppercase HEX, TIME -> its original textual wire value.
+            // Kingbase converts BYTEA/TIME in its derived query; MySQL uses the v2 driver.
             externalType = "VARCHAR(" + MAX_TEXT_BYTES + ")";
             textCapacity = MAX_TEXT_BYTES;
         } else if (json) {
-            if (!"java.lang.String".equals(javaClass)) throw invalid("源 JSON 字段 " + name + " 未以经过验证的 String 返回");
+            if (!"java.lang.String".equals(javaClass)
+                    && !(kingbaseJson && Arrays.asList("com.kingbase8.util.KBobject", "java.lang.Object").contains(javaClass))) {
+                throw invalid("源 JSON 字段 " + name + " 未以经过验证的 String 或 JSON 对象返回");
+            }
             externalType = "VARCHAR(" + MAX_TEXT_BYTES + ")";
             textCapacity = MAX_TEXT_BYTES;
         } else if (largeInteger && "java.lang.String".equals(javaClass)) {
@@ -571,7 +671,7 @@ final class StarRocksJdbcResourceSource {
     private static String sourceColumn(String name, String type) {
         if (isMySqlProtocol(type)) return mysqlQuote(name);
         if ("SQLSERVER".equals(type)) return bracket(name);
-        return "POSTGRESQL".equals(type) || "ORACLE".equals(type) ? quote(name) : name;
+        return "KINGBASE".equals(type) || "POSTGRESQL".equals(type) || "ORACLE".equals(type) ? quote(name) : name;
     }
     private static String identifier(String name) {
         if (name != null && name.length() >= 2 && name.startsWith("\"") && name.endsWith("\"")) {
@@ -648,7 +748,7 @@ final class StarRocksJdbcResourceSource {
             boolean numericBits = false;
             for (Column column : columns) {
                 numericBits |= column.unsignedBitWidth > 0;
-                String name = "`" + column.name + "`";
+                String name = "`" + column.scanName + "`";
                 // Vendor nullable metadata is not a target constraint. All temporary columns are
                 // nullable; the real destination's constraints remain enforced by strict INSERT.
                 declarations.add(name + " " + column.externalType + " NULL");
@@ -662,6 +762,7 @@ final class StarRocksJdbcResourceSource {
 
     static final class Column {
         final String name;
+        String scanName;
         final String physicalName;
         final String physicalTable;
         final String physicalSchema;
@@ -707,6 +808,7 @@ final class StarRocksJdbcResourceSource {
                 boolean json, boolean largeIntegerText, boolean mysqlTimestamp, boolean tinyIntBoolean, int unsignedBitWidth,
                 boolean binaryHex, boolean timeText) {
             this.name = name;
+            this.scanName = name;
             this.physicalName = physicalName;
             this.physicalTable = physicalTable;
             this.physicalSchema = physicalSchema;

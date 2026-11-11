@@ -23,17 +23,26 @@ import static org.junit.Assert.*;
 
 public class StarRocksJdbcResourceSourceTest {
     @Test
-    public void suppliedKingbaseResourceShapeAllowsMixedCaseColumnsAndReadsRawSql() throws Exception {
+    public void suppliedKingbaseResourceShapeUsesQuotedPhysicalColumnsAndStableScanAliases() throws Exception {
         Fixture f = new Fixture("KINGBASE");
         f.datasource.setJdbcUrl("jdbc:kingbase8://source.test:54321/business?stringtype=unspecified&useSSL=false");
         f.resource.put("jdbc_uri", "jdbc:kingbase8://source.test:54321/business?useSSL=false");
+        f.failRawProbe = true; // The old bare-original-name query must never be used for Kingbase.
         StarRocksJdbcResourceSource.Plan plan = f.prepare("time_stamp");
-        assertEquals("erp_base.rf_user", plan.sourceTableProperty);
-        assertTrue(plan.externalColumnsSql, plan.externalColumnsSql.contains("`Id` VARCHAR(1048576) NULL"));
-        assertTrue(plan.externalColumnsSql.contains("`time_stamp` DATETIME NULL"));
-        assertEquals("`Id`, `Name`, `time_stamp`", plan.selectColumnsSql);
-        assertTrue(f.queries.contains("SELECT Id, Name, time_stamp FROM erp_base.rf_user WHERE 1=0"));
+        assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.startsWith("(SELECT "));
+        assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("\"Id\" AS er_c0"));
+        assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("FROM \"erp_base\".\"rf_user\""));
+        assertTrue(plan.externalColumnsSql, plan.externalColumnsSql.contains("`er_c0` VARCHAR(1048576) NULL"));
+        assertTrue(plan.externalColumnsSql.contains("`er_c2` DATETIME NULL"));
+        assertEquals("`er_c0`, `er_c1`, `er_c2`", plan.selectColumnsSql);
+        assertEquals("Id", plan.columns.get(0).name);
+        assertEquals("er_c0", plan.columns.get(0).scanName);
+        assertEquals("er_c2", plan.timestampColumn);
+        assertFalse(f.queries.contains("SELECT Id, Name, time_stamp FROM erp_base.rf_user WHERE 1=0"));
         assertTrue(f.queries.contains("SELECT \"Id\", \"Name\", \"time_stamp\" FROM \"erp_base\".\"rf_user\" WHERE 1=0"));
+        assertEquals(1L, f.queries.stream().filter(sql -> sql.endsWith("WHERE 1=0") && sql.contains(" AS er_c")).count());
+        assertTrue(f.queries.toString(), f.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")
+                && sql.endsWith("FROM \"erp_base\".\"rf_user\" WHERE \"time_stamp\" IS NOT NULL")));
         assertEquals(10L, plan.sourceRowCount);
         assertEquals(40L, plan.columns.get(0).maxTextBytes);
         assertEquals(f.maximum, plan.maxTs);
@@ -91,7 +100,7 @@ public class StarRocksJdbcResourceSourceTest {
     public void unknownLobJsonComplexTimezoneAndUnboundedNumericCannotBecomeUnverifiedText() throws Exception {
         Object[][] unsupported = {
                 {Types.CLOB, "CLOB", "dm.jdbc.driver.DmdbClob", 100, 0},
-                {Types.OTHER, "JSONB", "com.kingbase8.util.KBobject", 100, 0},
+                {Types.SQLXML, "XML", "java.sql.SQLXML", 100, 0},
                 {Types.ARRAY, "INTEGER[]", "java.sql.Array", 100, 0},
                 {Types.TIMESTAMP_WITH_TIMEZONE, "TIMESTAMP WITH TIME ZONE", "java.sql.Timestamp", 29, 6},
                 {Types.NUMERIC, "NUMERIC", "java.math.BigDecimal", 0, 0},
@@ -131,8 +140,8 @@ public class StarRocksJdbcResourceSourceTest {
     }
 
     @Test
-    public void rawSqlFailureAndDifferentResolvedPhysicalColumnFailBeforeStatistics() throws Exception {
-        Fixture failure = new Fixture("KINGBASE");
+    public void dmRawSqlFailureAndDifferentResolvedPhysicalColumnStillFailBeforeStatistics() throws Exception {
+        Fixture failure = new Fixture("DM");
         failure.failRawProbe = true;
         try {
             failure.prepare(null);
@@ -142,10 +151,266 @@ public class StarRocksJdbcResourceSourceTest {
             assertNull(expected.getCause());
             assertEquals("42000", expected.getSQLState());
         }
-        Fixture different = new Fixture("KINGBASE");
+        Fixture different = new Fixture("DM");
         different.wrongRawPhysicalName = true;
         different.reject("物理字段不一致");
         assertFalse(different.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
+    }
+
+    @Test
+    public void kingbaseReservedWordsAndMixedCaseKeepLogicalNamesButScanSafeAliases() throws Exception {
+        Fixture f = new Fixture("KINGBASE");
+        f.columns.get(0).name = "level";
+        f.columns.get(1).name = "order";
+        f.table = "order";
+        f.failRawProbe = true;
+        StarRocksJdbcResourceSource.Plan plan = f.prepare("TIME_STAMP");
+        assertEquals("level", plan.columns.get(0).name);
+        assertEquals("order", plan.columns.get(1).name);
+        assertEquals("er_c0", plan.columns.get(0).scanName);
+        assertEquals("er_c1", plan.columns.get(1).scanName);
+        assertEquals("er_c2", plan.timestampColumn);
+        assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("\"level\" AS er_c0"));
+        assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("\"order\" AS er_c1"));
+        assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("FROM \"erp_base\".\"order\""));
+        assertTrue(f.queries.toString(), f.queries.stream().anyMatch(sql -> sql.startsWith("SELECT MIN(\"time_stamp\")")
+                && sql.endsWith("FROM \"erp_base\".\"order\" WHERE \"time_stamp\" IS NOT NULL")));
+    }
+
+    @Test
+    public void kingbaseUnquotedAliasLabelsMayFoldToUppercaseWithoutChangingScanNames() throws Exception {
+        Fixture f = new Fixture("KINGBASE");
+        f.uppercaseAliasLabels = true;
+        StarRocksJdbcResourceSource.Plan plan = f.prepare("time_stamp");
+        assertEquals("er_c0", plan.columns.get(0).scanName);
+        assertEquals("er_c2", plan.timestampColumn);
+        assertEquals("`er_c0`, `er_c1`, `er_c2`", plan.selectColumnsSql);
+    }
+
+    @Test
+    public void kingbaseJsonAndJsonbUseExistingDriverThroughAStringProjection() throws Exception {
+        for (String nativeType : new String[]{"JSON", "JSONB"}) {
+            for (String javaClass : new String[]{"com.kingbase8.util.KBobject", "java.lang.String", "java.lang.Object"}) {
+                Fixture f = new Fixture("KINGBASE");
+                Field json = f.columns.get(0);
+                json.nativeType = nativeType; json.jdbcType = Types.OTHER; json.javaClass = javaClass;
+                StarRocksJdbcResourceSource.Plan plan = f.prepare("time_stamp");
+                StarRocksJdbcResourceSource.Column column = plan.columns.get(0);
+                assertTrue(nativeType + "/" + javaClass, column.json);
+                assertEquals("Id", column.name);
+                assertEquals("er_c0", column.scanName);
+                assertEquals("VARCHAR(1048576)", column.externalType);
+                assertEquals(40L, column.maxTextBytes);
+                assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("CAST(\"Id\" AS TEXT) AS er_c0"));
+                assertEquals("com.kingbase8.Driver", f.resource.get("driver_class"));
+                assertTrue(f.queries.toString(), f.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")
+                        && sql.contains("CAST(\"Id\" AS TEXT)") && sql.endsWith("WHERE \"time_stamp\" IS NOT NULL")));
+            }
+        }
+    }
+
+    @Test
+    public void kingbaseTimeUsesTheExistingDriverAndCastsAllSupportedPrecisionsToTextAliases() throws Exception {
+        Object[][] types = {{"TIME", 6}, {"TIME(0)", 0}, {"TIME(3)", 3}, {"TIME(6)", 6},
+                {"TIME WITHOUT TIME ZONE", 6}, {"TIME(6) WITHOUT TIME ZONE", 6}};
+        for (Object[] type : types) {
+            for (String javaClass : Arrays.asList("java.sql.Time", "java.lang.String", "java.time.LocalTime")) {
+                Fixture f = kingbaseTime((String) type[0], javaClass, (Integer) type[1]);
+                StarRocksJdbcResourceSource.Plan plan = f.prepare("time_stamp");
+                StarRocksJdbcResourceSource.Column column = plan.columns.get(0);
+                assertTrue(column.timeText);
+                assertFalse(column.json);
+                assertFalse(column.binaryHex);
+                assertFalse(column.mysqlTimestamp);
+                assertEquals("col_time", column.name);
+                assertEquals("er_c0", column.scanName);
+                assertEquals("er_c2", plan.timestampColumn);
+                assertEquals("VARCHAR(1048576)", column.externalType);
+                assertEquals("com.kingbase8.Driver", f.resource.get("driver_class"));
+                assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("CAST(\"col_time\" AS TEXT) AS er_c0"));
+                assertTrue(plan.externalColumnsSql, plan.externalColumnsSql.contains("`er_c0` VARCHAR(1048576) NULL"));
+                assertTrue(f.queries.toString(), f.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")
+                        && sql.contains("MAX(LENGTH(CAST(\"col_time\" AS TEXT)) * 4)")
+                        && sql.endsWith("WHERE \"time_stamp\" IS NOT NULL")));
+            }
+        }
+    }
+
+    @Test
+    public void kingbaseTimeStatisticsMeasureServerCastTextWithoutJavaDateOrTimeNormalization() throws Exception {
+        // The source adapter reads SQL aggregates, not native TIME objects. These samples model
+        // server CAST output, including PostgreSQL/Oracle-style 24:00 and MySQL-mode durations.
+        for (String text : Arrays.asList("00:00:00", "24:00:00", "23:59:59.123456", "-00:30:00.000001",
+                "100:01:02.123456", "-838:59:59.000000", "838:59:59.000000", null)) {
+            Fixture f = kingbaseTime("TIME(6)", "java.sql.Time", 6);
+            f.columns.get(0).timeTextValues = Collections.singletonList(text);
+            f.sourceCount = 1;
+            f.uppercaseAliasLabels = true;
+            StarRocksJdbcResourceSource.Plan plan = f.prepare(null);
+            assertEquals(text == null ? 0L : text.length() * 4L, plan.columns.get(0).maxTextBytes);
+            assertEquals("er_c0", plan.columns.get(0).scanName);
+            assertTrue(plan.sourceTableProperty.contains("CAST(\"col_time\" AS TEXT) AS er_c0"));
+            assertFalse("TIME must not be used to derive timestamp bounds", f.queries.stream().anyMatch(sql -> sql.startsWith("SELECT MIN(")));
+            assertEquals("Small TIME strings need no source value fetch or Java temporal conversion", 0, f.candidateReads);
+        }
+    }
+
+    @Test
+    public void kingbaseTimeRejectsTimezoneUnknownJdbcClassesAndUnsupportedPrecisionBeforeStatistics() throws Exception {
+        Object[][] unsupported = {{"TIME(7)", Types.TIME, "java.sql.Time", 7},
+                {"TIME", Types.TIME, "java.sql.Time", -1}, {"TIME", Types.TIME, "java.sql.Time", 7},
+                {"TIMETZ", Types.TIME, "java.sql.Time", 6}, {"TIME WITH TIME ZONE", Types.TIME, "java.sql.Time", 6},
+                {"TIME(6) WITH TIME ZONE", Types.TIME, "java.sql.Time", 6},
+                {"TIME WITHOUT TIME ZONE", Types.TIME_WITH_TIMEZONE, "java.sql.Time", 6},
+                {"TIME", Types.TIMESTAMP, "java.sql.Time", 6},
+                {"TIME", Types.TIME, "java.sql.Timestamp", 6}, {"TIME", Types.TIME, "vendor.UnknownTime", 6}};
+        for (Object[] type : unsupported) {
+            Fixture f = kingbaseTime((String) type[0], (String) type[2], (Integer) type[3]);
+            f.columns.get(0).jdbcType = (Integer) type[1];
+            f.reject("尚未清空目标表");
+            assertFalse(f.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
+        }
+    }
+
+    @Test
+    public void kingbaseTimeProjectionMustActuallyReturnStringCharacterMetadata() throws Exception {
+        Fixture wrongClass = kingbaseTime("TIME(6)", "java.sql.Time", 6);
+        wrongClass.columns.get(0).projectedJavaClass = "java.sql.Time";
+        wrongClass.reject("转为文本后未以 String 返回");
+        Fixture wrongJdbc = kingbaseTime("TIME(6)", "java.sql.Time", 6);
+        wrongJdbc.columns.get(0).projectedJdbcType = Types.TIME;
+        wrongJdbc.reject("转为文本后未以 String 返回");
+        assertFalse(wrongClass.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
+        assertFalse(wrongJdbc.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
+    }
+
+    @Test
+    public void kingbaseTimeCannotBeConfiguredAsTheInitializationTimestampField() throws Exception {
+        Fixture f = kingbaseTime("TIME(6)", "java.sql.Time", 6);
+        try { f.prepare("col_time"); fail("A TIME value has no calendar date for initialization windows"); }
+        catch (IllegalArgumentException expected) { assertTrue(expected.getMessage(), expected.getMessage().contains("时间戳字段")); }
+        assertFalse(f.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
+        assertFalse(f.queries.stream().anyMatch(sql -> sql.startsWith("SELECT MIN(")));
+    }
+
+    private static Fixture kingbaseTime(String nativeType, String javaClass, int scale) {
+        Fixture f = new Fixture("KINGBASE");
+        Field time = f.columns.get(0);
+        time.name = "col_time"; time.nativeType = nativeType; time.jdbcType = Types.TIME;
+        time.javaClass = javaClass; time.precision = 17; time.scale = scale;
+        time.projectedTimeText = true;
+        return f;
+    }
+
+    @Test
+    public void kingbaseByteaHexCapacityPreservesHighBytesEmptyAndSqlNullWithoutANewDriver() throws Exception {
+        byte[] highBytes = new byte[]{0, (byte) 0x80, (byte) 0xFF};
+        for (Long rawBytes : Arrays.asList((long) highBytes.length, 0L, null)) {
+            Fixture f = kingbaseBytea();
+            f.columns.get(0).binaryBytes = rawBytes;
+            StarRocksJdbcResourceSource.Plan plan = f.prepare(null);
+            assertTrue(plan.columns.get(0).binaryHex);
+            assertFalse(plan.columns.get(0).json);
+            assertEquals(rawBytes == null ? 0L : rawBytes * 2 * 4, plan.columns.get(0).maxTextBytes);
+            assertEquals("VARCHAR(1048576)", plan.columns.get(0).externalType);
+            assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("UPPER(ENCODE(\"Id\", 'hex')) AS er_c0"));
+            assertEquals("com.kingbase8.Driver", f.resource.get("driver_class"));
+            assertTrue(f.queries.toString(), f.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")
+                    && sql.contains("UPPER(ENCODE(\"Id\", 'hex'))")));
+        }
+        Fixture exact = kingbaseBytea();
+        exact.columns.get(0).binaryBytes = StarRocksJdbcResourceSource.MAX_TEXT_BYTES / 2;
+        exact.candidates = Collections.singletonList(repeat("FF", (int) StarRocksJdbcResourceSource.MAX_TEXT_BYTES / 2));
+        assertEquals(StarRocksJdbcResourceSource.MAX_TEXT_BYTES, exact.prepare(null).columns.get(0).maxTextBytes);
+        assertTrue(exact.queries.toString(), exact.queries.stream().anyMatch(sql -> sql.startsWith("SELECT UPPER(ENCODE(")
+                && sql.contains("LENGTH(UPPER(ENCODE(")));
+        Fixture excessive = kingbaseBytea();
+        excessive.columns.get(0).binaryBytes = StarRocksJdbcResourceSource.MAX_TEXT_BYTES / 2 + 1;
+        excessive.reject("1 MiB");
+    }
+
+    @Test
+    public void kingbaseConvertedTextStreamsTheConvertedExpressionAndRejectsUtf8Overflow() throws Exception {
+        Fixture f = new Fixture("KINGBASE");
+        Field json = f.columns.get(0);
+        json.nativeType = "JSONB"; json.jdbcType = Types.OTHER; json.javaClass = "com.kingbase8.util.KBobject";
+        json.textBytes = 1_200_000L;
+        f.candidates = Collections.singletonList(repeat("🙂", 300_000));
+        f.reject("实际 UTF-8 字节数");
+        assertTrue(f.queries.toString(), f.queries.stream().anyMatch(sql -> sql.startsWith("SELECT CAST(\"Id\" AS TEXT)")
+                && sql.contains("LENGTH(CAST(\"Id\" AS TEXT))")));
+    }
+
+    @Test
+    public void kingbaseByteaProjectionCannotDropNonNullEmptyBytesOrChangeEncodedLength() throws Exception {
+        Fixture invalid = kingbaseBytea();
+        invalid.columns.get(0).binaryBytes = 0L;
+        invalid.binaryInvalidProjectionCount = 1L;
+        invalid.reject("尚未清空目标表");
+        assertTrue(invalid.queries.toString(), invalid.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")
+                && sql.contains("SUM(CASE WHEN") && sql.contains("OCTET_LENGTH(\"Id\")")));
+        Fixture nullAggregate = kingbaseBytea();
+        nullAggregate.columns.get(0).binaryBytes = null;
+        nullAggregate.binaryInvalidProjectionCount = null;
+        assertEquals(0L, nullAggregate.prepare(null).columns.get(0).maxTextBytes);
+    }
+
+    @Test
+    public void kingbaseProjectionMustReturnStringCharacterMetadataAndPreserveScalarPrecision() throws Exception {
+        Fixture wrongClass = kingbaseBytea();
+        wrongClass.columns.get(0).projectedJavaClass = "[B";
+        wrongClass.reject("转为文本后未以 String 返回");
+        Fixture wrongJdbc = kingbaseBytea();
+        wrongJdbc.columns.get(0).projectedJdbcType = Types.OTHER;
+        wrongJdbc.reject("转为文本后未以 String 返回");
+        Fixture jsonObject = new Fixture("KINGBASE");
+        jsonObject.columns.get(0).nativeType = "JSONB";
+        jsonObject.columns.get(0).jdbcType = Types.OTHER;
+        jsonObject.columns.get(0).javaClass = "com.kingbase8.util.KBobject";
+        jsonObject.columns.get(0).projectedJavaClass = "com.kingbase8.util.KBobject";
+        jsonObject.reject("转为文本后未以 String 返回");
+        for (String changed : new String[]{"jdbc", "class", "precision", "scale"}) {
+            Fixture scalar = new Fixture("KINGBASE");
+            if ("jdbc".equals(changed)) scalar.columns.get(0).projectedJdbcType = Types.INTEGER;
+            if ("class".equals(changed)) scalar.columns.get(0).projectedJavaClass = "java.lang.Integer";
+            if ("precision".equals(changed)) scalar.columns.get(0).projectedPrecision = 35;
+            if ("scale".equals(changed)) scalar.columns.get(0).projectedScale = 1;
+            scalar.reject("投影改变了源标量类型或精度");
+            assertFalse(scalar.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
+        }
+        Fixture wrongCount = new Fixture("KINGBASE");
+        wrongCount.aliasColumnCountDelta = 1;
+        wrongCount.reject("投影字段数量");
+        Fixture wrongAlias = new Fixture("KINGBASE");
+        wrongAlias.columns.get(0).projectedName = "Id";
+        wrongAlias.reject("安全别名");
+        Fixture wrongPhysical = new Fixture("KINGBASE");
+        wrongPhysical.wrongPhysicalName = true;
+        wrongPhysical.reject("物理列名与配置不一致");
+    }
+
+    @Test
+    public void kingbasePhysicalAndAliasSqlState42601ErrorsStaySanitizedBeforeStatistics() throws Exception {
+        for (boolean alias : new boolean[]{false, true}) {
+            Fixture f = new Fixture("KINGBASE");
+            SQLException syntax = new SQLException("private-driver-secret syntax near user-value", "42601", 919);
+            if (alias) f.aliasProbeFailure = syntax; else f.physicalProbeFailure = syntax;
+            try { f.prepare(null); fail("Expected a source/projection syntax failure"); }
+            catch (SQLException expected) {
+                assertEquals("42601", expected.getSQLState());
+                assertFalse(expected.getMessage().contains("private-driver-secret"));
+                assertFalse(expected.getMessage().contains("user-value"));
+                assertNull(expected.getCause());
+            }
+            assertFalse(f.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
+        }
+    }
+
+    private static Fixture kingbaseBytea() {
+        Fixture f = new Fixture("KINGBASE");
+        Field binary = f.columns.get(0);
+        binary.nativeType = "BYTEA"; binary.jdbcType = Types.VARBINARY; binary.javaClass = "[B";
+        return f;
     }
 
     @Test
@@ -184,6 +449,11 @@ public class StarRocksJdbcResourceSourceTest {
             f.actualUrl = actualUrl;
             StarRocksJdbcResourceSource.Plan plan = f.prepare(null);
             assertEquals(type, 10L, plan.sourceRowCount);
+            if ("KINGBASE".equals(type)) {
+                assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("FROM \"erp_base\".\"rf_user\""));
+                assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("\"Id\" AS er_c0"));
+                continue;
+            }
             assertEquals(type, "SQLSERVER".equals(type) ? "[business].[dbo].[rf_user]"
                     : "ORACLE".equals(type) ? "\"ERP_BASE\".\"rf_user\""
                     : "POSTGRESQL".equals(type) ? "\"erp_base\".\"rf_user\""
@@ -900,6 +1170,13 @@ public class StarRocksJdbcResourceSourceTest {
         Long textBytes = 40L;
         Long binaryBytes = 20L;
         String describedType;
+        String projectedJavaClass;
+        Integer projectedJdbcType;
+        Integer projectedPrecision;
+        Integer projectedScale;
+        String projectedName;
+        boolean projectedTimeText;
+        List<String> timeTextValues;
 
         Field(String name, int jdbcType, String nativeType, String javaClass, int precision, int scale) {
             this.name = name; this.jdbcType = jdbcType; this.nativeType = nativeType;
@@ -928,6 +1205,12 @@ public class StarRocksJdbcResourceSourceTest {
         String actualUrl;
         boolean failRawProbe;
         boolean wrongRawPhysicalName;
+        boolean wrongPhysicalName;
+        SQLException physicalProbeFailure;
+        SQLException aliasProbeFailure;
+        int aliasColumnCountDelta;
+        boolean uppercaseAliasLabels;
+        Long binaryInvalidProjectionCount = 0L;
         final DataSyncCancellation cancellation = new DataSyncCancellation();
         List<String> candidates = Collections.emptyList();
         boolean cancelCandidate;
@@ -998,21 +1281,43 @@ public class StarRocksJdbcResourceSourceTest {
                             throw new AssertionError(get);
                         });
                     }
-                    boolean physical = sql.startsWith("SELECT \"") || sql.startsWith("SELECT [");
+                    boolean alias = sql.contains(" AS er_c") && sql.contains("er_source");
+                    boolean physical = !alias && (sql.startsWith("SELECT \"") || sql.startsWith("SELECT ["));
                     if (sql.endsWith("WHERE 1=0")) {
-                        if (!physical && failRawProbe) throw new SQLException("private-driver-secret", "42000", 919);
-                        return result(metadata(!physical), new ArrayList<>());
+                        if (alias && aliasProbeFailure != null) throw aliasProbeFailure;
+                        if (physical && physicalProbeFailure != null) throw physicalProbeFailure;
+                        if (!physical && !alias && failRawProbe) throw new SQLException("private-driver-secret", "42000", 919);
+                        return result(metadata(!physical, alias), new ArrayList<>());
                     }
                     if (sql.startsWith("SELECT COUNT(*)") || sql.startsWith("SELECT COUNT_BIG(*)")) {
                         if (sql.contains("NOT IN (0, 1)")) return result(null, Collections.singletonList(new Object[]{invalidTinyIntValues}));
                         List<Object> aggregates = new ArrayList<>(); aggregates.add(sourceCount);
                         for (Field field : columns) {
                             String sourceField = "`" + field.name + "`";
-                            if (sql.contains("MAX(OCTET_LENGTH(" + sourceField + ")) * 2")) {
+                            if ("KINGBASE".equals(datasource.getDatasourceType()) && "BYTEA".equalsIgnoreCase(field.nativeType)) {
+                                aggregates.add(field.binaryBytes == null ? null : field.binaryBytes * 2 * 4);
+                            } else if ("KINGBASE".equals(datasource.getDatasourceType()) && kingbaseJson(field)) {
+                                aggregates.add(field.textBytes);
+                            } else if ("KINGBASE".equals(datasource.getDatasourceType()) && field.projectedTimeText) {
+                                Long bound = field.textBytes;
+                                if (field.timeTextValues != null) {
+                                    bound = null;
+                                    for (String text : field.timeTextValues) if (text != null) {
+                                        long length = text.length() * 4L;
+                                        bound = bound == null ? length : Math.max(bound, length);
+                                    }
+                                }
+                                aggregates.add(bound);
+                            } else if (sql.contains("MAX(OCTET_LENGTH(" + sourceField + ")) * 2")) {
                                 aggregates.add(field.binaryBytes == null ? null : field.binaryBytes * 2);
                             } else if (sql.contains("MAX(OCTET_LENGTH(CAST(" + sourceField + " AS CHAR CHARACTER SET utf8mb4)))")
                                     || ("java.lang.String".equals(field.javaClass) && !"LARGEINT".equals(field.describedType))) {
                                 aggregates.add(field.textBytes);
+                            }
+                        }
+                        if ("KINGBASE".equals(datasource.getDatasourceType())) {
+                            for (Field field : columns) {
+                                if ("BYTEA".equalsIgnoreCase(field.nativeType)) aggregates.add(binaryInvalidProjectionCount);
                             }
                         }
                         return result(null, Collections.singletonList(aggregates.toArray()));
@@ -1024,7 +1329,8 @@ public class StarRocksJdbcResourceSourceTest {
                     }
                     if (sql.startsWith("SELECT @@session.time_zone")) return result(null,
                             Collections.singletonList(new Object[]{sessionZone, globalZone, systemZone}));
-                    if (sql.startsWith("SELECT Id FROM ")) {
+                    if (sql.startsWith("SELECT Id FROM ") || ("KINGBASE".equals(datasource.getDatasourceType())
+                            && sql.startsWith("SELECT ") && sql.contains("LENGTH(") && sql.contains(" > "))) {
                         int[] cursor = {-1};
                         return proxy(ResultSet.class, (get, arguments) -> {
                             if ("close".equals(get)) return null;
@@ -1043,25 +1349,40 @@ public class StarRocksJdbcResourceSourceTest {
             });
         }
 
-        ResultSetMetaData metadata(boolean raw) {
+        ResultSetMetaData metadata(boolean raw, boolean alias) {
             return proxy(ResultSetMetaData.class, (method, args) -> {
-                if ("getColumnCount".equals(method)) return columns.size();
+                if ("getColumnCount".equals(method)) return columns.size() + (alias ? aliasColumnCountDelta : 0);
                 int index = (Integer) args[0] - 1;
                 Field field = columns.get(index);
+                boolean converted = alias && (kingbaseJson(field) || "BYTEA".equalsIgnoreCase(field.nativeType) || field.projectedTimeText);
                 switch (method) {
-                    case "getColumnName": return raw && wrongRawPhysicalName && index == 0 ? "different_field" : field.name;
+                    case "getColumnName": case "getColumnLabel":
+                        if (alias) {
+                            String aliasName = field.projectedName == null ? "er_c" + index : field.projectedName;
+                            return uppercaseAliasLabels && "getColumnLabel".equals(method)
+                                    ? aliasName.toUpperCase(java.util.Locale.ROOT) : aliasName;
+                        }
+                        if (wrongPhysicalName && index == 0) return "different_physical_name";
+                        return raw && wrongRawPhysicalName && index == 0 ? "different_field" : field.name;
                     case "getTableName": return "rf_user";
                     case "getSchemaName": return "erp_base";
-                    case "getColumnType": return field.jdbcType;
-                    case "getColumnTypeName": return field.nativeType;
-                    case "getColumnClassName": return field.javaClass;
-                    case "getPrecision": return field.precision;
-                    case "getScale": return field.scale;
+                    case "getColumnType": return alias && field.projectedJdbcType != null ? field.projectedJdbcType
+                            : converted ? Types.VARCHAR : field.jdbcType;
+                    case "getColumnTypeName": return converted ? "TEXT" : field.nativeType;
+                    case "getColumnClassName": return alias && field.projectedJavaClass != null ? field.projectedJavaClass
+                            : converted ? "java.lang.String" : field.javaClass;
+                    case "getPrecision": return alias && field.projectedPrecision != null ? field.projectedPrecision
+                            : converted ? (int) StarRocksJdbcResourceSource.MAX_TEXT_BYTES : field.precision;
+                    case "getScale": return alias && field.projectedScale != null ? field.projectedScale : converted ? 0 : field.scale;
                     case "isNullable": return field.nullable;
                     default: throw new AssertionError(method);
                 }
             });
         }
+    }
+
+    private static boolean kingbaseJson(Field field) {
+        return "JSON".equalsIgnoreCase(field.nativeType) || "JSONB".equalsIgnoreCase(field.nativeType);
     }
 
     private static ResultSet result(ResultSetMetaData metadata, List<Object[]> rows) {

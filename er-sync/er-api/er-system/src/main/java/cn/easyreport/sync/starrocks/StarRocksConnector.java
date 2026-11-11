@@ -114,7 +114,13 @@ public class StarRocksConnector implements DataSourceConnector {
 
     @Override
     public String getDatabaseName() {
-        return datasource.getDatabaseName();
+        try {
+            // A manually supplied URL or successful USE may differ from databaseName.
+            // A missing live catalog must remain missing so callers can reject it safely.
+            return withConnection(Connection::getCatalog, true);
+        } catch (Exception failure) {
+            throw new IllegalStateException("无法读取 StarRocks 连接的当前数据库，请检查目标连接配置");
+        }
     }
 
     @Override

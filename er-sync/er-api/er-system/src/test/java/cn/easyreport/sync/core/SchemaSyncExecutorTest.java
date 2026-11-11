@@ -19,6 +19,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Statement;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -149,6 +150,96 @@ public class SchemaSyncExecutorTest {
         for (String sql : driver.targetSql) assertFalse(sql, sql.contains("`dbo`"));
     }
 
+    @Test
+    public void schemaBasedSourcesCreateTablesInTheirSourceSchemaDatabases() {
+        for (String sourceType : Arrays.asList("DM", "KINGBASE", "POSTGRESQL")) {
+            driver.events.clear();
+            driver.targetSql.clear();
+            driver.targetMetadataCatalogs.clear();
+            driver.schemaFixture = true;
+            driver.sourceType = sourceType;
+            driver.targetCatalog = "actual_warehouse";
+
+            SyncResult result = executeSchemaSource(sourceType, "test");
+
+            assertTrue(sourceType + ": " + result.getMessage(), result.isSuccess());
+            assertEquals(1, result.getLogs().size());
+            assertEquals("test.orders", result.getLogs().get(0).getSourceTable());
+            assertEquals("test.orders", result.getLogs().get(0).getTargetTable());
+            String ddl = result.getLogs().get(0).getExecuteSql();
+            assertTrue(ddl, ddl.startsWith("CREATE TABLE IF NOT EXISTS `test`.`orders`"));
+            assertFalse(driver.targetSql.toString(), driver.targetSql.stream().anyMatch(sql -> sql.contains("`actual_warehouse`")));
+            assertTrue(driver.targetSql.toString(), driver.targetSql.stream().anyMatch(sql ->
+                    sql.startsWith("CREATE DATABASE") && sql.contains("`test`")));
+            assertEquals(Collections.singletonList("test"), driver.targetMetadataCatalogs);
+            assertBefore("source.close", "target.open");
+        }
+    }
+
+    @Test
+    public void sameNameAcrossSourceSchemasCreatesIndependentStarRocksDatabases() {
+        for (String sourceType : Arrays.asList("DM", "KINGBASE", "POSTGRESQL")) {
+            driver.events.clear();
+            driver.targetSql.clear();
+            driver.targetMetadataCatalogs.clear();
+            driver.schemaFixture = true;
+            driver.duplicateSchemaTables = true;
+            driver.sourceType = sourceType;
+            driver.targetCatalog = "actual_warehouse";
+
+            SyncResult result = executeSchemaSource(sourceType, "%");
+
+            assertTrue(sourceType + ": " + result.getMessage(), result.isSuccess());
+            assertEquals(2, result.getLogs().size());
+            assertEquals(2, result.getSuccessCount());
+            for (String schema : Arrays.asList("test", "other")) {
+                assertTrue(driver.targetSql.toString(), driver.targetSql.stream().anyMatch(sql ->
+                        sql.startsWith("CREATE DATABASE") && sql.contains("`" + schema + "`")));
+                assertTrue(driver.targetSql.toString(), driver.targetSql.stream().anyMatch(sql ->
+                        sql.startsWith("CREATE TABLE IF NOT EXISTS `" + schema + "`.`orders`")));
+                assertTrue(result.getLogs().stream().anyMatch(log -> (schema + ".orders").equals(log.getTargetTable())
+                        && (schema + ".orders").equals(log.getSourceTable())));
+            }
+            assertEquals(2, driver.targetMetadataCatalogs.size());
+            assertTrue(driver.targetMetadataCatalogs.toString(), driver.targetMetadataCatalogs.containsAll(Arrays.asList("test", "other")));
+            assertFalse(driver.targetSql.stream().anyMatch(sql -> sql.contains("`actual_warehouse`")));
+            assertBefore("source.close", "target.open");
+        }
+    }
+
+    @Test
+    public void schemaSourceCreatesDatabaseWhenTargetConnectionHasNoDefaultCatalog() {
+        for (String sourceType : Arrays.asList("DM", "KINGBASE", "POSTGRESQL")) {
+            driver.events.clear();
+            driver.targetSql.clear();
+            driver.targetMetadataCatalogs.clear();
+            driver.schemaFixture = true;
+            driver.sourceType = sourceType;
+            driver.targetCatalog = "";
+
+            SyncResult result = executeSchemaSource(sourceType, "test");
+
+            assertTrue(sourceType + ": " + result.getMessage(), result.isSuccess());
+            assertEquals("test.orders", result.getLogs().get(0).getTargetTable());
+            assertTrue(driver.targetSql.toString(), driver.targetSql.stream().anyMatch(sql ->
+                    sql.startsWith("CREATE DATABASE") && sql.contains("`test`")));
+            assertTrue(result.getLogs().get(0).getExecuteSql().startsWith("CREATE TABLE IF NOT EXISTS `test`.`orders`"));
+            assertEquals(Collections.singletonList("test"), driver.targetMetadataCatalogs);
+            assertTrue(driver.events.contains("target.open"));
+            assertTrue(driver.events.contains("target.close"));
+        }
+    }
+
+    private SyncResult executeSchemaSource(String sourceType, String schemaPattern) {
+        ErDataSync task = new ErDataSync();
+        task.setSyncId(1L);
+        task.setSourceSchemaPattern(schemaPattern);
+        task.setSourceTablePattern("%");
+        task.setIfExistsAction("0");
+        return new SchemaSyncExecutor().execute(task,
+                datasource(sourceType, "source"), datasource("STARROCKS", "target"));
+    }
+
     private SyncResult executeShards(String sourceType, String schemaPattern) {
         ErDataSync task = new ErDataSync();
         task.setSyncId(1L);
@@ -197,6 +288,7 @@ public class SchemaSyncExecutorTest {
         datasource.setJdbcUrl(RecordingDriver.URL_PREFIX + role);
         datasource.setUsername("test");
         datasource.setPassword("test");
+        datasource.setDatabaseName("stale_configuration");
         return datasource;
     }
 
@@ -215,9 +307,13 @@ public class SchemaSyncExecutorTest {
         private final List<String> events = new ArrayList<>();
         private final Map<Integer, String> parameters = new HashMap<>();
         private final List<String> targetSql = new ArrayList<>();
+        private final List<String> targetMetadataCatalogs = new ArrayList<>();
         private String sourceSql;
         private boolean failMetadataQuery;
         private boolean shardFixture;
+        private boolean schemaFixture;
+        private boolean duplicateSchemaTables;
+        private String targetCatalog = "target";
         private String sourceType = "TIDB";
 
         @Override
@@ -236,6 +332,11 @@ public class SchemaSyncExecutorTest {
                     sourceSql = (String) args[0];
                     return sourceStatement();
                 }
+                if (schemaFixture && "source".equals(role)) {
+                    if ("getMetaData".equals(method.getName())) return schemaMetadata();
+                    if ("getCatalog".equals(method.getName())) return "source_database";
+                    if ("getSchema".equals(method.getName())) return "test";
+                }
                 if (shardFixture && "source".equals(role)) {
                     if ("getMetaData".equals(method.getName())) return sourceMetadata();
                     if ("setCatalog".equals(method.getName())) {
@@ -244,13 +345,15 @@ public class SchemaSyncExecutorTest {
                         return null;
                     }
                 }
-                if (shardFixture && "target".equals(role)) {
+                if ((shardFixture || schemaFixture) && "target".equals(role)) {
                     switch (method.getName()) {
                         case "isClosed": return closed[0];
                         case "isValid": return !closed[0];
+                        case "getCatalog": return targetCatalog;
                         case "getMetaData":
                             return proxy(DatabaseMetaData.class, (metadata, metadataMethod, metadataArgs) -> {
                                 if ("getTables".equals(metadataMethod.getName())) {
+                                    targetMetadataCatalogs.add((String) metadataArgs[0]);
                                     return rows(Collections.emptyList(), "target");
                                 }
                                 throw new UnsupportedOperationException(metadataMethod.getName());
@@ -284,6 +387,7 @@ public class SchemaSyncExecutorTest {
                     case "executeQuery":
                         events.add("source.query");
                         if (failMetadataQuery) throw new SQLException("metadata unavailable");
+                        if (schemaFixture) return schemaRows(sql);
                         if (shardFixture) return shardRows(sql, statementParameters);
                         return proxy(ResultSet.class, (rows, resultMethod, resultArgs) -> {
                             if ("next".equals(resultMethod.getName())) return false;
@@ -298,6 +402,45 @@ public class SchemaSyncExecutorTest {
                         return null;
                     default:
                         throw new UnsupportedOperationException(method.getName());
+                }
+            });
+        }
+
+        private ResultSet schemaRows(String sql) {
+            String query = sql.toLowerCase(Locale.ROOT);
+            if (query.contains("from information_schema.tables")) {
+                List<Map<String, Object>> records = new ArrayList<>();
+                records.add(row("table_schema", "test", "table_name", "orders"));
+                if (duplicateSchemaTables) records.add(row("table_schema", "other", "table_name", "orders"));
+                return rows(records, "source");
+            }
+            if (query.contains("from information_schema.columns")) {
+                return rows(Collections.singletonList(row("column_name", "id", "data_type", "integer",
+                        "is_nullable", "NO")), "source");
+            }
+            if (query.contains("from pg_index")) return rows(Collections.singletonList(row("1", "id")), "source");
+            throw new UnsupportedOperationException(sql);
+        }
+
+        private DatabaseMetaData schemaMetadata() {
+            return proxy(DatabaseMetaData.class, (metadata, method, args) -> {
+                switch (method.getName()) {
+                    case "getSearchStringEscape": return "\\";
+                    case "getSchemas":
+                        List<Map<String, Object>> schemas = new ArrayList<>();
+                        schemas.add(row("TABLE_SCHEM", "test"));
+                        if (duplicateSchemaTables) schemas.add(row("TABLE_SCHEM", "other"));
+                        return rows(schemas, "source");
+                    case "getTables":
+                        return rows(Collections.singletonList(row("TABLE_SCHEM", args[1], "TABLE_NAME", "orders")), "source");
+                    case "getColumns":
+                        return rows(Collections.singletonList(row("COLUMN_NAME", "id", "TYPE_NAME", "INTEGER",
+                                "DATA_TYPE", Types.INTEGER, "COLUMN_SIZE", 10, "DECIMAL_DIGITS", 0,
+                                "NULLABLE", DatabaseMetaData.columnNoNulls, "IS_AUTOINCREMENT", "NO", "ORDINAL_POSITION", 1)), "source");
+                    case "getPrimaryKeys":
+                        return rows(Collections.singletonList(row("COLUMN_NAME", "id", "KEY_SEQ", 1, "PK_NAME", "orders_pkey")), "source");
+                    case "getIndexInfo": return rows(Collections.emptyList(), "source");
+                    default: throw new UnsupportedOperationException(method.getName());
                 }
             });
         }
@@ -385,6 +528,7 @@ public class SchemaSyncExecutorTest {
                 Object value = records.get(index[0]).get(args[0].toString().toLowerCase(Locale.ROOT));
                 switch (method.getName()) {
                     case "getString": return value == null ? null : value.toString();
+                    case "getObject": return value;
                     case "getInt": return value == null ? 0 : ((Number) value).intValue();
                     case "getShort": return value == null ? (short) 0 : ((Number) value).shortValue();
                     case "getBoolean": return value != null && (Boolean) value;
