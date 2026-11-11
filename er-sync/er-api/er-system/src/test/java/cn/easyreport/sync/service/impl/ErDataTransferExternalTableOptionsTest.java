@@ -1370,6 +1370,7 @@ public class ErDataTransferExternalTableOptionsTest
             task.setSourceDatasourceId(1L);
             task.setTargetDatasourceId(2L);
             task.setSyncMode("0");
+            task.setTimestampField("time_stamp");
             task.setCatalogName("src_mysql");
             task.setResourceName("src_resource");
             return task;

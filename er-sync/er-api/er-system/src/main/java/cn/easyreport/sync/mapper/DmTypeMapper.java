@@ -7,7 +7,7 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** DM8 source mapping, with DATE kept distinct from Oracle's date-and-time DATE. */
+/** DM8 source mapping, including DATE clocks in Oracle compatibility mode. */
 public class DmTypeMapper implements DatabaseTypeMapper {
     private static final List<String> TARGETS = Arrays.asList("DM", "MYSQL", "TIDB", "STARROCKS", "SQLSERVER", "POSTGRESQL", "ORACLE", "KINGBASE");
     private final KingbaseTypeMapper standardMapper = new KingbaseTypeMapper();
@@ -31,6 +31,9 @@ public class DmTypeMapper implements DatabaseTypeMapper {
         if (source == null || !supportsTarget(destination) || "DM".equalsIgnoreCase(destination)) return DmTargetMappings.value(source);
         String target = destination.toUpperCase(Locale.ROOT);
         String type = normalize(source);
+        // DM DATE can carry a clock in Oracle compatibility mode. Resource imports
+        // cast it on the server, before a JDBC getDate() can discard that clock.
+        if ("STARROCKS".equals(target) && "DATE".equals(type)) return DmTargetMappings.value("DATETIME");
         if (type.startsWith("INTERVAL ") || "BFILE".equals(type)) return asText(target);
         if ("NUMERIC".equals(type) && "ORACLE".equals(target)) {
             // Keep numeric keys usable; DM DECIMAL_ENHANCED can retain 40

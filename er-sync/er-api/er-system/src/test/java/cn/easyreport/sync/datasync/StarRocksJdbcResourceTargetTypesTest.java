@@ -214,6 +214,23 @@ public class StarRocksJdbcResourceTargetTypesTest {
     }
 
     @Test
+    public void dmTimestampTextKeepsClockAndFractionalPrecisionRules() {
+        StarRocksJdbcResourceSource.Column date = column(Types.DATE, "DATE", "java.sql.Date", "VARCHAR(26)", 19, 0);
+        date.timestampText = true;
+        accepts(date, "DATETIME", "DATETIME(0)", "VARCHAR(19)");
+        rejects(date, "DATE", "VARCHAR(10)", "INT");
+        StarRocksJdbcResourceSource.Column timestamp = column(Types.TIMESTAMP, "TIMESTAMP", "dm.jdbc.driver.DmdbTimestamp",
+                "VARCHAR(26)", 26, 6);
+        timestamp.timestampText = true;
+        accepts(timestamp, "DATETIME", "DATETIME(6)", "VARCHAR(26)");
+        rejects(timestamp, "DATE", "DATETIME(3)", "VARCHAR(25)");
+        StarRocksJdbcResourceSource.Column excessive = column(Types.TIMESTAMP, "TIMESTAMP", "dm.jdbc.driver.DmdbTimestamp",
+                "VARCHAR(26)", 29, 9);
+        excessive.timestampText = true;
+        rejects(excessive, "DATETIME", "STRING");
+    }
+
+    @Test
     public void unknownMalformedOrUnsupportedTargetTypesAreRejected() {
         StarRocksJdbcResourceSource.Column source = column(Types.INTEGER, "INTEGER", "java.lang.Integer", "INT", 10, 0);
         rejects(source, null, "", "BINARY(16)", "ARRAY<INT>", "INT UNSIGNED", "DECIMAL(39,0)",

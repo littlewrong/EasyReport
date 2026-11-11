@@ -48,7 +48,7 @@ public class StarRocksJdbcResourceFullImportTest {
             assertTrue(ddl, ddl.contains("ENGINE=JDBC"));
             assertTrue(ddl, ddl.contains("\"resource\"=\"jdbc_prebuilt\""));
             assertTrue(ddl, ddl.toLowerCase(java.util.Locale.ROOT).contains("rf_user"));
-            assertTrue(ddl, ddl.toLowerCase(java.util.Locale.ROOT).contains("KINGBASE".equals(sourceType) ? "`er_c0` bigint" : "`id` bigint"));
+            assertTrue(ddl, ddl.toLowerCase(java.util.Locale.ROOT).contains(Arrays.asList("KINGBASE", "DM").contains(sourceType) ? "`er_c0` bigint" : "`id` bigint"));
             assertTrue(f.sourceSql.toString(), f.sourceSql.stream().anyMatch(sql -> sql.startsWith("SELECT ")
                     && sql.toLowerCase(java.util.Locale.ROOT).contains("rf_user") && sql.endsWith("WHERE 1=0")));
             assertEquals(1, f.inserts.size());
@@ -92,7 +92,7 @@ public class StarRocksJdbcResourceFullImportTest {
             List<String> beforeClear = f.targetSql.subList(0, clear);
             assertTrue(beforeClear.toString(), beforeClear.stream().anyMatch(sql -> sql.startsWith("SELECT ")
                     && sql.contains(" FROM " + ownedTable)
-                    && ("SQLSERVER".equals(endpoint.getKey()) ? sql.startsWith("SELECT COUNT(*)") : sql.endsWith(" LIMIT 1"))));
+                    && (Arrays.asList("SQLSERVER", "DM").contains(endpoint.getKey()) ? sql.startsWith("SELECT COUNT(*)") : sql.endsWith(" LIMIT 1"))));
             assertTrue(beforeClear.toString(), beforeClear.stream().anyMatch(sql -> sql.startsWith("EXPLAIN INSERT")));
             assertTrue(indexOf(f.targetSql, "INSERT INTO") > clear);
             List<String> drops = new ArrayList<>();
@@ -337,6 +337,70 @@ public class StarRocksJdbcResourceFullImportTest {
         assertTrue(f.inserts.isEmpty());
         assertEquals(1, f.dropCount());
         assertFalse(f.targetSql.stream().anyMatch(sql -> sql.contains(" LIMIT ")));
+    }
+
+    @Test
+    public void dmProbeReadsEveryProjectionAndNaturalWindowWithoutPushedLimit() throws Exception {
+        Fixture f = new Fixture("DM");
+        f.sourceCount = 20000;
+        f.affected = new long[] {5, 7};
+
+        f.runFullSync("time_stamp", 1, "YEAR");
+
+        int truncate = indexOf(f.targetSql, "TRUNCATE TABLE");
+        List<String> probes = new ArrayList<>();
+        for (String sql : f.targetSql.subList(0, truncate)) {
+            if (sql.startsWith("SELECT COUNT(*)") && sql.contains("`easyreport_import_tmp`.")) probes.add(sql);
+        }
+        assertEquals("DM must read the global projection and both natural-year windows before clear", 3, probes.size());
+        for (String sql : probes) {
+            assertFalse(sql, sql.contains(" LIMIT "));
+            for (int index = 0; index < 2; index++) {
+                assertTrue(sql, sql.contains("MAX(LENGTH(CAST(`er_c" + index + "` AS VARCHAR(1048576))))"));
+            }
+            assertTrue(sql, sql.contains("IF(ASSERT_TRUE(`er_c2` IS NULL OR CAST(`er_c2` AS DATETIME) IS NOT NULL"));
+        }
+        assertFalse(f.targetSql.stream().anyMatch(sql -> sql.contains(" LIMIT ")));
+        assertEquals(2, f.inserts.size());
+        assertEquals(1, f.checkpoints.size());
+        f.assertUserResourceUntouched();
+    }
+
+    @Test
+    public void dmDateTextIsGuardedAndConvertedDuringPreflightAndInsert() throws Exception {
+        Fixture f = new Fixture("DM");
+        f.dmDateColumn = true;
+
+        f.runFullSync("time_stamp", 50, "YEAR");
+
+        String guarded = "IF(ASSERT_TRUE(`er_c2` IS NULL OR CAST(`er_c2` AS DATETIME) IS NOT NULL, "
+                + "'datetime conversion failed'), CAST(`er_c2` AS DATETIME), NULL)";
+        String insert = f.inserts.get(0);
+        assertTrue(insert, insert.contains(guarded));
+        assertTrue(f.targetSql.subList(0, indexOf(f.targetSql, "TRUNCATE TABLE")).stream()
+                .anyMatch(sql -> sql.startsWith("SELECT COUNT(*)") && sql.contains(guarded)));
+        assertFalse(f.datasource.getJdbcUrl().contains("dateToTimestamp"));
+        assertFalse(f.properties.get("jdbc_uri").contains("dateToTimestamp"));
+        f.assertUserResourceUntouched();
+    }
+
+    @Test
+    public void dmReadFailureReportsStageWithoutExposingDriverDetailsOrClearing() throws Exception {
+        Fixture f = new Fixture("DM");
+        f.probeFailure = new SQLException("driver-secret jdbc:dm://private:5236 password=secret", "42000", 1064);
+        try { f.runFullSync("time_stamp", 50, "YEAR"); fail("Expected Resource read failure"); }
+        catch (SQLException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("阶段：实际读取预检"));
+            assertEquals("42000", expected.getSQLState());
+            assertEquals(1064, expected.getErrorCode());
+            assertFalse(expected.getMessage().contains("private"));
+            assertFalse(expected.getMessage().contains("secret"));
+            assertNull(expected.getCause());
+        }
+        assertEquals(-1, indexOf(f.targetSql, "TRUNCATE TABLE"));
+        assertEquals(1, f.dropCount());
+        assertTrue(f.inserts.isEmpty());
+        assertTrue(f.checkpoints.isEmpty());
     }
 
     @Test
@@ -823,7 +887,7 @@ public class StarRocksJdbcResourceFullImportTest {
             for (String insert : f.inserts) {
                 String predicate = insert.substring(insert.indexOf(" WHERE "));
                 assertTrue(predicate, f.targetSql.stream().anyMatch(sql -> sql.startsWith("SELECT ")
-                        && sql.endsWith(predicate + " LIMIT 1")));
+                        && sql.endsWith(predicate)));
             }
             assertEquals("MONTH".equals(unit) ? 2 : 3, f.inserts.size());
         }
@@ -940,8 +1004,8 @@ public class StarRocksJdbcResourceFullImportTest {
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
         chinese.targetTextType = "VARCHAR(36)";
         chinese.expectPreclearFailure("time_stamp", "实际 UTF-8 字节数超出目标字段容量");
-        assertTrue(chinese.targetSql.stream().anyMatch(sql -> sql.startsWith("SELECT MAX(LENGTH(`Name`))")
-                && sql.endsWith("WHERE `time_stamp` IS NOT NULL")));
+        assertTrue(chinese.targetSql.stream().anyMatch(sql -> sql.startsWith("SELECT MAX(LENGTH(`er_c1`))")
+                && sql.endsWith("WHERE `er_c2` IS NOT NULL")));
         assertEquals(1, chinese.dropCount());
     }
 
@@ -1108,6 +1172,7 @@ public class StarRocksJdbcResourceFullImportTest {
         boolean failNumericInsert;
         boolean jsonProbeValid = true;
         boolean mysqlTimestamp;
+        boolean dmDateColumn;
         String targetMinText = MIN_TS.toString();
         String targetMaxText = MAX_TS.toString();
         long sourceCount = 7;
@@ -1280,16 +1345,19 @@ public class StarRocksJdbcResourceFullImportTest {
                     if (call.getName().equals("getColumnCount")) return 3;
                     int index = values != null && values.length > 0 && values[0] instanceof Integer ? (Integer) values[0] : 1;
                     boolean kingbaseTime = kingbaseTextNativeType != null && kingbaseTextNativeType.startsWith("TIME");
+                    boolean dmTimestampProjection = "DM".equals(datasource.getDatasourceType()) && scanProjection;
                     switch (call.getName()) {
                         case "getColumnType": return index == 1 ? (unsignedBitWidth > 0 ? Types.BIT : unsignedTinyint ? Types.TINYINT : largeIntegerText ? Types.VARCHAR : Types.BIGINT)
                                 : index == 2 ? (kingbaseTextNativeType != null ? scanProjection ? Types.LONGVARCHAR
                                         : kingbaseTime ? Types.TIME : "BYTEA".equals(kingbaseTextNativeType) ? Types.BINARY : Types.OTHER
                                         : compatibleTextNativeType != null
                                         ? compatibleTextNativeType.startsWith("TIME") ? Types.TIME : Types.VARBINARY
-                                        : jsonColumn ? Types.LONGVARCHAR : Types.VARCHAR) : Types.TIMESTAMP;
+                                        : jsonColumn ? Types.LONGVARCHAR : Types.VARCHAR)
+                                    : dmTimestampProjection ? Types.VARCHAR : dmDateColumn ? Types.DATE : Types.TIMESTAMP;
                         case "getColumnTypeName": return index == 1 ? (unsignedBitWidth > 0 ? "BIT" : unsignedTinyint ? "TINYINT UNSIGNED" : largeIntegerText ? "VARCHAR" : "BIGINT")
                                 : index == 2 ? (kingbaseTextNativeType != null ? scanProjection ? "TEXT" : kingbaseTextNativeType
                                         : compatibleTextNativeType != null ? compatibleTextNativeType : jsonColumn ? "JSON" : "VARCHAR")
+                                    : dmTimestampProjection ? "VARCHAR" : dmDateColumn ? "DATE"
                                     : "SQLSERVER".equals(datasource.getDatasourceType()) ? "DATETIME2"
                                     : mysqlProtocol() && !mysqlTimestamp ? "DATETIME" : "TIMESTAMP";
                         case "getColumnClassName": return index == 1 ? (unsignedBitWidth > 0 ? "java.lang.Boolean" : unsignedTinyint ? "java.lang.Integer" : largeIntegerText ? "java.lang.String" : "java.lang.Long")
@@ -1297,10 +1365,11 @@ public class StarRocksJdbcResourceFullImportTest {
                                         : kingbaseTime ? "java.sql.Time" : "BYTEA".equals(kingbaseTextNativeType) ? "[B" : "com.kingbase8.util.KBobject"
                                         : compatibleTextNativeType != null
                                         ? compatibleTextNativeType.startsWith("TIME") ? "java.sql.Time" : "[B"
-                                        : "java.lang.String") : "java.sql.Timestamp";
+                                        : "java.lang.String")
+                                    : dmTimestampProjection ? "java.lang.String" : dmDateColumn ? "java.sql.Date" : "java.sql.Timestamp";
                         case "getColumnName": case "getColumnLabel": return scanProjection ? "er_c" + (index - 1) : sourceColumns().get(index - 1);
-                        case "getPrecision": return index == 1 ? (unsignedBitWidth > 0 ? 1 : unsignedTinyint ? 3 : largeIntegerText ? 40 : 19) : index == 2 ? 200000 : 29;
-                        case "getScale": return index == 3 || index == 2 && kingbaseTime && !scanProjection ? 6 : 0;
+                        case "getPrecision": return index == 1 ? (unsignedBitWidth > 0 ? 1 : unsignedTinyint ? 3 : largeIntegerText ? 40 : 19) : index == 2 ? 200000 : dmDateColumn ? 26 : 29;
+                        case "getScale": return index == 3 && !dmDateColumn || index == 2 && kingbaseTime && !scanProjection ? 6 : 0;
                         case "isNullable": return ResultSetMetaData.columnNullable;
                         default: return defaultValue(call.getReturnType());
                     }
@@ -1315,7 +1384,7 @@ public class StarRocksJdbcResourceFullImportTest {
                 if (method.getName().equals("createStatement")) {
                     int[] fetchSize = {0};
                     return proxy(Statement.class, (call, values) -> {
-                    if ("SQLSERVER".equals(datasource.getDatasourceType()) && call.getName().equals("setMaxRows")) {
+                    if (Arrays.asList("SQLSERVER", "DM").contains(datasource.getDatasourceType()) && call.getName().equals("setMaxRows")) {
                         throw new AssertionError("Connector/J setMaxRows can reintroduce a pushed LIMIT");
                     }
                     if (call.getName().equals("setFetchSize")) { fetchSize[0] = (Integer) values[0]; return null; }
@@ -1362,7 +1431,9 @@ public class StarRocksJdbcResourceFullImportTest {
                             return rows(Collections.singletonList(indexed(count, converted, actualIntegerMin, actualIntegerMax)));
                         }
                         if (sql.startsWith("SELECT COUNT(*)") && sql.contains("`easyreport_import_tmp`.")) {
-                            assertFalse("SQLServer Resource must not receive a pushed LIMIT", sql.contains(" LIMIT "));
+                            assertFalse("DM and SQLServer Resource probes must not receive a pushed LIMIT", sql.contains(" LIMIT "));
+                            if (stopDuringProbe) { cancellation.requestStop(); throw new SQLException("driver-secret-on-cancel", "57014"); }
+                            if (probeFailure != null) throw probeFailure;
                             if (failSecondWindowProbe && sql.contains(" >= '2024-01-01")) {
                                 throw new SQLException("driver-secret-window", "42000", 333);
                             }

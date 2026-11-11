@@ -124,6 +124,7 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
     {
         log.info("[Quartz同步] 新增数据传输任务，前端传来的status={}", erDataTransfer.getStatus());
         normalizeExternalTableOptions(erDataTransfer, null);
+        validateTimestampField(erDataTransfer, null);
 
         // 预处理：将空字符串转换为null，避免查询时出现问题
         if (erDataTransfer.getSourceSchemaPattern() != null && erDataTransfer.getSourceSchemaPattern().trim().isEmpty())
@@ -206,6 +207,7 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         erDataTransfer.setUpdateTime(DateUtils.getNowDate());
         ErDataTransfer oldTask = erDataTransferMapper.selectErDataTransferByTransferId(erDataTransfer.getTransferId());
         normalizeExternalTableOptions(erDataTransfer, oldTask);
+        validateTimestampField(erDataTransfer, oldTask);
 
         int rows = erDataTransferMapper.updateErDataTransfer(erDataTransfer);
 
@@ -290,6 +292,23 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         }
 
         return rows;
+    }
+
+    /** Validate effective values without writing omitted fields back on sparse updates. */
+    private void validateTimestampField(ErDataTransfer task, ErDataTransfer oldTask)
+    {
+        if (task.getTimestampField() != null)
+        {
+            task.setTimestampField(task.getTimestampField().trim());
+        }
+        String syncMode = task.getSyncMode() != null ? task.getSyncMode()
+                : oldTask != null ? oldTask.getSyncMode() : "0";
+        String timestampField = task.getTimestampField() != null ? task.getTimestampField()
+                : oldTask != null ? oldTask.getTimestampField() : null;
+        if ("1".equals(syncMode) && (timestampField == null || timestampField.trim().isEmpty()))
+        {
+            throw new ServiceException("增量同步必须填写时间戳字段");
+        }
     }
 
     /** 默认使用JDBC；新增任务补策略默认值，稀疏更新不能覆盖未提交的配置。 */
@@ -555,6 +574,17 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         {
             result.put("success", false);
             result.put("message", "任务正在同步中，请勿重复执行");
+            return result;
+        }
+
+        try
+        {
+            validateTimestampField(transferTask, null);
+        }
+        catch (ServiceException e)
+        {
+            result.put("success", false);
+            result.put("message", e.getMessage());
             return result;
         }
 

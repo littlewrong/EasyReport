@@ -35,6 +35,27 @@ import static org.junit.Assert.*;
 
 /** Exercises the real executor/factory/loop with a local JDBC driver and no database. */
 public class DataSyncExecutorStopTest {
+    @Test public void incrementalWithoutTimestampFailsBeforeReadingDatasourceOrOpeningConnections() throws Exception {
+        for (String timestamp : new String[] {null, "", "   ", "\t\r\n"}) {
+            Fixture fixture = new Fixture(false);
+            ErDataTransfer task = new ErDataTransfer();
+            task.setTransferId(42L);
+            task.setSyncMode("1");
+            task.setTimestampField(timestamp);
+            try {
+                // No datasource is needed to reject an invalid task. This also proves
+                // scheduled/direct executor callers cannot reach any JDBC side effects.
+                new TestExecutor(fixture).execute(task, null, null, null, () -> false);
+                fail("An incremental task must specify its timestamp column");
+            } catch (IllegalArgumentException expected) {
+                assertEquals("增量同步必须填写时间戳字段", expected.getMessage());
+            }
+            assertEquals(0, fixture.dataQueries.get());
+            assertEquals(0, fixture.targetDataWrites.get());
+            assertEquals(0, fixture.savedTimestamps.get());
+        }
+    }
+
     @Test public void stopsMysqlFullQueryWithoutCompletingTableOrSavingTimestamp() throws Exception {
         assertStopped("MYSQL", "0", false);
     }

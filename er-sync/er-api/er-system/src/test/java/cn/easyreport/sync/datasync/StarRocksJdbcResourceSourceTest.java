@@ -58,11 +58,12 @@ public class StarRocksJdbcResourceSourceTest {
         f.columns.get(0).nullable = ResultSetMetaData.columnNoNulls;
         f.columns.get(1).nullable = ResultSetMetaData.columnNullableUnknown;
         StarRocksJdbcResourceSource.Plan plan = f.prepare("TIME_STAMP");
-        assertEquals("time_stamp", plan.timestampColumn);
-        assertTrue(plan.externalColumnsSql.contains("`Id` VARCHAR(1048576) NULL"));
-        assertTrue(plan.externalColumnsSql.contains("`Name` VARCHAR(1048576) NULL"));
+        assertEquals("er_c2", plan.timestampColumn);
+        assertTrue(plan.externalColumnsSql.contains("`er_c0` VARCHAR(1048576) NULL"));
+        assertTrue(plan.externalColumnsSql.contains("`er_c1` VARCHAR(1048576) NULL"));
         assertFalse(plan.externalColumnsSql.contains("NOT NULL"));
-        assertEquals("DATETIME", plan.columns.get(2).externalType);
+        assertTrue(plan.columns.get(2).timestampText);
+        assertEquals("VARCHAR(26)", plan.columns.get(2).externalType);
         assertEquals(3, plan.columns.size());
     }
 
@@ -80,20 +81,133 @@ public class StarRocksJdbcResourceSourceTest {
     }
 
     @Test
-    public void dmDateRequiresExplicitMatchingDateToTimestampSemantics() throws Exception {
+    public void dmDatePreservesClockThroughServerTextWithoutChangingDriverUrlFlags() throws Exception {
+        for (String javaClass : Arrays.asList("java.sql.Date", "java.sql.Timestamp", "dm.jdbc.driver.DmdbTimestamp")) {
+            Fixture f = new Fixture("DM");
+            Field date = f.columns.get(2);
+            date.nativeType = "DATE"; date.jdbcType = Types.DATE; date.javaClass = javaClass; date.scale = 0;
+            f.datasource.setJdbcUrl("jdbc:dm://source.test:5236?dateToTimestamp=false");
+            f.resource.put("jdbc_uri", "jdbc:dm://source.test:5236?dateToTimestamp=true");
+            f.minimum = Timestamp.valueOf("2024-01-01 13:14:15");
+            f.maximum = Timestamp.valueOf("2026-11-11 23:59:59");
+            StarRocksJdbcResourceSource.Plan plan = f.prepare("time_stamp");
+            assertEquals("er_c2", plan.timestampColumn);
+            assertTrue(plan.columns.get(2).timestampText);
+            assertEquals("VARCHAR(26)", plan.columns.get(2).externalType);
+            assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains(
+                    "TO_CHAR(CAST(\"time_stamp\" AS TIMESTAMP), 'YYYY-MM-DD HH24:MI:SS.FF6') END AS er_c2"));
+            assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains(
+                    "CAST(\"time_stamp\" AS TIMESTAMP) < TIMESTAMP '0001-01-01 00:00:00'"));
+            assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains(
+                    "CAST(\"time_stamp\" AS TIMESTAMP) > TIMESTAMP '9999-12-31 23:59:59.999999'"));
+            assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("THEN 'invalid datetime' ELSE TO_CHAR("));
+            assertEquals(f.minimum, plan.minTs);
+            assertEquals(f.maximum, plan.maxTs);
+            assertEquals("2026-11-11", plan.maxDay.toString());
+            assertTrue(f.queries.toString(), f.queries.stream().anyMatch(sql -> sql.startsWith(
+                    "SELECT MIN(CAST(\"time_stamp\" AS TIMESTAMP))")));
+            assertEquals("dm.jdbc.driver.DmDriver", f.resource.get("driver_class"));
+            assertTrue(f.datasource.getJdbcUrl().endsWith("dateToTimestamp=false"));
+            assertTrue(f.resource.get("jdbc_uri").endsWith("dateToTimestamp=true"));
+        }
+    }
+
+    @Test
+    public void dmBinaryUsesExistingDriverAndVerifiesHighBytesEmptyAndSqlNullAsHex() throws Exception {
+        for (String nativeType : Arrays.asList("BINARY", "BINARY(16)", "VARBINARY", "RAW")) {
+            Fixture f = dmBinaryFixture(nativeType);
+            Field binary = f.columns.get(0);
+            binary.binaryValues = Arrays.asList(new byte[]{0, (byte) 0x80, (byte) 0xFF}, new byte[0], null);
+            binary.binaryBytes = 3L;
+            StarRocksJdbcResourceSource.Plan plan = f.prepare("time_stamp");
+            assertTrue(plan.columns.get(0).binaryHex);
+            assertEquals("VARCHAR(1048576)", plan.columns.get(0).externalType);
+            assertEquals(6L, plan.columns.get(0).maxTextBytes);
+            assertEquals("dm.jdbc.driver.DmDriver", f.resource.get("driver_class"));
+            assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("UPPER(RAWTOHEX(\"Id\")) AS er_c0"));
+            assertTrue(f.queries.toString(), f.queries.contains("SELECT \"Id\", UPPER(RAWTOHEX(\"Id\")) FROM \"erp_base\".\"rf_user\" WHERE \"time_stamp\" IS NOT NULL"));
+        }
+    }
+
+    @Test
+    public void dmBinaryRejectsHexTruncationAndChangedNullOrEmptySemantics() throws Exception {
+        Object[][] invalid = {
+                {new byte[]{0, (byte) 0xFF}, "00"}, {new byte[]{0, (byte) 0xFF}, "00FE"},
+                {new byte[0], null}, {null, ""}
+        };
+        for (Object[] values : invalid) {
+            Fixture f = dmBinaryFixture("VARBINARY");
+            f.columns.get(0).binaryValues = Collections.singletonList((byte[]) values[0]);
+            f.columns.get(0).binaryProjectionValues = Collections.singletonList((String) values[1]);
+            f.reject("未完整保留原始字节");
+        }
+        Fixture excessive = dmBinaryFixture("BINARY");
+        excessive.columns.get(0).binaryBytes = StarRocksJdbcResourceSource.MAX_TEXT_BYTES / 2 + 1;
+        excessive.reject("1 MiB");
+    }
+
+    @Test
+    public void dmClobReadsFullDriverStringWithoutBoundedCastAndAcceptsNullAndEmpty() throws Exception {
+        String large = repeat("达梦🙂A", 20_000);
+        for (String nativeType : Arrays.asList("CLOB", "NCLOB", "TEXT")) {
+            Fixture f = dmClobFixture(nativeType);
+            Field clob = f.columns.get(0);
+            clob.clobValues = Arrays.asList(large, "", null);
+            clob.textBytes = (long) large.length() * 4;
+            StarRocksJdbcResourceSource.Plan plan = f.prepare(null);
+            assertEquals(large.getBytes(java.nio.charset.StandardCharsets.UTF_8).length, plan.columns.get(0).maxTextBytes);
+            assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("\"Id\" AS er_c0"));
+            assertFalse(plan.sourceTableProperty.contains("CAST(\"Id\" AS VARCHAR"));
+            assertTrue(f.queries.toString(), f.queries.contains("SELECT \"Id\" FROM \"erp_base\".\"rf_user\""));
+            assertEquals("VARCHAR(1048576)", plan.columns.get(0).externalType);
+        }
+    }
+
+    @Test
+    public void dmClobRejectsTruncatedStringsChangedNullSemanticsAndActualUtf8Overflow() throws Exception {
+        Object[][] invalid = {
+                {repeat("A", 40_000), repeat("A", 32_767), "截断"},
+                {"完整字符流", "不一致字符流", "不一致"},
+                {null, "", "未保留 NULL"}, {"", null, "未保留 NULL"}
+        };
+        for (Object[] values : invalid) {
+            Fixture f = dmClobFixture("CLOB");
+            f.columns.get(0).clobValues = Collections.singletonList((String) values[0]);
+            f.columns.get(0).clobStringValues = Collections.singletonList((String) values[1]);
+            f.reject((String) values[2]);
+        }
+        Fixture excessive = dmClobFixture("CLOB");
+        excessive.columns.get(0).clobValues = Collections.singletonList(repeat("🙂", 262_145));
+        excessive.reject("UTF-8 字节数");
+    }
+
+    @Test
+    public void dmConvertedDateAndBinaryMustActuallyReturnScannerReadableStringMetadata() throws Exception {
+        for (boolean timestamp : new boolean[]{false, true}) {
+            for (boolean badClass : new boolean[]{false, true}) {
+                Fixture f = timestamp ? new Fixture("DM") : dmBinaryFixture("BINARY");
+                Field field = f.columns.get(timestamp ? 2 : 0);
+                if (timestamp) { field.nativeType = "DATE"; field.jdbcType = Types.DATE; field.javaClass = "java.sql.Date"; field.scale = 0; }
+                if (badClass) field.projectedJavaClass = "vendor.Unreadable"; else field.projectedJdbcType = Types.OTHER;
+                f.reject("转为文本后未以 String 返回");
+                assertFalse(f.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
+            }
+        }
+    }
+
+    private static Fixture dmBinaryFixture(String nativeType) {
         Fixture f = new Fixture("DM");
-        f.columns.get(2).nativeType = "DATE";
-        f.columns.get(2).jdbcType = Types.DATE;
-        f.columns.get(2).javaClass = "java.sql.Date";
-        f.columns.get(2).scale = 0;
-        f.reject("dateToTimestamp");
-        f.datasource.setJdbcUrl("jdbc:dm://source.test:5236?dateToTimestamp=true");
-        f.reject("语义不一致");
-        f.resource.put("jdbc_uri", f.datasource.getJdbcUrl());
-        f.reject("并确认驱动返回类型");
-        f.columns.get(2).jdbcType = Types.TIMESTAMP;
-        f.columns.get(2).javaClass = "java.sql.Timestamp";
-        assertEquals("DATETIME", f.prepare("time_stamp").columns.get(2).externalType);
+        Field binary = f.columns.get(0);
+        binary.nativeType = nativeType; binary.jdbcType = Types.VARBINARY; binary.javaClass = "[B";
+        return f;
+    }
+
+    private static Fixture dmClobFixture(String nativeType) {
+        Fixture f = new Fixture("DM");
+        Field clob = f.columns.get(0);
+        clob.nativeType = nativeType; clob.jdbcType = "NCLOB".equals(nativeType) ? Types.NCLOB : Types.CLOB;
+        clob.javaClass = "NCLOB".equals(nativeType) ? "dm.jdbc.driver.DmdbNClob" : "dm.jdbc.driver.DmdbClob";
+        return f;
     }
 
     @Test
@@ -140,20 +254,31 @@ public class StarRocksJdbcResourceSourceTest {
     }
 
     @Test
-    public void dmRawSqlFailureAndDifferentResolvedPhysicalColumnStillFailBeforeStatistics() throws Exception {
-        Fixture failure = new Fixture("DM");
-        failure.failRawProbe = true;
-        try {
-            failure.prepare(null);
-            fail("A raw BE-style SQL error must reject the import");
-        } catch (SQLException expected) {
-            assertFalse(expected.getMessage().contains("private-driver-secret"));
-            assertNull(expected.getCause());
-            assertEquals("42000", expected.getSQLState());
+    public void dmQuotedProjectionAvoidsReservedWordsAndRejectsPhysicalAndAliasSqlFailures() throws Exception {
+        Fixture reserved = new Fixture("DM");
+        reserved.columns.get(0).name = "level";
+        reserved.columns.get(1).name = "order";
+        reserved.table = "order";
+        reserved.failRawProbe = true;
+        StarRocksJdbcResourceSource.Plan plan = reserved.prepare("time_stamp");
+        assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("\"level\" AS er_c0"));
+        assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("FROM \"erp_base\".\"order\""));
+        assertEquals("er_c2", plan.timestampColumn);
+        for (boolean alias : new boolean[]{false, true}) {
+            Fixture failure = new Fixture("DM");
+            SQLException syntax = new SQLException("private-driver-secret", "42000", 919);
+            if (alias) failure.aliasProbeFailure = syntax; else failure.physicalProbeFailure = syntax;
+            try { failure.prepare(null); fail("Expected a physical/projection SQL error"); }
+            catch (SQLException expected) {
+                assertFalse(expected.getMessage().contains("private-driver-secret"));
+                assertNull(expected.getCause());
+                assertEquals("42000", expected.getSQLState());
+            }
+            assertFalse(failure.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
         }
         Fixture different = new Fixture("DM");
-        different.wrongRawPhysicalName = true;
-        different.reject("物理字段不一致");
+        different.wrongPhysicalName = true;
+        different.reject("物理列名与配置不一致");
         assertFalse(different.queries.stream().anyMatch(sql -> sql.startsWith("SELECT COUNT(*)")));
     }
 
@@ -449,7 +574,7 @@ public class StarRocksJdbcResourceSourceTest {
             f.actualUrl = actualUrl;
             StarRocksJdbcResourceSource.Plan plan = f.prepare(null);
             assertEquals(type, 10L, plan.sourceRowCount);
-            if ("KINGBASE".equals(type)) {
+            if ("KINGBASE".equals(type) || "DM".equals(type)) {
                 assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("FROM \"erp_base\".\"rf_user\""));
                 assertTrue(plan.sourceTableProperty, plan.sourceTableProperty.contains("\"Id\" AS er_c0"));
                 continue;
@@ -514,7 +639,7 @@ public class StarRocksJdbcResourceSourceTest {
         f.columns.get(0).textBytes = 1_200_000L;
         f.candidates = Collections.singletonList(repeat("A", 300_000));
         assertEquals(StarRocksJdbcResourceSource.MAX_TEXT_BYTES, f.prepare("time_stamp").columns.get(0).maxTextBytes);
-        assertTrue(f.queries.contains("SELECT Id FROM erp_base.rf_user WHERE time_stamp IS NOT NULL AND LENGTH(Id) > 262144"));
+        assertTrue(f.queries.toString(), f.queries.contains("SELECT \"Id\" FROM \"erp_base\".\"rf_user\" WHERE \"time_stamp\" IS NOT NULL AND LENGTH(\"Id\") > 262144"));
         assertEquals(128, f.candidateFetchSize);
         Fixture boundary = new Fixture("KINGBASE");
         boundary.columns.get(0).textBytes = StarRocksJdbcResourceSource.MAX_TEXT_BYTES * 4;
@@ -647,7 +772,9 @@ public class StarRocksJdbcResourceSourceTest {
     public void knownDmTimestampVendorClassCanBeValidatedByTheDifferentResourceDriver() throws Exception {
         Fixture f = new Fixture("DM");
         f.columns.get(2).javaClass = "dm.jdbc.driver.DmdbTimestamp";
-        assertEquals("DATETIME", f.prepare("time_stamp").columns.get(2).externalType);
+        StarRocksJdbcResourceSource.Column column = f.prepare("time_stamp").columns.get(2);
+        assertTrue(column.timestampText);
+        assertEquals("VARCHAR(26)", column.externalType);
     }
 
     @Test
@@ -1177,6 +1304,10 @@ public class StarRocksJdbcResourceSourceTest {
         String projectedName;
         boolean projectedTimeText;
         List<String> timeTextValues;
+        List<byte[]> binaryValues = Collections.singletonList(new byte[]{0, (byte) 0x80, (byte) 0xFF});
+        List<String> binaryProjectionValues;
+        List<String> clobValues = Collections.singletonList("达梦 CLOB");
+        List<String> clobStringValues;
 
         Field(String name, int jdbcType, String nativeType, String javaClass, int precision, int scale) {
             this.name = name; this.jdbcType = jdbcType; this.nativeType = nativeType;
@@ -1294,7 +1425,11 @@ public class StarRocksJdbcResourceSourceTest {
                         List<Object> aggregates = new ArrayList<>(); aggregates.add(sourceCount);
                         for (Field field : columns) {
                             String sourceField = "`" + field.name + "`";
-                            if ("KINGBASE".equals(datasource.getDatasourceType()) && "BYTEA".equalsIgnoreCase(field.nativeType)) {
+                            if ("DM".equals(datasource.getDatasourceType()) && dmBinary(field)) {
+                                aggregates.add(field.binaryBytes == null ? null : field.binaryBytes * 2);
+                            } else if ("DM".equals(datasource.getDatasourceType()) && dmClob(field)) {
+                                aggregates.add(field.textBytes);
+                            } else if ("KINGBASE".equals(datasource.getDatasourceType()) && "BYTEA".equalsIgnoreCase(field.nativeType)) {
                                 aggregates.add(field.binaryBytes == null ? null : field.binaryBytes * 2 * 4);
                             } else if ("KINGBASE".equals(datasource.getDatasourceType()) && kingbaseJson(field)) {
                                 aggregates.add(field.textBytes);
@@ -1329,7 +1464,32 @@ public class StarRocksJdbcResourceSourceTest {
                     }
                     if (sql.startsWith("SELECT @@session.time_zone")) return result(null,
                             Collections.singletonList(new Object[]{sessionZone, globalZone, systemZone}));
-                    if (sql.startsWith("SELECT Id FROM ") || ("KINGBASE".equals(datasource.getDatasourceType())
+                    if ("DM".equals(datasource.getDatasourceType())) {
+                        for (Field field : columns) {
+                            String raw = "\"" + field.name + "\"";
+                            if (dmBinary(field) && sql.startsWith("SELECT " + raw + ", UPPER(RAWTOHEX(")) {
+                                List<Object[]> valuesToRead = new ArrayList<>();
+                                for (int index = 0; index < field.binaryValues.size(); index++) {
+                                    byte[] bytes = field.binaryValues.get(index);
+                                    String encoded = field.binaryProjectionValues == null ? hex(bytes) : field.binaryProjectionValues.get(index);
+                                    valuesToRead.add(new Object[]{bytes, encoded});
+                                }
+                                return result(null, valuesToRead);
+                            }
+                            if (dmClob(field) && sql.startsWith("SELECT " + raw + " FROM ") && !sql.contains("LENGTH(")) {
+                                int[] cursor = {-1};
+                                return proxy(ResultSet.class, (get, arguments) -> {
+                                    if ("close".equals(get)) return null;
+                                    if ("next".equals(get)) return ++cursor[0] < field.clobValues.size();
+                                    String clob = field.clobValues.get(cursor[0]);
+                                    if ("getString".equals(get)) return field.clobStringValues == null ? clob : field.clobStringValues.get(cursor[0]);
+                                    if ("getCharacterStream".equals(get)) return clob == null ? null : new java.io.StringReader(clob);
+                                    throw new AssertionError(get);
+                                });
+                            }
+                        }
+                    }
+                    if (sql.startsWith("SELECT Id FROM ") || (("KINGBASE".equals(datasource.getDatasourceType()) || "DM".equals(datasource.getDatasourceType()))
                             && sql.startsWith("SELECT ") && sql.contains("LENGTH(") && sql.contains(" > "))) {
                         int[] cursor = {-1};
                         return proxy(ResultSet.class, (get, arguments) -> {
@@ -1354,7 +1514,9 @@ public class StarRocksJdbcResourceSourceTest {
                 if ("getColumnCount".equals(method)) return columns.size() + (alias ? aliasColumnCountDelta : 0);
                 int index = (Integer) args[0] - 1;
                 Field field = columns.get(index);
-                boolean converted = alias && (kingbaseJson(field) || "BYTEA".equalsIgnoreCase(field.nativeType) || field.projectedTimeText);
+                boolean timestampText = alias && "DM".equals(datasource.getDatasourceType()) && dmTimestampText(field);
+                boolean converted = alias && (kingbaseJson(field) || "BYTEA".equalsIgnoreCase(field.nativeType)
+                        || field.projectedTimeText || timestampText || "DM".equals(datasource.getDatasourceType()) && dmBinary(field));
                 switch (method) {
                     case "getColumnName": case "getColumnLabel":
                         if (alias) {
@@ -1372,7 +1534,7 @@ public class StarRocksJdbcResourceSourceTest {
                     case "getColumnClassName": return alias && field.projectedJavaClass != null ? field.projectedJavaClass
                             : converted ? "java.lang.String" : field.javaClass;
                     case "getPrecision": return alias && field.projectedPrecision != null ? field.projectedPrecision
-                            : converted ? (int) StarRocksJdbcResourceSource.MAX_TEXT_BYTES : field.precision;
+                            : timestampText ? 26 : converted ? (int) StarRocksJdbcResourceSource.MAX_TEXT_BYTES : field.precision;
                     case "getScale": return alias && field.projectedScale != null ? field.projectedScale : converted ? 0 : field.scale;
                     case "isNullable": return field.nullable;
                     default: throw new AssertionError(method);
@@ -1383,6 +1545,25 @@ public class StarRocksJdbcResourceSourceTest {
 
     private static boolean kingbaseJson(Field field) {
         return "JSON".equalsIgnoreCase(field.nativeType) || "JSONB".equalsIgnoreCase(field.nativeType);
+    }
+
+    private static boolean dmTimestampText(Field field) {
+        return "DATE".equalsIgnoreCase(field.nativeType) || field.jdbcType == Types.TIMESTAMP;
+    }
+
+    private static boolean dmBinary(Field field) {
+        return field.nativeType.toUpperCase(java.util.Locale.ROOT).matches("(?:BINARY|VARBINARY|RAW)(?:\\s*\\(\\s*\\d+\\s*\\))?");
+    }
+
+    private static boolean dmClob(Field field) {
+        return Arrays.asList("CLOB", "NCLOB", "TEXT").contains(field.nativeType.toUpperCase(java.util.Locale.ROOT));
+    }
+
+    private static String hex(byte[] bytes) {
+        if (bytes == null) return null;
+        StringBuilder text = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) text.append(String.format(java.util.Locale.ROOT, "%02X", value & 0xff));
+        return text.toString();
     }
 
     private static ResultSet result(ResultSetMetaData metadata, List<Object[]> rows) {
@@ -1401,6 +1582,7 @@ public class StarRocksJdbcResourceSourceTest {
             wasNull[0] = value == null;
             if ("getLong".equals(method)) return value == null ? 0L : ((Number) value).longValue();
             if ("getTimestamp".equals(method)) return value;
+            if ("getBytes".equals(method)) return value;
             if ("getString".equals(method)) {
                 String raw = rawStrings == null ? null : rawStrings[(Integer) args[0] - 1];
                 return raw != null ? raw : value == null ? null : value.toString();

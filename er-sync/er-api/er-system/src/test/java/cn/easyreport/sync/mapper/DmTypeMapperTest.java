@@ -93,6 +93,8 @@ public class DmTypeMapperTest {
         assertEquals("DATE", new PostgreSqlTypeMapper().mapType("DM", "DATE"));
         assertEquals("DATE", dm.mapType("MYSQL", "DATE"));
         assertEquals("DATE", dm.mapType("ORACLE", "DATE"));
+        assertEquals("DATETIME", dm.mapType("STARROCKS", "DATE"));
+        assertFalse(dm.isLossyConversion("STARROCKS", "DATE"));
         assertEquals("DATETIME(6)", dm.mapType("MYSQL", "DATETIME(6)"));
         assertEquals("TIMESTAMP(6)", dm.mapType("KINGBASE", "DATETIME"));
         assertEquals("TIMESTAMP(9)", dm.mapType("ORACLE", "DATETIME2"));

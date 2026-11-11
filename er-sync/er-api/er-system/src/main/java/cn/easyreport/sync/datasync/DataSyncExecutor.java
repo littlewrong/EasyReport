@@ -298,6 +298,10 @@ public abstract class DataSyncExecutor {
     private boolean mysqlProtocolSource;
 
     public DataSyncResult execute(ErDataTransfer task, ErDatasource sourceDs, ErDatasource targetDs, SyncProgressCallback callback, StopChecker stopChecker) throws Exception {
+        if ("1".equals(task.getSyncMode()) && (task.getTimestampField() == null || task.getTimestampField().trim().isEmpty())) {
+            throw new IllegalArgumentException("增量同步必须填写时间戳字段");
+        }
+        if (task.getTimestampField() != null) task.setTimestampField(task.getTimestampField().trim());
         System.out.println("[DataSyncExecutor] 开始execute方法，taskId=" + task.getTransferId());
         // 保存源和目标数据库策略
         this.sourceStrategy = cn.easyreport.sync.strategy.DatabaseStrategyFactory.getStrategy(sourceDs.getDatasourceType());

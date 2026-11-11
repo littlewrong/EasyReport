@@ -4,6 +4,8 @@ import cn.easyreport.sync.dm.DmJdbcSupport;
 import cn.easyreport.sync.domain.ErDatasource;
 import cn.easyreport.sync.kingbase.KingbaseJdbcSupport;
 
+import java.io.IOException;
+import java.io.Reader;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
@@ -38,6 +40,7 @@ final class StarRocksJdbcResourceSource {
     private static final Pattern MYSQL_BINARY_TYPE = Pattern.compile("^(?:BINARY|VARBINARY)(?:\\s*\\(\\s*\\d+\\s*\\))?$|^(?:TINY|MEDIUM|LONG)?BLOB$");
     private static final Pattern MYSQL_TIME_TYPE = Pattern.compile("^TIME(?:\\s*\\(\\s*([0-6])\\s*\\))?$");
     private static final Pattern KINGBASE_TIME_TYPE = Pattern.compile("^TIME(?:\\s*\\(\\s*([0-6])\\s*\\))?(?: WITHOUT TIME ZONE)?$");
+    private static final Pattern DM_BINARY_TYPE = Pattern.compile("^(?:BINARY|VARBINARY|RAW)(?:\\s*\\(\\s*\\d+\\s*\\))?$");
     private static final Set<String> READ_SESSION_PARAMETERS = new HashSet<>(Arrays.asList(
             "options", "initparams", "timezone", "sessiontimezone", "datestyle", "serveroption", "server_option"));
 
@@ -51,6 +54,8 @@ final class StarRocksJdbcResourceSource {
         String type = datasource == null ? "" : value(datasource.getDatasourceType()).toUpperCase(Locale.ROOT);
         boolean mysqlProtocol = isMySqlProtocol(type);
         boolean kingbaseProjection = "KINGBASE".equals(type);
+        boolean dmProjection = "DM".equals(type);
+        boolean projected = kingbaseProjection || dmProjection;
         if (!Arrays.asList("KINGBASE", "DM", "POSTGRESQL", "ORACLE", "SQLSERVER").contains(type) && !mysqlProtocol) {
             throw invalid("JDBC Resource 导入不支持该源数据库类型");
         }
@@ -89,11 +94,11 @@ final class StarRocksJdbcResourceSource {
             }
         }
         // In 3.1.5 the BE uses the raw table property and raw column names for non-MySQL URLs.
-        // Exercise that SQL against the source. Kingbase uses the quoted derived
+        // Exercise that SQL against the source. Kingbase and DM use the quoted derived
         // projection below so its scanner sees safe aliases instead of physical names.
         String qualified = mysqlProtocol ? mysqlQuote(actualSchema) + "." + mysqlQuote(table)
                 : "SQLSERVER".equals(type) ? bracket(actualSchema) + ".[dbo]." + bracket(table)
-                : kingbaseProjection || "POSTGRESQL".equals(type) || "ORACLE".equals(type) ? quote(actualSchema) + "." + quote(table)
+                : projected || "POSTGRESQL".equals(type) || "ORACLE".equals(type) ? quote(actualSchema) + "." + quote(table)
                 : actualSchema + "." + table;
         Set<String> names = new HashSet<>();
         List<String> selected = new ArrayList<>();
@@ -103,7 +108,7 @@ final class StarRocksJdbcResourceSource {
                 throw invalid("StarRocks 3.1.5 JDBC Resource 裸列名无法安全读取字段 " + value(column)
                         + "，首版仅支持无 SQL 片段的普通列名");
             }
-            selected.add(mysqlProtocol ? mysqlQuote(column) : kingbaseProjection ? quote(column) : column);
+            selected.add(mysqlProtocol ? mysqlQuote(column) : projected ? quote(column) : column);
         }
         Map<String, String> nativeTypes = mysqlProtocol
                 ? starRocksTypes(source, qualified, cancellation) : Collections.emptyMap();
@@ -112,7 +117,7 @@ final class StarRocksJdbcResourceSource {
         for (String column : sourceColumns) physicalSelections.add("SQLSERVER".equals(type) ? bracket(column) : quote(column));
         String physicalTable = "SQLSERVER".equals(type) || "POSTGRESQL".equals(type) || "ORACLE".equals(type)
                 ? qualified : quote(actualSchema) + "." + quote(table);
-        List<Column> physicalColumns = mysqlProtocol || kingbaseProjection ? null : readColumns(source, "SELECT " + String.join(", ", physicalSelections)
+        List<Column> physicalColumns = mysqlProtocol || projected ? null : readColumns(source, "SELECT " + String.join(", ", physicalSelections)
                 + " FROM " + physicalTable + " WHERE 1=0", sourceColumns, type, parameters, nativeTypes, bitCompatibleResource, resourceV2, cancellation);
         List<Column> columns = readColumns(source, emptyQuery, sourceColumns, type, parameters, nativeTypes, bitCompatibleResource, resourceV2, cancellation);
         if (physicalColumns == null) physicalColumns = columns;
@@ -126,13 +131,14 @@ final class StarRocksJdbcResourceSource {
                 throw invalid("JDBC Resource 裸标识符解析到的字段或类型与源物理字段不一致：" + raw.name);
             }
         }
-        String kingbaseTableProperty = kingbaseProjection
-                ? prepareKingbaseProjection(source, qualified, columns, cancellation) : null;
+        String projectedTableProperty = kingbaseProjection
+                ? prepareKingbaseProjection(source, qualified, columns, cancellation)
+                : dmProjection ? prepareDmProjection(source, qualified, columns, cancellation) : null;
         String timestamp = null;
         if (timestampField != null && !timestampField.trim().isEmpty()) {
             for (Column column : columns) {
                 if (column.name.equalsIgnoreCase(timestampField.trim())) {
-                    if (!"DATE".equals(column.externalType) && !"DATETIME".equals(column.externalType)) {
+                    if (!"DATE".equals(column.externalType) && !"DATETIME".equals(column.externalType) && !column.timestampText) {
                         throw invalid("时间戳字段必须为不带时区的 DATE 或 TIMESTAMP");
                     }
                     timestamp = column.name;
@@ -158,8 +164,14 @@ final class StarRocksJdbcResourceSource {
                         bytes += " + OCTET_LENGTH(" + field + ") - OCTET_LENGTH(CAST(" + field + " AS TEXT))";
                     }
                     count.append(", MAX(").append(bytes).append(")");
+                } else if (dmProjection && column.binaryHex) {
+                    // HEX contains only ASCII; its character count is its UTF-8 byte count.
+                    count.append(", MAX(CAST(LENGTH(").append(field).append(") AS BIGINT))");
                 } else if ("SQLSERVER".equals(type)) {
                     count.append(", MAX(CAST(DATALENGTH(CONVERT(NVARCHAR(MAX), ").append(field).append(")) AS BIGINT) * 2)");
+                } else if (dmProjection) {
+                    // Promote before multiplying so a very large CLOB cannot overflow an INT.
+                    count.append(", MAX(CAST(LENGTH(").append(field).append(") AS BIGINT) * 4)");
                 } else {
                     // Safe UTF-8 bound even if DM uses another server encoding. Ambiguous values
                     // receive exact source-side streaming validation before an external table exists.
@@ -194,7 +206,7 @@ final class StarRocksJdbcResourceSource {
                 Column column = texts.get(index);
                 long bytes = rows.getLong(index + 2);
                 if (rows.wasNull()) bytes = 0;
-                boolean exactUtf8 = mysqlProtocol || "POSTGRESQL".equals(type);
+                boolean exactUtf8 = mysqlProtocol || "POSTGRESQL".equals(type) || dmProjection && column.binaryHex;
                 if (bytes < 0 || bytes > (exactUtf8 ? MAX_TEXT_BYTES : MAX_TEXT_BYTES * 4)) {
                     throw invalid("源文本字段 " + column.name + (exactUtf8 ? " 的实际 UTF-8 字节数" : " 的最大字符数")
                             + "超过当前导入通道容量（1 MiB）");
@@ -216,12 +228,18 @@ final class StarRocksJdbcResourceSource {
         for (Column column : ambiguousTexts) {
             verifyAmbiguousText(source, qualified, filter, column, type, cancellation);
         }
+        if (dmProjection) verifyDmTextValues(source, qualified, filter, columns, cancellation);
         Timestamp min = null;
         Timestamp max = null;
         String minText = null;
         String maxText = null;
         if (timestamp != null && sourceRowCount > 0) {
             String field = sourceColumn(timestamp, type);
+            if (dmProjection) {
+                for (Column column : columns) {
+                    if (column.name.equals(timestamp) && column.timestampText) field = "CAST(" + field + " AS TIMESTAMP)";
+                }
+            }
             String rangeSql = "SELECT MIN(" + field + "), MAX(" + field + ")";
             if ("ORACLE".equals(type)) {
                 rangeSql += ", TO_CHAR(CAST(MIN(" + field + ") AS TIMESTAMP), 'YYYY-MM-DD HH24:MI:SS.FF6')"
@@ -288,10 +306,10 @@ final class StarRocksJdbcResourceSource {
             }
         }
         stopped(cancellation);
-        String property = kingbaseProjection ? kingbaseTableProperty
+        String property = projected ? projectedTableProperty
                 : mysqlProtocol ? actualSchema.replace("`", "``") + "`.`" + table.replace("`", "``") : qualified;
         String scanTimestamp = timestamp;
-        if (kingbaseProjection && timestamp != null) {
+        if (projected && timestamp != null) {
             for (Column column : columns) if (column.name.equals(timestamp)) scanTimestamp = column.scanName;
         }
         return new Plan(type, actualSchema, table, property, columns, scanTimestamp, sourceRowCount, min, max,
@@ -382,11 +400,150 @@ final class StarRocksJdbcResourceSource {
         return derived;
     }
 
+    /** Keep the existing DM driver, but expose only names and Java types the BE scanner can read. */
+    private static String prepareDmProjection(Connection source, String table, List<Column> columns,
+            DataSyncCancellation cancellation) throws SQLException {
+        List<String> selections = new ArrayList<>();
+        List<String> aliases = new ArrayList<>();
+        for (int index = 0; index < columns.size(); index++) {
+            Column column = columns.get(index);
+            if (!column.name.equals(column.physicalName)) throw invalid("达梦源字段 " + column.name + " 的物理列名与配置不一致");
+            column.scanName = "er_c" + index;
+            aliases.add(column.scanName);
+            selections.add(sourceTextExpression(column, "DM") + " AS " + column.scanName);
+        }
+        String derived = "(SELECT " + String.join(", ", selections) + " FROM " + table + ") er_source";
+        stopped(cancellation);
+        try (Statement statement = source.createStatement(); ResultSet rows = statement.executeQuery(
+                "SELECT " + String.join(", ", aliases) + " FROM " + derived + " WHERE 1=0")) {
+            ResultSetMetaData metadata = rows.getMetaData();
+            if (metadata.getColumnCount() != columns.size()) throw invalid("达梦 Resource 投影字段数量与源表不一致");
+            for (int index = 0; index < columns.size(); index++) {
+                stopped(cancellation);
+                Column column = columns.get(index);
+                int jdbcIndex = index + 1;
+                if (!column.scanName.equalsIgnoreCase(metadata.getColumnLabel(jdbcIndex))) {
+                    throw invalid("达梦 Resource 字段 " + column.name + " 的安全别名未正确解析");
+                }
+                if (column.binaryHex || column.timestampText) {
+                    if (!"java.lang.String".equals(metadata.getColumnClassName(jdbcIndex))
+                            || !Arrays.asList(Types.CHAR, Types.VARCHAR, Types.LONGVARCHAR,
+                                    Types.NCHAR, Types.NVARCHAR, Types.LONGNVARCHAR).contains(metadata.getColumnType(jdbcIndex))) {
+                        throw invalid("达梦字段 " + column.name + " 转为文本后未以 String 返回，无法使用现有 Resource 驱动读取");
+                    }
+                } else if (metadata.getColumnType(jdbcIndex) != column.jdbcType
+                        || !column.javaClassName.equals(metadata.getColumnClassName(jdbcIndex))
+                        || metadata.getPrecision(jdbcIndex) != column.precision
+                        || metadata.getScale(jdbcIndex) != column.scale) {
+                    throw invalid("达梦 Resource 字段 " + column.name + " 的投影改变了源标量类型或精度");
+                }
+            }
+        } catch (SQLException failure) {
+            stopped(cancellation);
+            throw safe("校验达梦 JDBC Resource 文本转换及字段别名失败", failure);
+        }
+        return derived;
+    }
+
+    /**
+     * RAWTOHEX must preserve every byte, and CLOB getString must agree with its full character stream.
+     * Do not use CAST(CLOB AS VARCHAR) or a fixed SUBSTR: either can silently truncate large values.
+     */
+    private static void verifyDmTextValues(Connection source, String table, String filter, List<Column> columns,
+            DataSyncCancellation cancellation) throws SQLException {
+        for (Column column : columns) {
+            boolean clob = isDmClob(column.nativeType);
+            if (!column.binaryHex && !clob) continue;
+            String field = sourceColumn(column.name, "DM");
+            String sql = "SELECT " + field + (column.binaryHex ? ", " + sourceTextExpression(column, "DM") : "")
+                    + " FROM " + table + filter;
+            stopped(cancellation);
+            try (Statement statement = source.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+                statement.setFetchSize(128);
+                try (ResultSet rows = statement.executeQuery(sql)) {
+                    long maximum = 0;
+                    while (rows.next()) {
+                        stopped(cancellation);
+                        String text;
+                        if (column.binaryHex) {
+                            byte[] raw = rows.getBytes(1);
+                            text = rows.getString(2);
+                            if (raw != null && raw.length > MAX_TEXT_BYTES / 2) throw invalid("达梦二进制字段 " + column.name + " 转为 HEX 后超过导入容量（1 MiB）");
+                            if (!equal(raw == null ? null : hex(raw), text)) {
+                                throw invalid("达梦二进制字段 " + column.name + " 的 HEX 转换未完整保留原始字节、空值或空字节串");
+                            }
+                        } else {
+                            text = rows.getString(1);
+                            if (text != null && text.length() > MAX_TEXT_BYTES) throw invalid("达梦 CLOB 字段 " + column.name + " 超过导入容量（1 MiB）");
+                            try (Reader reader = rows.getCharacterStream(1)) {
+                                if ((text == null) != (reader == null)) throw invalid("达梦 CLOB 字段 " + column.name + " 的字符串读取未保留 NULL");
+                                if (reader != null) {
+                                    char[] buffer = new char[4096];
+                                    int offset = 0;
+                                    int length;
+                                    while ((length = reader.read(buffer)) != -1) {
+                                        stopped(cancellation);
+                                        if (length == 0) continue;
+                                        if (offset + length > text.length()) throw invalid("达梦 CLOB 字段 " + column.name + " 的驱动字符串读取发生截断");
+                                        for (int i = 0; i < length; i++) {
+                                            if (buffer[i] != text.charAt(offset + i)) throw invalid("达梦 CLOB 字段 " + column.name + " 的驱动字符串读取与完整字符流不一致");
+                                        }
+                                        offset += length;
+                                    }
+                                    if (offset != text.length()) throw invalid("达梦 CLOB 字段 " + column.name + " 的驱动字符串读取与完整字符流长度不一致");
+                                }
+                            }
+                        }
+                        if (text != null) {
+                            long bytes = text.getBytes(StandardCharsets.UTF_8).length;
+                            if (bytes > MAX_TEXT_BYTES) throw invalid("达梦文本字段 " + column.name + " 的实际 UTF-8 字节数超过导入容量（1 MiB）");
+                            maximum = Math.max(maximum, bytes);
+                        }
+                    }
+                    column.maxTextBytes = maximum;
+                }
+            } catch (IOException failure) {
+                stopped(cancellation);
+                throw invalid("读取达梦 CLOB 字段 " + column.name + " 的完整字符流失败");
+            } catch (SQLException failure) {
+                stopped(cancellation);
+                throw safe("校验达梦 JDBC Resource 二进制或 CLOB 完整读取失败", failure);
+            }
+        }
+    }
+
+    private static String hex(byte[] bytes) {
+        char[] digits = "0123456789ABCDEF".toCharArray();
+        char[] encoded = new char[bytes.length * 2];
+        for (int index = 0; index < bytes.length; index++) {
+            int unsigned = bytes[index] & 0xff;
+            encoded[index * 2] = digits[unsigned >>> 4];
+            encoded[index * 2 + 1] = digits[unsigned & 0xf];
+        }
+        return new String(encoded);
+    }
+
+    private static boolean isDmClob(String nativeType) {
+        return Arrays.asList("CLOB", "NCLOB", "TEXT").contains(nativeType);
+    }
+
     private static String sourceTextExpression(Column column, String sourceType) {
         String field = sourceColumn(column.name, sourceType);
         if ("KINGBASE".equals(sourceType)) {
             if (column.json || column.timeText) return "CAST(" + field + " AS TEXT)";
             if (column.binaryHex) return "UPPER(ENCODE(" + field + ", 'hex'))";
+        }
+        if ("DM".equals(sourceType)) {
+            if (column.binaryHex) return "UPPER(RAWTOHEX(" + field + "))";
+            if (column.timestampText) {
+                String timestamp = "CAST(" + field + " AS TIMESTAMP)";
+                // YYYY omits the era. Reject BC values instead of silently turning them into AD;
+                // the invalid marker is rejected by the target's guarded DATETIME conversion.
+                return "CASE WHEN " + timestamp + " < TIMESTAMP '0001-01-01 00:00:00'"
+                        + " OR " + timestamp + " > TIMESTAMP '9999-12-31 23:59:59.999999'"
+                        + " THEN 'invalid datetime' ELSE TO_CHAR(" + timestamp
+                        + ", 'YYYY-MM-DD HH24:MI:SS.FF6') END";
+            }
         }
         return field;
     }
@@ -424,13 +581,19 @@ final class StarRocksJdbcResourceSource {
         int scale = metadata.getScale(index);
         boolean mysql = "MYSQL".equals(sourceType) || "TIDB".equals(sourceType);
         boolean kingbaseBinary = "KINGBASE".equals(sourceType) && "BYTEA".equals(nativeType);
-        boolean binaryHex = kingbaseBinary || mysql && MYSQL_BINARY_TYPE.matcher(nativeType).matches();
+        boolean dmBinary = "DM".equals(sourceType) && DM_BINARY_TYPE.matcher(nativeType).matches();
+        boolean dmClob = "DM".equals(sourceType) && isDmClob(nativeType);
+        boolean dmDate = "DM".equals(sourceType) && "DATE".equals(nativeType);
+        // The Resource may use the same driver with different convertToTimestamp defaults.
+        // Format all DM timestamps in SQL so the BE always receives String on both connections.
+        boolean timestampText = "DM".equals(sourceType) && (dmDate || jdbcType == Types.TIMESTAMP);
+        boolean binaryHex = kingbaseBinary || dmBinary || mysql && MYSQL_BINARY_TYPE.matcher(nativeType).matches();
         boolean kingbaseTime = "KINGBASE".equals(sourceType) && KINGBASE_TIME_TYPE.matcher(nativeType).matches();
         boolean timeText = kingbaseTime || mysql && MYSQL_TIME_TYPE.matcher(nativeType).matches();
         if (binaryHex) {
-            if (!kingbaseBinary) requireCompatibleV2(resourceV2, name, "二进制/BLOB");
+            if (!kingbaseBinary && !dmBinary) requireCompatibleV2(resourceV2, name, "二进制/BLOB");
             if (!Arrays.asList(Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB).contains(jdbcType)
-                    || !(kingbaseBinary ? "[B".equals(javaClass)
+                    || !(kingbaseBinary || dmBinary ? "[B".equals(javaClass)
                         : Arrays.asList("[B", "java.sql.Blob", "com.mysql.cj.jdbc.Blob", "com.mysql.jdbc.Blob").contains(javaClass))) {
                 throw invalid("源二进制/BLOB 字段 " + name + " 的 JDBC 类型或驱动返回类尚未验证可无损转换为 HEX 文本");
             }
@@ -441,6 +604,19 @@ final class StarRocksJdbcResourceSource {
                     || scale < 0 || scale > 6) {
                 throw invalid("源 TIME 字段 " + name + " 的 JDBC 类型、精度或驱动返回类尚未验证可保留原始文本");
             }
+        }
+        if (dmClob && (!Arrays.asList(Types.CLOB, Types.NCLOB, Types.CHAR, Types.VARCHAR, Types.LONGVARCHAR,
+                        Types.NCHAR, Types.NVARCHAR, Types.LONGNVARCHAR).contains(jdbcType)
+                || !Arrays.asList("dm.jdbc.driver.DmdbClob", "dm.jdbc.driver.DmdbNClob", "java.sql.Clob",
+                        "java.sql.NClob", "java.lang.String").contains(javaClass))) {
+            throw invalid("达梦 CLOB 字段 " + name + " 的 JDBC 类型或驱动返回类不受当前文本通道支持");
+        }
+        if (timestampText && ((!dmDate && jdbcType != Types.TIMESTAMP)
+                || (dmDate && !Arrays.asList(Types.DATE, Types.TIMESTAMP).contains(jdbcType))
+                || !(dmDate && "java.sql.Date".equals(javaClass)
+                        || Arrays.asList("java.sql.Timestamp", "dm.jdbc.driver.DmdbTimestamp", "java.time.LocalDateTime").contains(javaClass))
+                || scale < 0 || scale > 6)) {
+            throw invalid("达梦日期时间字段 " + name + " 的 JDBC 类型、精度或驱动返回类无法保证无损读取");
         }
         int unsignedBitWidth = 0;
         if (mysql
@@ -471,22 +647,28 @@ final class StarRocksJdbcResourceSource {
         }
         if (nativeType.isEmpty() || nativeType.matches(".*WITH(?: LOCAL)? TIME ZONE.*") || nativeType.contains("TIMESTAMPTZ")
                 || "DATETIMEOFFSET".equals(nativeType)
-                || nativeType.endsWith("_TZ") || (!isScalarNativeType(nativeType) && !json && !largeInteger && !binaryHex && !timeText)
-                || jdbcType == Types.CLOB || jdbcType == Types.NCLOB || (jdbcType == Types.BLOB && !binaryHex) || jdbcType == Types.ARRAY
+                || nativeType.endsWith("_TZ") || (!isScalarNativeType(nativeType) && !json && !largeInteger && !binaryHex && !timeText && !dmClob)
+                || (jdbcType == Types.CLOB || jdbcType == Types.NCLOB) && !dmClob || (jdbcType == Types.BLOB && !binaryHex) || jdbcType == Types.ARRAY
                 || jdbcType == Types.STRUCT || jdbcType == Types.SQLXML || (jdbcType == Types.OTHER && !json)) {
             throw invalid("源字段 " + name + " 类型 " + nativeType + " 尚未验证可通过 JDBC Resource 无损导入");
-        }
-        if ("DM".equals(sourceType) && "DATE".equals(nativeType)
-                && truth(parameters.get("datetotimestamp")) != truth(parameters.get("resource.datetotimestamp"))) {
-            throw invalid("达梦 DATE 字段 " + name + " 的源连接与 Resource dateToTimestamp 语义不一致");
         }
         String externalType;
         long textCapacity = -1;
         boolean largeIntegerText = false;
-        if (unsignedBitWidth > 0) {
+        if (timestampText) {
+            // Both scanner implementations know String, whereas the vendor DmdbTimestamp class
+            // follows the scanner's VARCHAR fallback. Explicit source formatting preserves clocks
+            // independently of dateToTimestamp / convertToTimestamp connection settings.
+            externalType = "VARCHAR(26)";
+        } else if (dmClob) {
+            // JDBCScanner obtains getString for vendor CLOB classes. Validate against the character
+            // stream below; never reduce the source value to a bounded DM VARCHAR expression.
+            externalType = "VARCHAR(" + MAX_TEXT_BYTES + ")";
+            textCapacity = MAX_TEXT_BYTES;
+        } else if (unsignedBitWidth > 0) {
             externalType = "LARGEINT";
         } else if (binaryHex || timeText) {
-            // Kingbase converts BYTEA/TIME in its derived query; MySQL uses the v2 driver.
+            // Kingbase and DM convert binary in the derived query; MySQL uses the v2 driver.
             externalType = "VARCHAR(" + MAX_TEXT_BYTES + ")";
             textCapacity = MAX_TEXT_BYTES;
         } else if (json) {
@@ -556,12 +738,14 @@ final class StarRocksJdbcResourceSource {
             default:
                 throw invalid("源字段 " + name + " 的驱动返回类 " + javaClass + " 尚未验证，不降级为文本导入");
         }
-        return new Column(name, physicalName, metadata.getTableName(index), metadata.getSchemaName(index),
+        Column column = new Column(name, physicalName, metadata.getTableName(index), metadata.getSchemaName(index),
                 jdbcType, nativeType, javaClass, externalType,
                 nullability != ResultSetMetaData.columnNoNulls, precision, scale, textCapacity, json, largeIntegerText,
                 ("MYSQL".equals(sourceType) || "TIDB".equals(sourceType)) && nativeType.startsWith("TIMESTAMP"),
                 isMySqlProtocol(sourceType) && "java.lang.Boolean".equals(javaClass) && nativeType.startsWith("TINYINT"), unsignedBitWidth,
                 binaryHex, timeText);
+        column.timestampText = timestampText;
+        return column;
     }
 
     private static void requireCompatibleV2(boolean compatibleResource, String name, String kind) {
@@ -671,7 +855,7 @@ final class StarRocksJdbcResourceSource {
     private static String sourceColumn(String name, String type) {
         if (isMySqlProtocol(type)) return mysqlQuote(name);
         if ("SQLSERVER".equals(type)) return bracket(name);
-        return "KINGBASE".equals(type) || "POSTGRESQL".equals(type) || "ORACLE".equals(type) ? quote(name) : name;
+        return "KINGBASE".equals(type) || "DM".equals(type) || "POSTGRESQL".equals(type) || "ORACLE".equals(type) ? quote(name) : name;
     }
     private static String identifier(String name) {
         if (name != null && name.length() >= 2 && name.startsWith("\"") && name.endsWith("\"")) {
@@ -752,7 +936,8 @@ final class StarRocksJdbcResourceSource {
                 // Vendor nullable metadata is not a target constraint. All temporary columns are
                 // nullable; the real destination's constraints remain enforced by strict INSERT.
                 declarations.add(name + " " + column.externalType + " NULL");
-                selections.add(column.largeIntegerText ? "CAST(" + name + " AS LARGEINT)" : name);
+                selections.add(column.largeIntegerText ? "CAST(" + name + " AS LARGEINT)"
+                        : column.timestampText ? "CAST(" + name + " AS DATETIME)" : name);
             }
             this.externalColumnsSql = String.join(", ", declarations);
             this.selectColumnsSql = String.join(", ", selections);
@@ -781,6 +966,7 @@ final class StarRocksJdbcResourceSource {
         final int unsignedBitWidth;
         final boolean binaryHex;
         final boolean timeText;
+        boolean timestampText;
         String mysqlTimestampMinText;
         String mysqlTimestampMaxText;
         long maxTextBytes = -1;

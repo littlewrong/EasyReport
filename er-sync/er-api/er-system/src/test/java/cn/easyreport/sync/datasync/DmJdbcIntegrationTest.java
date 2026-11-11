@@ -1,6 +1,7 @@
 package cn.easyreport.sync.datasync;
 
 import cn.easyreport.sync.dm.DmJdbcSupport;
+import cn.easyreport.sync.domain.ErDatasource;
 import cn.easyreport.sync.strategy.DatabaseStrategyFactory;
 import java.lang.reflect.Field;
 import java.sql.Connection;
@@ -13,8 +14,10 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import org.junit.Assume;
@@ -129,6 +132,79 @@ public class DmJdbcIntegrationTest {
                 executor.clearTable(conn, table);
                 assertEquals(0, count(conn, table));
             } finally { executor.cancellationContext().close(); }
+        }
+    }
+
+    @Test
+    public void realDmResourceProjectionReadsBinaryLargeClobAndStoredDateClockUsingCurrentDriver() throws Exception {
+        String url = System.getenv("ER_SYNC_DM_TEST_JDBC_URL");
+        Assume.assumeTrue("Set ER_SYNC_DM_TEST_JDBC_URL to opt in using a dedicated DM8+ test database",
+                url != null && !url.trim().isEmpty());
+        Properties properties = new Properties();
+        String username = System.getenv("ER_SYNC_DM_TEST_USERNAME");
+        String password = System.getenv("ER_SYNC_DM_TEST_PASSWORD");
+        if (username != null) properties.setProperty("user", username);
+        if (password != null) properties.setProperty("password", password);
+        Class.forName("dm.jdbc.driver.DmDriver");
+        try (TestDatabase database = new TestDatabase(url, properties)) {
+            Connection conn = database.connection;
+            assertTrue(conn.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT).contains("dm"));
+            String tableName = database.prefix + "_Resource";
+            String table = database.createTable(tableName,
+                    "\"COL_BINARY_16\" BINARY(16), \"COL_TEXT\" CLOB, \"COL_DATE\" DATE, \"COL_STAMP\" TIMESTAMP(6)");
+            byte[] bytes = new byte[]{0, (byte) 0x80, (byte) 0xFF, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0};
+            StringBuilder text = new StringBuilder();
+            for (int i = 0; i < 20_000; i++) text.append("达梦Clob-");
+            String clob = text.toString();
+            Timestamp stamp = Timestamp.valueOf("2026-11-11 13:14:15.123456");
+            try (PreparedStatement insert = conn.prepareStatement("INSERT INTO " + table + " VALUES (?, ?, ?, ?)")) {
+                insert.setBytes(1, bytes);
+                insert.setCharacterStream(2, new java.io.StringReader(clob), clob.length());
+                insert.setTimestamp(3, stamp); insert.setTimestamp(4, stamp); insert.executeUpdate();
+            }
+            write(conn, "INSERT INTO " + table + " VALUES (NULL, NULL, NULL, NULL)");
+            String storedDate;
+            try (Statement statement = conn.createStatement(); ResultSet rows = statement.executeQuery(
+                    "SELECT TO_CHAR(CAST(\"COL_DATE\" AS TIMESTAMP), 'YYYY-MM-DD HH24:MI:SS.FF6') FROM "
+                            + table + " WHERE \"COL_DATE\" IS NOT NULL")) {
+                assertTrue(rows.next()); storedDate = rows.getString(1);
+            }
+            ErDatasource datasource = new ErDatasource();
+            datasource.setDatasourceType("DM"); datasource.setDriverClass("dm.jdbc.driver.DmDriver");
+            datasource.setJdbcUrl(url); datasource.setUsername(conn.getMetaData().getUserName());
+            Map<String, String> resource = new HashMap<>();
+            resource.put("driver_class", datasource.getDriverClass()); resource.put("jdbc_uri", url);
+            resource.put("user", datasource.getUsername());
+            try (DataSyncCancellation cancellation = new DataSyncCancellation()) {
+                StarRocksJdbcResourceSource.Plan plan = StarRocksJdbcResourceSource.prepare(datasource, conn,
+                        database.schema, tableName, Arrays.asList("COL_BINARY_16", "COL_TEXT", "COL_DATE", "COL_STAMP"),
+                        null, resource, cancellation);
+                assertEquals(2L, plan.sourceRowCount);
+                assertTrue(plan.columns.get(0).binaryHex);
+                assertTrue(plan.columns.get(2).timestampText);
+                List<String> aliases = new ArrayList<>();
+                for (StarRocksJdbcResourceSource.Column column : plan.columns) aliases.add(column.scanName);
+                int nonNull = 0, nullRows = 0;
+                try (Statement statement = conn.createStatement(); ResultSet rows = statement.executeQuery(
+                        "SELECT " + String.join(", ", aliases) + " FROM " + plan.sourceTableProperty)) {
+                    while (rows.next()) {
+                        String hex = rows.getString(1);
+                        if (hex == null) {
+                            nullRows++;
+                            assertNull(rows.getString(2)); assertNull(rows.getString(3)); assertNull(rows.getTimestamp(4));
+                        } else {
+                            nonNull++;
+                            assertEquals("0080FF0102030405060708090A0B0C00", hex);
+                            assertEquals(clob, rows.getString(2));
+                            // Oracle-compatible DATE stores its clock; standard DATE may store midnight.
+                            // Compare with server-side formatting so JDBC getDate cannot erase a stored clock.
+                            assertEquals(storedDate, rows.getString(3));
+                            assertEquals(stamp, Timestamp.valueOf(rows.getString(4)));
+                        }
+                    }
+                }
+                assertEquals(1, nonNull); assertEquals(1, nullRows);
+            }
         }
     }
 

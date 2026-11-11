@@ -58,6 +58,7 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
     private boolean createAttempted;
     private boolean executed;
     private boolean closed;
+    private String preparationStage = "配置导入会话";
 
     private StarRocksJdbcResourceFullImport(Connection target, String resourceName,
             Map<String, String> resourceProperties, String targetTable, List<String> targetColumns,
@@ -135,15 +136,19 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
             importer.verifyBinaryDecoderSemantics();
             stopped(cancellation);
             try (Statement statement = target.createStatement()) {
+                importer.preparationStage = "创建临时数据库";
                 statement.execute("CREATE DATABASE IF NOT EXISTS " + quote(StarRocksExternalFullImport.IMPORT_DATABASE));
                 stopped(cancellation);
                 String ddl = "CREATE EXTERNAL TABLE " + importer.externalTable + " (" + source.externalColumnsSql
                         + ") ENGINE=JDBC PROPERTIES (\"resource\"=" + property(resourceName)
                         + ",\"table\"=" + property(source.sourceTableProperty) + ")";
                 importer.createAttempted = true;
+                importer.preparationStage = "创建 JDBC 外表";
                 statement.execute(ddl);
             }
+            importer.preparationStage = "实际读取预检";
             importer.preflight();
+            importer.preparationStage = "复核 Resource 配置";
             importer.verifyResourceUnchanged();
             return importer;
         } catch (Exception failure) {
@@ -162,7 +167,8 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
             }
             if (primary instanceof SQLException && !(primary instanceof ResourceSQLException)
                     && !(primary instanceof DataSyncCancellation.SyncStoppedException)) {
-                SQLException safe = safe("JDBC Resource 外表创建或实际读取预检失败；请检查 Resource、驱动、BE 网络及源 SQL 兼容性，尚未清空目标表",
+                SQLException safe = safe("JDBC Resource 外表创建或实际读取预检失败（阶段：" + importer.preparationStage
+                        + "）；请检查 Resource、驱动、BE 网络及源 SQL 兼容性，尚未清空目标表",
                         (SQLException) primary);
                 for (Throwable suppressed : primary.getSuppressed()) safe.addSuppressed(suppressed);
                 throw safe;
@@ -218,6 +224,7 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
             }
         }
         stopped(cancellation);
+        preparationStage = "校验 INSERT SELECT 语句";
         try (Statement statement = target.createStatement();
                 ResultSet rows = statement.executeQuery("EXPLAIN " + insertSql("1=0"))) {
             while (rows.next()) stopped(cancellation);
@@ -404,8 +411,8 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
 
     private void probe(String predicate, boolean requireVisibleData) throws SQLException {
         stopped(cancellation);
-        if ("SQLSERVER".equals(source.sourceType)) {
-            probeSqlServer(predicate, requireVisibleData);
+        if ("SQLSERVER".equals(source.sourceType) || "DM".equals(source.sourceType)) {
+            probeWithoutLimit(predicate, requireVisibleData);
             return;
         }
         String sql = "SELECT " + selectColumns + " FROM " + externalTable
@@ -426,9 +433,10 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
         stopped(cancellation);
     }
 
-    private void probeSqlServer(String predicate, boolean requireVisibleData) throws SQLException {
-        // SR 3.1.5's BE appends LIMIT for non-Oracle JDBC URLs. A SQLServer scan must therefore
-        // have no planner limit. Aggregating every effective projection both forces the real
+    private void probeWithoutLimit(String predicate, boolean requireVisibleData) throws SQLException {
+        // SR 3.1.5's BE appends LIMIT for non-Oracle JDBC URLs. SQL Server and DM's
+        // compatibility modes must not depend on that dialect-specific syntax.
+        // Aggregating every effective projection both forces the real
         // driver read/type conversion and returns one result row without setMaxRows side effects.
         List<String> projections = new ArrayList<>();
         projections.add("COUNT(*)");
@@ -440,12 +448,12 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
                 + (predicate == null ? "" : " WHERE " + predicate);
         stopped(cancellation);
         try (Statement statement = target.createStatement(); ResultSet rows = statement.executeQuery(sql)) {
-            if (!rows.next()) throw new IllegalStateException("SQL Server JDBC Resource 聚合预检未返回结果，尚未清空目标表");
+            if (!rows.next()) throw new IllegalStateException("JDBC Resource 聚合预检未返回结果，尚未清空目标表");
             long visible = rows.getLong(1);
-            if (rows.wasNull() || visible < 0) throw new IllegalStateException("SQL Server JDBC Resource 聚合预检行数无效，尚未清空目标表");
+            if (rows.wasNull() || visible < 0) throw new IllegalStateException("JDBC Resource 聚合预检行数无效，尚未清空目标表");
             for (int index = 0; index < source.columns.size(); index++) rows.getObject(index + 2);
             if (requireVisibleData && source.sourceRowCount > 0 && visible == 0) {
-                throw new IllegalArgumentException("源端统计存在有效数据，但 SQL Server JDBC Resource 未读取到数据，尚未清空目标表");
+                throw new IllegalArgumentException("源端统计存在有效数据，但 JDBC Resource 未读取到数据，尚未清空目标表");
             }
         }
         stopped(cancellation);
@@ -601,6 +609,7 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
             String targetType = types.get(targetColumns.get(index).toLowerCase(Locale.ROOT));
             if (targetType == null) throw new IllegalArgumentException("JDBC Resource 导入缺少目标字段 " + targetColumns.get(index) + "，尚未清空目标表");
             String expression = quote(column.scanName);
+            if (column.timestampText) expression = timestampProjection(expression);
             if (column.largeIntegerText) expression = "CAST(" + expression + " AS LARGEINT)";
             if (column.json) {
                 if ("JSON".equals(targetType)) {
@@ -646,6 +655,12 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
         return "IF(ASSERT_TRUE(" + column + " IS NULL OR (LENGTH(" + column + ") <= " + (capacity * 2)
                 + " AND IFNULL(HEX(" + decoded + ") = UPPER(" + column + "), FALSE)), 'binary hex conversion failed'), "
                 + decoded + ", NULL)";
+    }
+
+    private static String timestampProjection(String column) {
+        String converted = "CAST(" + column + " AS DATETIME)";
+        return "IF(ASSERT_TRUE(" + column + " IS NULL OR " + converted
+                + " IS NOT NULL, 'datetime conversion failed'), " + converted + ", NULL)";
     }
 
     private static long binaryCapacity(String type) {

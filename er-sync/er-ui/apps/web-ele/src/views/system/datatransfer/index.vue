@@ -163,6 +163,13 @@ export default {
         targetDatasourceId: [
           { required: true, message: '请选择目标数据源', trigger: 'change' },
         ],
+        timestampField: [
+          {
+            validator: (rule, value, callback) =>
+              this.validateTimestampField(rule, value, callback),
+            trigger: ['blur', 'change'],
+          },
+        ],
         directImportMethod: [
           {
             validator: (rule, value, callback) =>
@@ -574,6 +581,16 @@ export default {
           this.$refs.form.clearValidate(['directImportMethod', 'catalogName', 'resourceName']);
       });
     },
+    validateTimestampField(rule, value, callback) {
+      if (
+        this.form.syncMode === '1' &&
+        (typeof value !== 'string' || !value.trim())
+      ) {
+        callback(new Error('增量同步必须填写时间戳字段'));
+        return;
+      }
+      callback();
+    },
     validateDirectImportMethod(rule, value, callback) {
       if (this.form.externalTableEnabled !== '1') {
         callback();
@@ -691,6 +708,10 @@ export default {
             typeof this.form.resourceName === 'string'
               ? this.form.resourceName.trim()
               : '';
+          this.form.timestampField =
+            typeof this.form.timestampField === 'string'
+              ? this.form.timestampField.trim()
+              : '';
           // deleteWindowYears 已绑定在 form 上，直接提交
 
           if (this.form.transferId == null) {
@@ -750,6 +771,7 @@ export default {
     },
     /** 同步模式变更 */
     handleSyncModeChange(val) {
+      this.$nextTick(() => this.$refs.form?.clearValidate('timestampField'));
       if (val === '0') {
         // 初始化同步：禁用同步操作选项，全量同步
         this.syncOperations.insert = true;
@@ -1700,21 +1722,25 @@ D
           <div class="external-table-policy-tip">
             <template v-if="form.timestampField && form.timestampField.trim()">
 </template>
-            <template v-else>未配置时间戳字段时按整表导入。</template>
+            <template v-else>&nbsp;未配置时间戳字段时按整表导入。</template>
           </div>
         </el-form-item>
 
         <!-- 时间戳字段（独立一行，始终显示） -->
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-form-item label="时间戳字段" prop="timestampField">
+            <el-form-item
+              label="时间戳字段"
+              prop="timestampField"
+              :required="form.syncMode === '1'"
+            >
               <el-input
                 v-model="form.timestampField"
-                placeholder="默认: time_stamp"
+                :placeholder="form.syncMode === '1' ? '必填，例如：time_stamp' : '可选，留空时整表导入'"
               >
                 <template #append>
                   <el-tooltip
-                    content="同步时依据此字段判断时间窗口"
+                    content="增量同步必填，用于判断新增或更新的数据；初始化同步可选，留空时整表导入"
                     placement="top"
                   >
                     <CircleHelp class="inline-icon" />

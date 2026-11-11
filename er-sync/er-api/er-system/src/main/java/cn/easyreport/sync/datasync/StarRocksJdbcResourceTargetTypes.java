@@ -108,6 +108,15 @@ final class StarRocksJdbcResourceTargetTypes {
 
     private static Scalar scalar(StarRocksJdbcResourceSource.Column column) {
         if (column.json || column.externalTextCapacity >= 0) return null; // Handled by the caller's text/JSON probes.
+        if (column.timestampText) {
+            // DM DATE / vendor timestamps use an ISO text transport with the current
+            // driver. Their logical domain remains a clock-bearing timestamp.
+            if (!"VARCHAR(26)".equals(column.externalType)
+                    || (column.jdbcType != Types.DATE && column.jdbcType != Types.TIMESTAMP)
+                    || column.scale < 0 || column.scale > 6) return null;
+            return new Scalar(Kind.DATETIME, null, null, 0, column.scale,
+                    19L + (column.scale > 0 ? 1L + column.scale : 0));
+        }
         if (column.unsignedBitWidth > 0) {
             // The compatible Resource driver returns BigInteger for multi-bit MySQL
             // values. Keep the source bit domain instead of the LARGEINT transport width.
