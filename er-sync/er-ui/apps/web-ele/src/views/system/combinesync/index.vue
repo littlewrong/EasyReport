@@ -429,13 +429,32 @@
 
         <div class="form-section">目标数据配置</div>
 
+        <el-alert
+          v-if="datasourceMismatch"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        >
+          <template #title>
+            当前任务的源和目标数据源不一致，请确认目标库后修正配置。
+            <el-button
+              link
+              type="primary"
+              @click="handleSourceChange(form.sourceDatasourceId)"
+            >
+              与源保持一致
+            </el-button>
+          </template>
+        </el-alert>
+
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="目标数据源" prop="targetDatasourceId">
               <el-select
                 v-model="form.targetDatasourceId"
-                placeholder="请选择目标数据源"
-                filterable
+                placeholder="跟随源数据源"
+                disabled
                 style="width: 100%"
               >
                 <el-option
@@ -458,6 +477,10 @@
             </el-form-item>
           </el-col>
         </el-row>
+
+        <div class="datasource-hint">
+          合并同步仅支持同一数据源内的跨库合并，目标数据源自动与源保持一致，目标库名可不同。
+        </div>
 
         <el-form-item label="来源列名" prop="sourceColumn">
           <el-input
@@ -1154,7 +1177,17 @@ export default {
           { required: true, message: '源表名不能为空', trigger: 'blur' },
         ],
         targetDatasourceId: [
-          { required: true, message: '请选择目标数据源', trigger: 'change' },
+          { required: true, message: '请先选择源数据源', trigger: 'change' },
+          {
+            validator: (_rule, _value, callback) => {
+              if (this.datasourceMismatch) {
+                callback(new Error('合并同步的源和目标必须使用同一数据源'));
+              } else {
+                callback();
+              }
+            },
+            trigger: 'change',
+          },
         ],
         targetTable: [
           { required: true, message: '目标表名不能为空', trigger: 'blur' },
@@ -1163,6 +1196,13 @@ export default {
     };
   },
   computed: {
+    datasourceMismatch() {
+      return (
+        this.form.sourceDatasourceId != null &&
+        String(this.form.sourceDatasourceId) !==
+          String(this.form.targetDatasourceId)
+      );
+    },
     syncProgressInfo() {
       if (!this.syncProgressData.syncProgress) {
         return { current: 0, total: 0, percent: 0, message: '' };
@@ -1298,7 +1338,6 @@ export default {
       if (!this.$refs.form) return;
       this.$refs.form.validate((valid) => {
         if (valid) {
-          // 合并同步允许源和目标使用同一个数据源（从不同库/表合并到同一数据源的不同库/表）
           this.form.syncInsert = this.syncOperations.insert ? '1' : '0';
           this.form.syncUpdate = this.syncOperations.update ? '1' : '0';
           this.form.syncDelete = this.syncOperations.delete ? '1' : '0';
@@ -1350,7 +1389,10 @@ export default {
         });
     },
     handleSourceChange(val) {
-      // 合并同步允许源和目标使用同一个数据源，无需清空
+      this.form.targetDatasourceId = val;
+      this.$nextTick(() => {
+        this.$refs.form?.clearValidate('targetDatasourceId');
+      });
     },
     handleSyncModeChange(val) {
       if (val === '0') {
@@ -1643,6 +1685,11 @@ export default {
   width: 16px;
   height: 16px;
   vertical-align: middle;
+}
+.datasource-hint {
+  margin-bottom: 18px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
 }
 .app-container > .el-form :deep(.el-select) {
   min-width: 180px;

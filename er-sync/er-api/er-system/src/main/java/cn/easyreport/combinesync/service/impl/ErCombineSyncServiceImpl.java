@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import cn.easyreport.common.exception.ServiceException;
 import cn.easyreport.common.utils.DateUtils;
 import cn.easyreport.common.utils.StringUtils;
 import cn.easyreport.combinesync.domain.ErCombineSync;
@@ -76,6 +77,7 @@ public class ErCombineSyncServiceImpl implements IErCombineSyncService
     @Transactional
     public int insertErCombineSync(ErCombineSync erCombineSync)
     {
+        validateDatasources(erCombineSync.getSourceDatasourceId(), erCombineSync.getTargetDatasourceId());
         if (erCombineSync.getSourceSchemaPattern() != null && erCombineSync.getSourceSchemaPattern().trim().isEmpty())
         {
             erCombineSync.setSourceSchemaPattern(null);
@@ -97,6 +99,19 @@ public class ErCombineSyncServiceImpl implements IErCombineSyncService
     @Transactional
     public int updateErCombineSync(ErCombineSync erCombineSync)
     {
+        Long sourceId = erCombineSync.getSourceDatasourceId();
+        Long targetId = erCombineSync.getTargetDatasourceId();
+        // Mapper 按非空字段更新，校验的是更新后的配置，不能让单边修改绕过限制。
+        if ((sourceId == null || targetId == null) && erCombineSync.getCombineId() != null)
+        {
+            ErCombineSync existing = erCombineSyncMapper.selectErCombineSyncByCombineId(erCombineSync.getCombineId());
+            if (existing != null)
+            {
+                sourceId = sourceId != null ? sourceId : existing.getSourceDatasourceId();
+                targetId = targetId != null ? targetId : existing.getTargetDatasourceId();
+            }
+        }
+        validateDatasources(sourceId, targetId);
         if (erCombineSync.getSourceSchemaPattern() != null && erCombineSync.getSourceSchemaPattern().trim().isEmpty())
         {
             erCombineSync.setSourceSchemaPattern(null);
@@ -138,6 +153,31 @@ public class ErCombineSyncServiceImpl implements IErCombineSyncService
         return true;
     }
 
+    /**
+     * 合并 SQL 在目标连接上直接引用源表，仅支持同一数据源内跨库合并。
+     */
+    private String getDatasourceValidationMessage(Long sourceId, Long targetId)
+    {
+        if (sourceId == null || targetId == null)
+        {
+            return "源和目标数据源不能为空，合并同步必须使用同一个数据源";
+        }
+        if (!sourceId.equals(targetId))
+        {
+            return "合并同步仅支持同一数据源内跨库合并，源和目标数据源必须一致，请编辑任务修正配置";
+        }
+        return null;
+    }
+
+    private void validateDatasources(Long sourceId, Long targetId)
+    {
+        String message = getDatasourceValidationMessage(sourceId, targetId);
+        if (message != null)
+        {
+            throw new ServiceException(message);
+        }
+    }
+
     // ==================== 执行同步 ====================
 
     @Override
@@ -150,6 +190,14 @@ public class ErCombineSyncServiceImpl implements IErCombineSyncService
         {
             result.put("success", false);
             result.put("message", "合并任务不存在");
+            return result;
+        }
+
+        String datasourceError = getDatasourceValidationMessage(task.getSourceDatasourceId(), task.getTargetDatasourceId());
+        if (datasourceError != null)
+        {
+            result.put("success", false);
+            result.put("message", datasourceError);
             return result;
         }
 
@@ -687,6 +735,7 @@ public class ErCombineSyncServiceImpl implements IErCombineSyncService
             return result;
         }
 
+        validateDatasources(task.getSourceDatasourceId(), task.getTargetDatasourceId());
         ErDatasource sourceDatasource = erDatasourceMapper.selectErDatasourceByDatasourceId(task.getSourceDatasourceId());
         if (sourceDatasource == null)
         {
@@ -774,6 +823,13 @@ public class ErCombineSyncServiceImpl implements IErCombineSyncService
         {
             result.put("success", false);
             result.put("message", "合并任务不存在");
+            return result;
+        }
+        String datasourceError = getDatasourceValidationMessage(task.getSourceDatasourceId(), task.getTargetDatasourceId());
+        if (datasourceError != null)
+        {
+            result.put("success", false);
+            result.put("message", datasourceError);
             return result;
         }
         if ("1".equals(task.getSyncStatus()))
