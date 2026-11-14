@@ -20,12 +20,12 @@ from app.schemas import (
 )
 
 router = APIRouter(
-    prefix="/bi/datasource",
+    prefix="/datasource",
     tags=["bi-datasource"],
     dependencies=[Depends(get_current_user)],
 )
 public_router = APIRouter(
-    prefix="/bi/datasource/public",
+    prefix="/datasource/public",
     tags=["bi-datasource-runtime"],
     dependencies=[Depends(get_current_user)],
 )

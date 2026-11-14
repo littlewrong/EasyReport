@@ -11,7 +11,7 @@ from app.modules.bi import connector_service
 from app.modules.bi.schemas import DbConnectorBody
 
 router = APIRouter(
-    prefix="/bi/datasource",
+    prefix="/datasource",
     tags=["bi-db-connector"],
     dependencies=[Depends(get_current_user)],
 )

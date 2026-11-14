@@ -35,25 +35,25 @@ export namespace BiProjectApi {
 }
 
 async function createBiProject(data: BiProjectApi.ProjectCreateParams) {
-  return requestClient.post<number>('/bi/project/create', data);
+  return requestClient.post<number>('/project/create', data);
 }
 
 async function deleteBiProject(id: number | string) {
-  return requestClient.delete<boolean>(`/bi/project/${id}`);
+  return requestClient.delete<boolean>(`/project/${id}`);
 }
 
 async function editBiProject(data: BiProjectApi.ProjectEditParams) {
-  return requestClient.post<boolean>('/bi/project/edit', data);
+  return requestClient.post<boolean>('/project/edit', data);
 }
 
 async function getBiProjectList(params: { limit?: number; page?: number }) {
-  return requestClient.get<BiProjectApi.ProjectListResult>('/bi/project/list', {
+  return requestClient.get<BiProjectApi.ProjectListResult>('/project/list', {
     params,
   });
 }
 
 async function publishBiProject(data: BiProjectApi.ProjectPublishParams) {
-  return requestClient.post<boolean>('/bi/project/publish', data);
+  return requestClient.post<boolean>('/project/publish', data);
 }
 
 export {

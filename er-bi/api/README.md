@@ -27,14 +27,14 @@
   - `/api/system/role`
   - `/api/system/menu`
 - BI 大屏项目
-  - `/api/bi/project/create`
-  - `/api/bi/project/list`
-  - `/api/bi/project/getData`
-  - `/api/bi/project/save/data`
-  - `/api/bi/project/edit`
-  - `/api/bi/project/publish`
+  - `/api/project/create`
+  - `/api/project/list`
+  - `/api/project/getData`
+  - `/api/project/save/data`
+  - `/api/project/edit`
+  - `/api/project/publish`
 - BI 数据源
-  - DB 连接器：`/api/bi/datasource/db-connectors`
+  - DB 连接器：`/api/datasource/db-connectors`
   - HTTP/SQL/Python 数据源：由 `datasource_api`（默认端口 5321）提供
 
 ## 快速开始
@@ -168,8 +168,8 @@ api/
 │   │       ├── users.py         # 用户管理接口
 │   │       ├── roles.py         # 角色管理接口
 │   │       ├── menus.py         # 菜单管理接口
-│   │       ├── bi_reports.py    # BI 大屏项目接口
-│   │       ├── bi_datasources.py # DB连接器接口
+│   │       ├── reports.py       # BI 大屏项目接口
+│   │       ├── datasources.py   # DB连接器接口
 │   │       └── internal.py       # 数据源服务内部接口
 │   ├── core/
 │   │   ├── config.py            # 配置

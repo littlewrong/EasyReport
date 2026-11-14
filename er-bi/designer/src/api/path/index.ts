@@ -2,7 +2,7 @@ import { get, post, del } from '@/api/http'
 import { API_BASE } from '@/api/config'
 
 // 后端 BI 大屏接口前缀，开发态经 vite proxy、生产态经 nginx 同源转发到后端
-const PREFIX = `${API_BASE}/bi/project`
+const PREFIX = `${API_BASE}/project`
 
 export interface ProjectListItem {
   id: number

@@ -38,14 +38,14 @@ def _get(path: str):
 
 
 def resolve(connector_id: int) -> dict:
-    connector = _get(f"/internal/bi/db-connectors/{connector_id}/resolve")
+    connector = _get(f"/internal/db-connectors/{connector_id}/resolve")
     if not connector:
         raise HTTPException(status_code=404, detail="DB连接器不存在")
     return connector
 
 
 def options() -> list[dict]:
-    return _get("/internal/bi/db-connectors/options") or []
+    return _get("/internal/db-connectors/options") or []
 
 
 def ensure_exists(connector_id: int) -> dict:
