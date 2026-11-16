@@ -1,0 +1,70 @@
+services:
+  er-bi-api:
+    build:
+      context: ./api
+    environment:
+      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_NAME: ${DB_NAME:-easyreport_bi}
+      JWT_SECRET: ${JWT_SECRET:-er-bi-jwt-secret-change-me-in-prod}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-er-bi-internal-dev-change-me}
+      CONNECTOR_SECRET_KEY: ${CONNECTOR_SECRET_KEY:-}
+      DATASOURCE_SERVICE_URL: http://er-bi-datasource:5321/api
+    ports:
+      - "5320:5320"
+    depends_on:
+      er-bi-datasource:
+        condition: service_healthy
+    networks:
+      - er-bi-control
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  er-bi-datasource:
+    build:
+      context: ./datasource_api
+    environment:
+      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_NAME: ${DB_NAME:-easyreport_bi}
+      JWT_SECRET: ${JWT_SECRET:-er-bi-jwt-secret-change-me-in-prod}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-er-bi-internal-dev-change-me}
+      MAIN_API_URL: http://er-bi-api:5320/api
+      HTTP_ALLOW_PRIVATE_NETWORKS: ${HTTP_ALLOW_PRIVATE_NETWORKS:-false}
+      SQL_READ_ONLY: ${SQL_READ_ONLY:-true}
+      PYTHON_TIMEOUT_SECONDS: ${PYTHON_TIMEOUT_SECONDS:-8}
+      PYTHON_MEMORY_LIMIT_MB: ${PYTHON_MEMORY_LIMIT_MB:-256}
+    ports:
+      # 本地调试开放；生产环境应仅通过 nginx/API Gateway 暴露。
+      - "5321:5321"
+    networks:
+      - er-bi-control
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5321/api/status', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 768m
+    restart: unless-stopped
+
+networks:
+  er-bi-control:
+    driver: bridge

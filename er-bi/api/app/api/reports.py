@@ -13,7 +13,7 @@ from app.modules.bi.schemas import (
 from app.modules.system.models import SysUser
 
 router = APIRouter(
-    prefix="/bi/project",
+    prefix="/project",
     tags=["bi-project"],
     dependencies=[Depends(get_current_user)],
 )

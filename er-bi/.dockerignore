@@ -1,0 +1,12 @@
+.git
+.build
+release
+api/.venv
+api/config.ini
+datasource_api/.venv
+datasource_api/config.ini
+**/__pycache__
+**/*.pyc
+bi_designer
+deploy
+ui

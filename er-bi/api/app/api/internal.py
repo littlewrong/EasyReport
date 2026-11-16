@@ -24,14 +24,14 @@ def require_internal_service(
 
 
 @router.get(
-    "/bi/db-connectors/options", dependencies=[Depends(require_internal_service)]
+    "/db-connectors/options", dependencies=[Depends(require_internal_service)]
 )
 def connector_options(db: Session = Depends(get_db)):
     return ok(connector_service.list_all_options(db))
 
 
 @router.get(
-    "/bi/db-connectors/{connector_id}/resolve",
+    "/db-connectors/{connector_id}/resolve",
     dependencies=[Depends(require_internal_service)],
 )
 def resolve_connector(connector_id: int, db: Session = Depends(get_db)):

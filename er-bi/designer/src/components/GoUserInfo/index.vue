@@ -11,10 +11,11 @@
         v-if="!fallback"
         round
         object-fit="cover"
-        size="medium"
-        :src="Person"
+        size="small"
+        :src="avatar"
         @error="errorHandle"
       ></n-avatar>
+      <span v-if="displayName" class="user-name">{{ displayName }}</span>
     </div>
   </n-dropdown>
 
@@ -23,12 +24,12 @@
 </template>
 
 <script lang="ts" setup>
-import { h, ref } from 'vue'
+import { computed, h, onMounted, ref } from 'vue'
 import { NAvatar, NText } from 'naive-ui'
 import { renderIcon } from '@/utils'
 import { logout, renderLang } from '@/utils'
+import { getUserInfoApi, type UserInfoResult } from '@/api/user'
 import { GoSystemSet } from '@/components/GoSystemSet/index'
-import Person from './person.png'
 
 import { icon } from '@/plugins'
 const {
@@ -44,6 +45,29 @@ const modelShow = ref(false)
 // 是否失败
 const fallback = ref(false)
 
+// 当前登录用户，取自主系统 /user/info
+const userInfo = ref<UserInfoResult | null>(null)
+
+// 与主系统(@vben/preferences)一致的默认头像，加载失败时回退为图标
+const DEFAULT_AVATAR =
+  'https://unpkg.com/@vbenjs/static-source@0.1.7/source/avatar-v1.webp'
+
+const avatar = computed(() => userInfo.value?.avatar || DEFAULT_AVATAR)
+
+// 主系统右上角展示 realName，为空时退回 username
+const displayName = computed(
+  () => userInfo.value?.realName || userInfo.value?.username || ''
+)
+
+onMounted(async () => {
+  try {
+    const res = await getUserInfoApi()
+    userInfo.value = res?.data ?? null
+  } catch (error) {
+    console.error('[user] 获取用户信息失败', error)
+  }
+})
+
 // 用户图标渲染
 const renderUserInfo = () => {
   return h(
@@ -55,12 +79,19 @@ const renderUserInfo = () => {
       h(NAvatar, {
         round: true,
         style: 'margin-right: 12px;',
-        src: Person
+        src: avatar.value
       }),
       h('div', null, [
         h('div', null, [
-          h(NText, { depth: 2 }, { default: () => '奔跑的面条' })
-        ])
+          h(NText, { depth: 2 }, { default: () => displayName.value || '未登录' })
+        ]),
+        userInfo.value?.username
+          ? h(
+              'div',
+              { style: 'font-size: 12px; opacity: 0.6;' },
+              `@${userInfo.value.username}`
+            )
+          : null
       ])
     ]
   )
@@ -117,6 +148,11 @@ const handleSelect = (key: string) => {
 <style lang="scss" scoped>
 .user-info-box {
   cursor: pointer;
-  transform: scale(0.7);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  .user-name {
+    font-size: 14px;
+  }
 }
 </style>

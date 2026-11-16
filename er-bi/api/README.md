@@ -27,14 +27,14 @@
   - `/api/system/role`
   - `/api/system/menu`
 - BI 大屏项目
-  - `/api/bi/project/create`
-  - `/api/bi/project/list`
-  - `/api/bi/project/getData`
-  - `/api/bi/project/save/data`
-  - `/api/bi/project/edit`
-  - `/api/bi/project/publish`
+  - `/api/project/create`
+  - `/api/project/list`
+  - `/api/project/getData`
+  - `/api/project/save/data`
+  - `/api/project/edit`
+  - `/api/project/publish`
 - BI 数据源
-  - DB 连接器：`/api/bi/datasource/db-connectors`
+  - DB 连接器：`/api/datasource/db-connectors`
   - HTTP/SQL/Python 数据源：由 `datasource_api`（默认端口 5321）提供
 
 ## 快速开始
@@ -168,8 +168,8 @@ api/
 │   │       ├── users.py         # 用户管理接口
 │   │       ├── roles.py         # 角色管理接口
 │   │       ├── menus.py         # 菜单管理接口
-│   │       ├── bi_reports.py    # BI 大屏项目接口
-│   │       ├── bi_datasources.py # DB连接器接口
+│   │       ├── reports.py       # BI 大屏项目接口
+│   │       ├── datasources.py   # DB连接器接口
 │   │       └── internal.py       # 数据源服务内部接口
 │   ├── core/
 │   │   ├── config.py            # 配置
@@ -216,7 +216,7 @@ api/
 
 ```text
 HTTP 请求
-  -> app/api/v1/*.py
+  -> app/api/*.py
   -> app/modules/*/service.py
   -> app/repositories/*.py
   -> app/db/session.py
@@ -226,7 +226,7 @@ HTTP 请求
 
 | 层 | 负责 | 不负责 |
 | --- | --- | --- |
-| `api/v1` | HTTP 入参、依赖注入、调用 service、返回响应 | 复杂 SQL、业务规则 |
+| `api` | HTTP 入参、依赖注入、调用 service、返回响应 | 复杂 SQL、业务规则 |
 | `modules/*/service.py` | 业务规则、权限判断、事务编排 | HTTP 细节 |
 | `repositories/*.py` | SQLAlchemy 查询、保存、删除、关联处理 | 业务判断 |
 | `modules/*/schemas.py` | Pydantic 请求模型 | 数据库操作 |
@@ -236,7 +236,7 @@ HTTP 请求
 
 开发约定：
 
-- 新接口先放到 `app/api/v1`。
+- 新接口直接放到 `app/api`。
 - 业务逻辑放到对应 `modules/*/service.py`。
 - SQL 查询放到 `repositories`。
 - 系统管理相关放 `modules/system`。
