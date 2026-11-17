@@ -143,6 +143,7 @@ export default class HttpTree extends BaseTree{
                         dataset.name=newDataset.name;
                         dataset.url=newDataset.url;
                         dataset.method=newDataset.method;
+                        dataset.protocolForce=newDataset.protocolForce || 'auto';
                         dataset.requestBody=newDataset.requestBody;
                         dataset.dataPath=newDataset.dataPath;
                         dataset.parameters=newDataset.parameters;

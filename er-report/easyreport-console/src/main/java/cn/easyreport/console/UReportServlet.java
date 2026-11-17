@@ -29,6 +29,9 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.lang.StringUtils;
 import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.context.support.WebApplicationContextUtils;
 
 /**
@@ -77,6 +80,9 @@ public class UReportServlet extends HttpServlet {
 			return;
 		}
 		RequestHolder.setRequest(req);
+		RequestAttributes previousAttributes = RequestContextHolder.getRequestAttributes();
+		ServletRequestAttributes requestAttributes = new ServletRequestAttributes(req, resp);
+		RequestContextHolder.setRequestAttributes(requestAttributes);
 		try{
 			targetHandler.execute(req, resp);
 		}catch(Exception ex){
@@ -103,7 +109,12 @@ public class UReportServlet extends HttpServlet {
 			}
 			throw new ServletException(ex);
 		}finally{
-			RequestHolder.clean();
+			try {
+				requestAttributes.requestCompleted();
+			} finally {
+				RequestContextHolder.setRequestAttributes(previousAttributes);
+				RequestHolder.clean();
+			}
 		}
 	}
 	private Throwable buildRootException(Throwable throwable){

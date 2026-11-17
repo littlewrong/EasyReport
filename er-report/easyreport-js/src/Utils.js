@@ -547,6 +547,8 @@ export function tableToXml(context){
                 if(dataset.method){
                     ds+=` method="${dataset.method}"`;
                 }
+                const protocolForce=['auto','http','https'].indexOf(dataset.protocolForce)>=0 ? dataset.protocolForce : 'auto';
+                ds+=` protocolForce="${protocolForce}"`;
                 if(dataset.dataPath){
                     ds+=` dataPath="${encode(dataset.dataPath)}"`;
                 }

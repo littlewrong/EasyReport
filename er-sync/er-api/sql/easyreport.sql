@@ -1321,7 +1321,7 @@ CREATE TABLE `er_combine_sync`  (
   `combine_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT '' COMMENT '任务编码',
   `source_datasource_id` bigint NOT NULL COMMENT '源数据源ID',
   `source_schema_pattern` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL COMMENT '源Schema匹配模式（支持通配符%，如erp_charge_%）',
-  `source_table` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '源表名（多个用逗号分隔，如tb_charge_fee）',
+  `source_table` text CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '源表名（多个用逗号分隔，如tb_charge_fee）',
   `target_datasource_id` bigint NOT NULL COMMENT '目标数据源ID',
   `target_table` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '目标表名（合并后所有数据写入此表）',
   `source_column` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT 'source_table' COMMENT '来源列名（标识数据来源，值为库名.表名）',

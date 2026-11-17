@@ -101,6 +101,7 @@ public class DatasourceParser implements Parser<DatasourceDefinition> {
 				dataset.setName(ele.attributeValue("name"));
 				dataset.setUrl(ele.attributeValue("url"));
 				dataset.setMethod(ele.attributeValue("method"));
+				dataset.setProtocolForce(ele.attributeValue("protocolForce"));
 				dataset.setRequestBody(parseRequestBody(ele));
 				dataset.setDataPath(ele.attributeValue("dataPath"));
 				dataset.setFields(parseFields(ele));

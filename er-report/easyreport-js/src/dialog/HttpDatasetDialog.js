@@ -75,7 +75,7 @@ export default class HttpDatasetDialog{
         const protocolForceRow=$(`<div class="form-group" style="margin-bottom: 10px;">
             <label class="col-sm-2 control-label" style="text-align:right;">协议强制</label>
             <div class="col-sm-10">
-                <small class="text-muted">(对相对路径生效，强制使用指定协议)</small>
+                <small class="text-muted">(对相对路径生效；自动跟随当前报表的协议、域名和端口)</small>
             </div>
         </div>`);
         this.protocolForceEditor=$(`<select class="form-control" style="font-size: 13px">
@@ -294,7 +294,7 @@ export default class HttpDatasetDialog{
             this.nameEditor.val(ds.name);
             this.urlEditor.val(ds.url || '');
             this.methodEditor.val(ds.method || 'POST');
-            this.protocolForceEditor.val(ds.protocolForce || 'https');
+            this.protocolForceEditor.val(ds.protocolForce || 'auto');
             this.requestBodyEditor.val(ds.requestBody || '');
             this.dataPathEditor.val(ds.dataPath || '');
         }else{
@@ -302,7 +302,7 @@ export default class HttpDatasetDialog{
             this.nameEditor.val('');
             this.urlEditor.val('');
             this.methodEditor.val('POST');
-            this.protocolForceEditor.val('https');
+            this.protocolForceEditor.val('auto');
             this.requestBodyEditor.val('');
             this.dataPathEditor.val('');
         }

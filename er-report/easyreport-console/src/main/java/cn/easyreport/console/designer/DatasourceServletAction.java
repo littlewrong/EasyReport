@@ -68,6 +68,7 @@ import cn.easyreport.expression.model.Expression;
 import cn.easyreport.expression.model.data.ExpressionData;
 import cn.easyreport.expression.model.data.ObjectExpressionData;
 import cn.easyreport.utils.ProcedureUtils;
+import cn.easyreport.utils.HttpDatasetUrlResolver;
 
 /**
  * @author Jacky.gao
@@ -610,54 +611,10 @@ public class DatasourceServletAction extends RenderPageServletAction {
 	 * 将相对路径补全为当前请求的完整地址，避免“no protocol”错误。
 	 */
 	private String resolveUrl(HttpServletRequest req, String rawUrl, String protocolForce){
-		if(rawUrl==null || rawUrl.trim().isEmpty()){
-			throw new ReportDesignException("HTTP URL 必须填写");
-		}
-		String trimmed=rawUrl.trim();
-		if(trimmed.startsWith("http://") || trimmed.startsWith("https://")){
-			return trimmed;
-		}
-		String scheme=req.getScheme();
-
-		// 应用协议强制设置
-		if(protocolForce != null && !protocolForce.equals("auto")) {
-			scheme = protocolForce;
-			Utils.logToConsole("Designer: Protocol forced to: " + scheme);
-		}
-
-		String host=req.getServerName();
-		int port=req.getServerPort();
-		// When forcing protocol, switch to the default port of the target protocol to avoid https still carrying :80
-		if(protocolForce != null && !protocolForce.equals("auto")) {
-			if("https".equalsIgnoreCase(scheme) && port == 80){
-				port = 443;
-			}else if("http".equalsIgnoreCase(scheme) && port == 443){
-				port = 80;
-			}
-		}
-		boolean defaultPort=("http".equalsIgnoreCase(scheme) && port==80) || ("https".equalsIgnoreCase(scheme) && port==443);
-		StringBuilder builder=new StringBuilder();
-		builder.append(scheme).append("://").append(host);
-		if(!defaultPort){
-			builder.append(":").append(port);
-		}
-		if(trimmed.startsWith("/")){
-			builder.append(trimmed);
-		}else{
-			String contextPath=req.getContextPath();
-			if(contextPath!=null && !contextPath.isEmpty()){
-				if(!contextPath.startsWith("/")){
-					builder.append("/");
-				}
-				builder.append(contextPath);
-			}
-			builder.append("/").append(trimmed);
-		}
-		String resolved=builder.toString();
+		String resolved = HttpDatasetUrlResolver.resolve(req, rawUrl, protocolForce);
 		Utils.logToConsole("Designer resolved HTTP URL: " + resolved);
 		return resolved;
 	}
-	
 	@SuppressWarnings("unchecked")
 	private Map<String, Object> buildParameters(String parameters) throws IOException, JsonParseException, JsonMappingException {
 		Map<String,Object> map=new HashMap<String,Object>();

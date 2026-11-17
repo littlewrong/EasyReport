@@ -33,6 +33,7 @@ import java.util.regex.Pattern;
 import javax.servlet.http.HttpServletRequest;
 
 import cn.easyreport.Utils;
+import cn.easyreport.utils.HttpDatasetUrlResolver;
 import cn.easyreport.build.Context;
 import cn.easyreport.build.Dataset;
 import cn.easyreport.exception.ReportComputeException;
@@ -63,7 +64,7 @@ public class HttpDatasetDefinition implements DatasetDefinition {
 	private String name;
 	private String url; // HTTP地址
 	private String method = "POST"; // 请求方式，默认POST
-	private String protocolForce = "https"; // 协议强制：auto/http/https，默认https
+	private String protocolForce = "auto"; // auto 跟随当前报表请求的协议和域名
 	private String requestBody; // 请求体模板
 	private String dataPath; // JSON数据路径，例如："data.rows"
 	private List<Parameter> parameters;
@@ -269,78 +270,10 @@ public class HttpDatasetDefinition implements DatasetDefinition {
 	 * Resolve relative HTTP dataset URL against current request when scheme is missing.
 	 */
 	private String resolveUrl(String rawUrl) {
-		if(rawUrl == null || rawUrl.trim().isEmpty()) {
-			throw new ReportComputeException("HTTP dataset url can not be empty.");
-		}
-		String trimmed = rawUrl.trim();
-		if(trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-			return trimmed;
-		}
-		// 优先使用配置的显式前缀（系统属性/环境变量）
-		String explicitBase = System.getProperty("easyreport.http.base-url");
-		if(explicitBase == null || explicitBase.trim().isEmpty()){
-			explicitBase = System.getenv("EASYREPORT_HTTP_BASE_URL");
-		}
-		if(explicitBase != null && !explicitBase.trim().isEmpty()){
-			String base = explicitBase.trim();
-			if(base.endsWith("/")){
-				base = base.substring(0, base.length()-1);
-			}
-			String path = trimmed.startsWith("/") ? trimmed : "/" + trimmed;
-			String resolved = base + path;
-			return resolved;
-		}
-		try{
-			ServletRequestAttributes requestAttributes = (ServletRequestAttributes)RequestContextHolder.getRequestAttributes();
-			if(requestAttributes != null){
-				HttpServletRequest request = requestAttributes.getRequest();
-				String scheme = request.getScheme();
-				boolean schemeForced = protocolForce != null && !protocolForce.equals("auto");
-
-				// 应用协议强制设置
-				if(schemeForced) {
-					scheme = protocolForce;
-				}
-
-				int port = request.getServerPort();
-				// 当强制切换协议时，使用目标协议的默认端口，避免 http->https 仍携带 80 导致 SSL 异常
-				if(schemeForced){
-					if("https".equalsIgnoreCase(scheme) && port == 80){
-						port = 443;
-					}else if("http".equalsIgnoreCase(scheme) && port == 443){
-						port = 80;
-					}
-				}
-				boolean defaultPort = ("http".equalsIgnoreCase(scheme) && port==80) || ("https".equalsIgnoreCase(scheme) && port==443);
-				StringBuilder builder=new StringBuilder();
-				builder.append(scheme).append("://").append(request.getServerName());
-				if(!defaultPort){
-					builder.append(":").append(port);
-				}
-				if(trimmed.startsWith("/")) {
-					builder.append(trimmed);
-				} else {
-					String contextPath=request.getContextPath();
-					if(contextPath!=null && !contextPath.isEmpty()) {
-						if(!contextPath.startsWith("/")) {
-							builder.append("/");
-						}
-						builder.append(contextPath);
-					}
-					builder.append("/").append(trimmed);
-				}
-				String resolved=builder.toString();
-				return resolved;
-			}
-		}catch(Exception ex){
-			// URL解析失败，使用原始值
-		}
-		if(trimmed.startsWith("/")){
-			throw new ReportComputeException("Relative HTTP dataset url ["+trimmed+"] can not be resolved. Configure easyreport.http.base-url or invoke within an HTTP request.");
-		}
-		return trimmed;
+		ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+		HttpServletRequest request = attributes == null ? null : attributes.getRequest();
+		return HttpDatasetUrlResolver.resolve(request, rawUrl, protocolForce);
 	}
-
 	/**
 	 * 发送HTTP请求
 	 */
@@ -563,7 +496,7 @@ public class HttpDatasetDefinition implements DatasetDefinition {
 	}
 
 	public void setProtocolForce(String protocolForce) {
-		this.protocolForce = protocolForce;
+		this.protocolForce = HttpDatasetUrlResolver.normalizeProtocol(protocolForce);
 	}
 
 	public String getRequestBody() {

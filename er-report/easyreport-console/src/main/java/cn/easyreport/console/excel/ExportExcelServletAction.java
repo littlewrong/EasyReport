@@ -37,6 +37,7 @@ import cn.easyreport.export.ExportConfigureImpl;
 import cn.easyreport.export.ExportManager;
 import cn.easyreport.export.excel.high.ExcelProducer;
 import cn.easyreport.model.Report;
+import cn.easyreport.utils.HttpDatasetUrlResolver;
 
 /**
  * @author Jacky.gao
@@ -413,12 +414,14 @@ public class ExportExcelServletAction extends BaseServletAction {
 			final cn.easyreport.definition.dataset.HttpDatasetDefinition finalSummaryDataset = summaryDs;
 			cn.easyreport.Utils.logToConsole("最终finalSummaryDataset=" + (finalSummaryDataset != null ? "有" : "null"));
 
+			// Freeze the originating address before the servlet request is completed.
+			final HttpDatasetUrlResolver.RequestOrigin requestOrigin = HttpDatasetUrlResolver.captureOrigin(req);
 			// 异步执行导出
 			new Thread(new Runnable() {
 				@Override
 				public void run() {
 					java.io.FileOutputStream fos = null;
-					try {
+					try (HttpDatasetUrlResolver.OriginScope originScope = HttpDatasetUrlResolver.withOrigin(requestOrigin)) {
 						// 创建临时文件
 						java.io.File tempDir = new java.io.File(System.getProperty("java.io.tmpdir"), "easyreport_export");
 						if (!tempDir.exists()) {
