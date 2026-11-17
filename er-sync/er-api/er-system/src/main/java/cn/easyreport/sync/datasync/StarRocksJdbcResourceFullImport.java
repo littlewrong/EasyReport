@@ -10,8 +10,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -216,7 +214,9 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
         validateActualTextCapacity();
         verifyBinaryTargetValues();
         verifyKingbaseJsonValues();
-        verifyTimestampWallClocks();
+        // Source and Resource connections do not share a snapshot. Comparing their
+        // full-table timestamp extrema would reject valid imports while rows change.
+        // JDBC/session settings are checked by the source plan; its maxTs is the watermark.
         if (firstWindow != null) {
             for (LocalDate start = firstWindow; start.isBefore(endExclusive); start = unit.next(start)) {
                 stopped(cancellation);
@@ -341,37 +341,6 @@ final class StarRocksJdbcResourceFullImport implements AutoCloseable {
             }
         }
         stopped(cancellation);
-    }
-
-    private void verifyTimestampWallClocks() throws SQLException {
-        if (source.sourceRowCount == 0) return;
-        String filter = source.timestampColumn == null ? "" : " WHERE " + quote(source.timestampColumn) + " IS NOT NULL";
-        for (StarRocksJdbcResourceSource.Column column : source.columns) {
-            if (!column.mysqlTimestamp) continue;
-            stopped(cancellation);
-            String name = quote(column.scanName);
-            try (Statement statement = target.createStatement(); ResultSet rows = statement.executeQuery(
-                    "SELECT MIN(" + name + "), MAX(" + name + ") FROM " + externalTable + filter)) {
-                if (!rows.next()) throw new IllegalStateException("JDBC Resource TIMESTAMP 墙钟预检未返回结果，尚未清空目标表");
-                String min = rows.getString(1);
-                String max = rows.getString(2);
-                if (!sameWallClock(column.mysqlTimestampMinText, min) || !sameWallClock(column.mysqlTimestampMaxText, max)) {
-                    throw new IllegalArgumentException("MySQL/TiDB TIMESTAMP 字段 " + column.name
-                            + " 的源与 JDBC Resource 墙钟时间不一致，请核对两端 JDBC 会话及 BE JVM 时区，尚未清空目标表");
-                }
-            }
-            stopped(cancellation);
-        }
-    }
-
-    private static boolean sameWallClock(String source, String target) {
-        if (source == null || target == null) return source == null && target == null;
-        try {
-            return LocalDateTime.parse(source.trim().replace(' ', 'T')).equals(
-                    LocalDateTime.parse(target.trim().replace(' ', 'T')));
-        } catch (DateTimeParseException invalid) {
-            throw new IllegalArgumentException("无法确认 JDBC Resource TIMESTAMP 墙钟时间格式，尚未清空目标表");
-        }
     }
 
     private void validateActualTextCapacity() throws SQLException {

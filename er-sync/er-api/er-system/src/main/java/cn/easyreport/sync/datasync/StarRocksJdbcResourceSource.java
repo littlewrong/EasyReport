@@ -282,8 +282,6 @@ final class StarRocksJdbcResourceSource {
                     }
                 }
                 if ((first == null) != (last == null)) throw invalid("源 TIMESTAMP 数据日期范围不完整");
-                column.mysqlTimestampMinText = firstText;
-                column.mysqlTimestampMaxText = lastText;
                 if (first != null) StarRocksCatalogSessionSettings.verifyResourceTimestampSession(source, datasource,
                         resource, cancellation, wallDay(firstText), wallDay(lastText));
             }
@@ -967,8 +965,6 @@ final class StarRocksJdbcResourceSource {
         final boolean binaryHex;
         final boolean timeText;
         boolean timestampText;
-        String mysqlTimestampMinText;
-        String mysqlTimestampMaxText;
         long maxTextBytes = -1;
 
         Column(String name, String physicalName, String physicalTable, String physicalSchema,

@@ -778,7 +778,7 @@ public class StarRocksJdbcResourceSourceTest {
     }
 
     @Test
-    public void timestampWindowDaysAndWallClockReferenceUseRawTextRatherThanJvmInstantDate() throws Exception {
+    public void timestampWindowDaysUseSourceRawTextRatherThanJvmInstantDate() throws Exception {
         Fixture f = new Fixture("MYSQL");
         f.columns.get(2).nativeType = "TIMESTAMP";
         f.minimum = Timestamp.valueOf("2025-01-01 07:00:00");
@@ -788,8 +788,6 @@ public class StarRocksJdbcResourceSourceTest {
         StarRocksJdbcResourceSource.Plan plan = f.prepare("time_stamp");
         assertEquals("2024-12-31", plan.minDay.toString());
         assertEquals("2024-12-31", plan.maxDay.toString());
-        assertEquals(f.rawMinimum, plan.columns.get(2).mysqlTimestampMinText);
-        assertEquals(f.rawMaximum, plan.columns.get(2).mysqlTimestampMaxText);
         assertEquals(f.maximum, plan.maxTs);
     }
 

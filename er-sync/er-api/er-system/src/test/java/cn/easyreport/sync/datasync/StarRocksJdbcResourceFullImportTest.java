@@ -812,31 +812,35 @@ public class StarRocksJdbcResourceFullImportTest {
     }
 
     @Test
-    public void mysqlAndTiDbTimestampWallClockOffsetsFailBeforeTargetClear() throws Exception {
+    public void liveTimestampChangesDoNotAbortImportOrAdvanceTheSourceWatermark() throws Exception {
         for (String type : Arrays.asList("MYSQL", "TIDB")) {
-            Fixture f = new Fixture(type);
-            f.mysqlTimestamp = true;
-            f.targetMinText = "2023-12-31 08:00:00";
-            f.targetMaxText = "2024-01-02 20:34:56.123456";
-            f.expectPreclearFailure("time_stamp", "墙钟时间不一致");
-            assertEquals(1, f.dropCount());
-            assertTrue(f.inserts.isEmpty());
+            for (int threshold : new int[] {50, 1}) {
+                Fixture f = new Fixture(type);
+                f.mysqlTimestamp = true;
+                // A newer Resource snapshot can see rows modified after the source range was read.
+                f.targetMaxText = "2024-01-02 12:35:01.123456";
+                if (threshold == 1) f.sourceCount = 20000;
+
+                Object result = f.runFullSync("time_stamp", threshold, "YEAR");
+
+                assertEquals(Boolean.TRUE, field(result, "success"));
+                assertEquals(MAX_TS, field(result, "maxTs"));
+                assertEquals(1, f.checkpoints.size());
+                assertEquals(String.valueOf(MAX_TS.getTime()), field(f.checkpoints.get(0), "lastSyncValue"));
+                assertTrue(indexOf(f.targetSql, "TRUNCATE TABLE") >= 0);
+                assertEquals(threshold == 1 ? 2 : 1, f.inserts.size());
+                assertEquals(1, f.dropCount());
+                f.assertUserResourceUntouched();
+            }
         }
     }
 
     @Test
-    public void timestampWallClocksNormalizeEquivalentFractionsAndNullRanges() throws Exception {
-        Fixture f = new Fixture("MYSQL");
-        f.mysqlTimestamp = true;
-        f.targetMinText = "2023-12-31 00:00:00.000000";
-        f.targetMaxText = "2024-01-02 12:34:56.1234560";
-        try (StarRocksJdbcResourceFullImport ignored = f.prepare("time_stamp", 50, "YEAR")) { }
+    public void timestampNullAndEmptySourceRangesRemainSupported() throws Exception {
         Fixture nulls = new Fixture("TIDB");
         nulls.mysqlTimestamp = true;
         nulls.min = null;
         nulls.max = null;
-        nulls.targetMinText = null;
-        nulls.targetMaxText = null;
         // This TIMESTAMP column is not the task watermark and may be NULL in every eligible row.
         try (StarRocksJdbcResourceFullImport ignored = nulls.prepare(null, 50, "YEAR")) { }
         Fixture empty = new Fixture("MYSQL");
