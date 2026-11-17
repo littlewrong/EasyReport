@@ -4,6 +4,7 @@ import cn.easyreport.sync.model.ColumnMeta;
 import cn.easyreport.sync.model.TableMeta;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.StringJoiner;
 
@@ -36,8 +37,16 @@ public class StarRocksDialect implements SchemaDialect {
             }
         }
 
+        // StarRocks 要求主键列按 PRIMARY KEY 中的顺序排在所有普通列之前。
+        // 只调整 DDL 的输出顺序，保留源元数据的字段顺序供其他同步步骤使用。
+        List<ColumnMeta> columns = new ArrayList<>(tableMeta.getColumns());
+        columns.sort(Comparator.comparingInt(column -> {
+            int keyIndex = tableMeta.getPrimaryKey().indexOf(column.getName());
+            return keyIndex < 0 ? Integer.MAX_VALUE : keyIndex;
+        }));
+
         List<String> lines = new ArrayList<>();
-        for (ColumnMeta c : tableMeta.getColumns()) {
+        for (ColumnMeta c : columns) {
             lines.add(buildColumn(c));
         }
 

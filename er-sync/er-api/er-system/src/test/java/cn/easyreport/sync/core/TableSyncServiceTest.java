@@ -64,6 +64,49 @@ public class TableSyncServiceTest {
     }
 
     @Test
+    public void placesMySqlCompositePrimaryKeyBeforeValueColumnsInStarRocksDdl() {
+        RecordingConnector connector = new RecordingConnector(false);
+        TableSyncContext original = context(connector);
+        ColumnMeta id = column("id", "char(36)");
+        id.setComment("资源信息id");
+        ColumnMeta sort = column("sort", "int");
+        sort.setDefaultValue("0");
+        ColumnMeta splitMerge = column("is_split_merge", "int");
+        splitMerge.setComment("拆分合并状态");
+        ColumnMeta customField = column("custom_field", "json");
+        customField.setNullable(true);
+        TableMeta table = original.getTableMeta();
+        List<ColumnMeta> sourceColumns = Arrays.asList(id, sort, splitMerge, customField);
+        table.setColumns(sourceColumns);
+        table.setPrimaryKey(Arrays.asList("id", "is_split_merge"));
+        IndexMeta uniqueId = new IndexMeta();
+        uniqueId.setName("idx_id");
+        uniqueId.setUnique(true);
+        uniqueId.setColumns(Collections.singletonList("id"));
+        table.setIndexes(Collections.singletonList(uniqueId));
+        TableSyncContext context = new TableSyncContext(original.getTask(), datasource("MYSQL"),
+                original.getTargetDs(), connector, original.getDialect(), original.getStrategy(),
+                original.getTargetConfig(), table, original.getSourceSchema());
+
+        ErDataSyncLog result = new TableSyncService().syncTable(context);
+
+        assertEquals("0", result.getSyncResult());
+        assertEquals(connector.sql, result.getExecuteSql());
+        assertTrue(connector.sql, connector.sql.startsWith(
+                "CREATE TABLE IF NOT EXISTS `target_db`.`orders` (\n"
+                + "  `id` STRING NOT NULL COMMENT '资源信息id',\n"
+                + "  `is_split_merge` INT NOT NULL COMMENT '拆分合并状态',\n"
+                + "  `sort` INT NOT NULL DEFAULT \"0\",\n"
+                + "  `custom_field` JSON NULL\n)"));
+        assertTrue(connector.sql, connector.sql.contains("PRIMARY KEY (`id`, `is_split_merge`)"));
+        assertTrue(connector.sql, connector.sql.contains("DISTRIBUTED BY HASH(`id`) BUCKETS 10"));
+        assertSame(sourceColumns, table.getColumns());
+        assertSame(sort, table.getColumns().get(1));
+        assertEquals(Arrays.asList("id", "is_split_merge"), table.getPrimaryKey());
+        assertSame(uniqueId, table.getIndexes().get(0));
+    }
+
+    @Test
     public void mapsMySqlZerofillColumnsBeforeExecutingStarRocksDdl() {
         RecordingConnector connector = new RecordingConnector(false);
         TableSyncContext original = context(connector);
