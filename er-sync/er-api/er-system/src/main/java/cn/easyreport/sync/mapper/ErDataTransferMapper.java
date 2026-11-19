@@ -55,6 +55,9 @@ public interface ErDataTransferMapper
     /** 原子保留并完成已提交的停止请求，防止末次成功/失败覆盖停止状态。 */
     int finishTransfer(ErDataTransfer erDataTransfer);
 
+    /** 人工确认执行已退出后，仅将遗留的停止中状态原子恢复为已停止。 */
+    int recoverStoppedTransfer(ErDataTransfer erDataTransfer);
+
     /** 停止中及结束状态不再接受工作线程的展示进度。 */
     int updateTransferProgress(ErDataTransfer erDataTransfer);
 

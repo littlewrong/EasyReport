@@ -1,5 +1,6 @@
 package cn.easyreport.sync.task;
 
+import cn.easyreport.combinesync.service.IErCombineSyncService;
 import cn.easyreport.sync.service.IErDataSyncService;
 import cn.easyreport.sync.service.IErDataTransferService;
 import org.slf4j.Logger;
@@ -25,6 +26,9 @@ public class DataSyncTask
 
     @Autowired
     private IErDataTransferService dataTransferService;
+
+    @Autowired
+    private IErCombineSyncService combineSyncService;
 
     /**
      * 执行架构同步（通过任务ID）
@@ -77,6 +81,33 @@ public class DataSyncTask
         catch (Exception e)
         {
             log.error("[定时任务] 执行数据传输任务异常，transferId={}", transferId, e);
+        }
+    }
+
+    /**
+     * 执行合并同步（通过任务ID）
+     *
+     * @param combineId 合并同步任务ID
+     */
+    public void executeCombineSyncById(Long combineId)
+    {
+        log.info("[定时任务] 开始执行合并同步任务，combineId={}", combineId);
+        try
+        {
+            Map<String, Object> result = combineSyncService.executeCombineSync(combineId);
+            if (result != null && (Boolean) result.get("success"))
+            {
+                log.info("[定时任务] 合并同步任务提交成功，combineId={}", combineId);
+            }
+            else
+            {
+                String message = result != null ? (String) result.get("message") : "未知错误";
+                log.error("[定时任务] 合并同步任务提交失败，combineId={}, message={}", combineId, message);
+            }
+        }
+        catch (Exception e)
+        {
+            log.error("[定时任务] 执行合并同步任务异常，combineId={}", combineId, e);
         }
     }
 }

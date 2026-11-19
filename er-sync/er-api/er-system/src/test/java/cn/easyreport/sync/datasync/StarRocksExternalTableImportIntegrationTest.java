@@ -22,6 +22,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -307,10 +308,11 @@ public class StarRocksExternalTableImportIntegrationTest {
                 throw new AssertionError(method.getName());
             });
             List<String> messages = new ArrayList<>();
+            List<String> sourceSql = new ArrayList<>();
             try {
                 new StarRocksDataSyncExecutor(null, null, null).prepareDirectFullImport(task, datasource(type),
                         "db", "orders", "`warehouse`.`orders`", COLUMNS, COLUMNS,
-                        DataSyncFactory.buildExtractor(datasource(type)), unusedConnection(), target,
+                        DataSyncFactory.buildExtractor(datasource(type)), nonBinaryMetadataSource(sourceSql), target,
                         "time_stamp", (current, total, message) -> messages.add(message));
                 fail("Resource failure must propagate for " + type);
             } catch (SQLException expected) {
@@ -318,6 +320,7 @@ public class StarRocksExternalTableImportIntegrationTest {
                 assertFalse(expected.getMessage().contains("driver-secret"));
             }
             assertEquals(Collections.singletonList("SHOW RESOURCES"), sql);
+            assertEquals(Arrays.asList("MYSQL", "TIDB", "ORACLE").contains(type) ? 1 : 0, sourceSql.size());
             assertTrue(messages.isEmpty());
         }
     }
@@ -373,9 +376,38 @@ public class StarRocksExternalTableImportIntegrationTest {
     }
 
     private static void assertStaysOnJdbcPath(ErDataTransfer task, ErDatasource source, DataSyncExtractor extractor) throws Exception {
+        List<String> sourceSql = new ArrayList<>();
         assertNull(new StarRocksDataSyncExecutor(null, null, null).prepareDirectFullImport(task, source,
                 "db", "orders", "`warehouse`.`orders`", COLUMNS, COLUMNS, extractor,
-                unusedConnection(), unusedConnection(), "time_stamp", null));
+                nonBinaryMetadataSource(sourceSql), unusedConnection(), "time_stamp", null));
+        boolean preparesTextMapping = task != null && "0".equals(task.getSyncMode())
+                && source != null && Arrays.asList("MYSQL", "TIDB", "ORACLE").contains(source.getDatasourceType());
+        assertEquals(preparesTextMapping ? 1 : 0, sourceSql.size());
+    }
+
+    /** Allows source type discovery only; any row scan, mutation or remote Resource inspection fails. */
+    private static Connection nonBinaryMetadataSource(List<String> sql) {
+        return proxy(Connection.class, (method, args) -> {
+            assertEquals("createStatement", method.getName());
+            return proxy(Statement.class, (call, values) -> {
+                if ("close".equals(call.getName())) return null;
+                assertEquals("executeQuery", call.getName());
+                String query = (String) values[0];
+                sql.add(query);
+                assertTrue(query, query.startsWith("SELECT ") && query.endsWith(" WHERE 1=0"));
+                return proxy(ResultSet.class, (read, parameters) -> {
+                    if ("getMetaData".equals(read.getName())) {
+                        return proxy(ResultSetMetaData.class, (metadata, column) -> {
+                            if ("getColumnCount".equals(metadata.getName())) return COLUMNS.size();
+                            if ("getColumnType".equals(metadata.getName())) return (Integer) column[0] == 1 ? Types.BIGINT : Types.TIMESTAMP;
+                            if ("getColumnTypeName".equals(metadata.getName())) return (Integer) column[0] == 1 ? "BIGINT" : "TIMESTAMP";
+                            return defaultValue(metadata.getReturnType());
+                        });
+                    }
+                    return defaultValue(read.getReturnType());
+                });
+            });
+        });
     }
 
     private static ErDataTransfer task(String enabled, String mode, String method) {

@@ -11,16 +11,89 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.math.BigInteger;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * StarRocks-specific data sync executor.
  */
 public class StarRocksDataSyncExecutor extends DataSyncExecutor {
 
+    private StarRocksBinaryTextTransfer binaryTextTransfer;
+    private boolean mysqlBinaryTextSource;
+
     public StarRocksDataSyncExecutor(ErDataTransferMapper transferMapper, ErDataTransferLogMapper logMapper, ErDataTransferProgressMapper progressMapper) {
         super(transferMapper, logMapper, progressMapper);
+    }
+
+    @Override
+    protected void prepareColumnTransfer(ErDataTransfer task, ErDatasource sourceDs,
+            Connection sourceConn, Connection targetConn, String schema, String table,
+            String targetTable, List<String> sourceCols, List<String> targetCols) throws Exception {
+        // Full imports prepare in prepareDirectFullImport, including callers that
+        // invoke the full-import lifecycle directly. Reset between physical tables.
+        binaryTextTransfer = null;
+        mysqlBinaryTextSource = false;
+        if (task != null && !"0".equals(task.getSyncMode())) {
+            prepareBinaryTextTransfer(sourceDs, sourceConn, targetConn, schema, table,
+                    targetTable, sourceCols, targetCols);
+        }
+    }
+
+    private void prepareBinaryTextTransfer(ErDatasource sourceDs, Connection sourceConn,
+            Connection targetConn, String schema, String table, String targetTable,
+            List<String> sourceCols, List<String> targetCols) throws Exception {
+        binaryTextTransfer = null;
+        mysqlBinaryTextSource = false;
+        if (sourceDs == null) return;
+        String type = sourceDs.getDatasourceType();
+        if (!("MYSQL".equalsIgnoreCase(type) || "TIDB".equalsIgnoreCase(type)
+                || "ORACLE".equalsIgnoreCase(type))) return;
+        binaryTextTransfer = StarRocksBinaryTextTransfer.prepare(type, sourceConn, targetConn,
+                schema, table, targetTable, sourceCols, targetCols, cancellationContext());
+        mysqlBinaryTextSource = "MYSQL".equalsIgnoreCase(type) || "TIDB".equalsIgnoreCase(type);
+        if (binaryTextTransfer.hasTextColumns()) {
+            checkStopped();
+            try (Statement statement = targetConn.createStatement()) {
+                statement.execute("SET enable_insert_strict = true");
+            }
+        }
+    }
+
+    @Override
+    protected Object readColumnValue(ResultSet rows, String column, String sourceTypeName) throws Exception {
+        if (binaryTextTransfer != null && binaryTextTransfer.contains(column)) {
+            return binaryTextTransfer.read(rows, column);
+        }
+        if (mysqlBinaryTextSource && binaryTextTransfer != null && binaryTextTransfer.hasTextColumns()) {
+            // A whole-table JDBC transfer must also preserve the other special
+            // MySQL values that the Resource compatibility driver handled.
+            if ("BIT".equalsIgnoreCase(sourceTypeName)) {
+                Object value = rows.getObject(column);
+                if (value instanceof byte[]) {
+                    byte[] bytes = (byte[]) value;
+                    return bytes.length == 0 ? BigInteger.ZERO : new BigInteger(1, bytes);
+                }
+                return convertColumnValue(value, sourceTypeName);
+            }
+            if ("TIME".equalsIgnoreCase(sourceTypeName)) {
+                Duration value = rows.getObject(column, Duration.class);
+                if (value == null) return null;
+                int scale = rows.getMetaData().getScale(rows.findColumn(column));
+                Duration absolute = value.abs();
+                long seconds = absolute.getSeconds();
+                String text = String.format(Locale.ROOT, "%s%02d:%02d:%02d", value.isNegative() ? "-" : "",
+                        seconds / 3600, seconds / 60 % 60, seconds % 60);
+                if (scale > 0 && scale <= 6) {
+                    text += "." + String.format(Locale.ROOT, "%09d", absolute.getNano()).substring(0, scale);
+                }
+                return text;
+            }
+        }
+        return super.readColumnValue(rows, column, sourceTypeName);
     }
 
     @Override
@@ -39,24 +112,38 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
             String schema, String table, String targetTable, List<String> sourceCols,
             List<String> targetCols, DataSyncExtractor extractor, Connection sourceConn,
             Connection targetConn, String tsField, SyncProgressCallback callback) throws Exception {
+        if (task != null && "0".equals(task.getSyncMode()) && "1".equals(task.getExternalTableEnabled())) {
+            String method = task.resolveDirectImportMethod();
+            if (ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE.equals(method)) {
+                if (task.getResourceName() == null || task.getResourceName().trim().isEmpty()) {
+                    throw new IllegalArgumentException("JDBC Resource 导入必须填写已有的 Resource 名称；旧外部表任务请补填后重试，尚未清空目标表");
+                }
+                if (!supportsResourceSource(sourceDs, extractor)) {
+                    throw new IllegalArgumentException("JDBC Resource 导入的源数据库类型或提取器不匹配，尚未清空目标表");
+                }
+            } else if (ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(method)) {
+                if (task.getCatalogName() == null || task.getCatalogName().trim().isEmpty()) {
+                    throw new IllegalArgumentException("Catalog 导入必须填写已有的 JDBC Catalog 名称，尚未清空目标表");
+                }
+            } else {
+                throw new IllegalArgumentException("未知的数据湖导入方式，尚未清空目标表");
+            }
+        }
+        if (task != null && "0".equals(task.getSyncMode())) {
+            prepareBinaryTextTransfer(sourceDs, sourceConn, targetConn, schema, table,
+                    targetTable, sourceCols, targetCols);
+            if (binaryTextTransfer != null && binaryTextTransfer.hasTextColumns()) {
+                // Scanner-side byte[] handling cannot be fixed by changing the target
+                // type alone. Validate every effective value before syncFull truncates.
+                binaryTextTransfer.preflight(sourceConn, schema, table, tsField, cancellationContext());
+            }
+        }
         if (task == null || !"0".equals(task.getSyncMode()) || !"1".equals(task.getExternalTableEnabled())) {
             return null;
         }
         String method = task.resolveDirectImportMethod();
         if (ErDataTransfer.DIRECT_IMPORT_JDBC_RESOURCE.equals(method)) {
-            if (task.getResourceName() == null || task.getResourceName().trim().isEmpty()) {
-                throw new IllegalArgumentException("JDBC Resource 导入必须填写已有的 Resource 名称；旧外部表任务请补填后重试，尚未清空目标表");
-            }
-            boolean supported = sourceDs != null
-                    && (("KINGBASE".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof KingbaseDataSyncExtractor)
-                        || ("DM".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof DmDataSyncExtractor)
-                        || ("MYSQL".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof MySqlDataSyncExtractor)
-                        || ("TIDB".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof TiDbDataSyncExtractor)
-                        || ("STARROCKS".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof StarRocksDataSyncExtractor)
-                        || ("SQLSERVER".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof SqlServerDataSyncExtractor)
-                        || ("POSTGRESQL".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof PostgreSqlDataSyncExtractor)
-                        || ("ORACLE".equalsIgnoreCase(sourceDs.getDatasourceType()) && extractor instanceof OracleDataSyncExtractor));
-            if (!supported) throw new IllegalArgumentException("JDBC Resource 导入的源数据库类型或提取器不匹配，尚未清空目标表");
+            if (useBinaryTextJdbcTransfer(callback, schema, table)) return null;
             checkStopped();
             final StarRocksJdbcResourceFullImport resourceImport = StarRocksJdbcResourceFullImport.prepare(sourceDs,
                     sourceConn, targetConn, task.getResourceName(), schema, table, targetTable, sourceCols,
@@ -74,9 +161,7 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
             };
         }
         if (ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG.equals(method)) {
-            if (task.getCatalogName() == null || task.getCatalogName().trim().isEmpty()) {
-                throw new IllegalArgumentException("Catalog 导入必须填写已有的 JDBC Catalog 名称，尚未清空目标表");
-            }
+            if (useBinaryTextJdbcTransfer(callback, schema, table)) return null;
             checkStopped();
             final StarRocksCatalogFullImport catalogImport = StarRocksCatalogFullImport.prepare(
                     sourceDs, sourceConn, targetConn, task.getCatalogName().trim(), schema, table,
@@ -94,6 +179,29 @@ public class StarRocksDataSyncExecutor extends DataSyncExecutor {
             };
         }
         throw new IllegalArgumentException("未知的数据湖导入方式，尚未清空目标表");
+    }
+
+    private static boolean supportsResourceSource(ErDatasource datasource, DataSyncExtractor extractor) {
+        if (datasource == null) return false;
+        String type = datasource.getDatasourceType();
+        return ("KINGBASE".equalsIgnoreCase(type) && extractor instanceof KingbaseDataSyncExtractor)
+                || ("DM".equalsIgnoreCase(type) && extractor instanceof DmDataSyncExtractor)
+                || ("MYSQL".equalsIgnoreCase(type) && extractor instanceof MySqlDataSyncExtractor)
+                || ("TIDB".equalsIgnoreCase(type) && extractor instanceof TiDbDataSyncExtractor)
+                || ("STARROCKS".equalsIgnoreCase(type) && extractor instanceof StarRocksDataSyncExtractor)
+                || ("SQLSERVER".equalsIgnoreCase(type) && extractor instanceof SqlServerDataSyncExtractor)
+                || ("POSTGRESQL".equalsIgnoreCase(type) && extractor instanceof PostgreSqlDataSyncExtractor)
+                || ("ORACLE".equalsIgnoreCase(type) && extractor instanceof OracleDataSyncExtractor);
+    }
+
+    private boolean useBinaryTextJdbcTransfer(SyncProgressCallback callback, String schema, String table) throws Exception {
+        if (binaryTextTransfer == null || !binaryTextTransfer.hasTextColumns()) return false;
+        checkStopped();
+        String message = "表 " + (schema == null || schema.isEmpty() ? table : schema + "." + table)
+                + " 包含二进制/BLOB→文本映射，已通过 UTF-8 和容量预检，使用应用 JDBC 批量同步，无需额外兼容驱动";
+        System.out.println("[StarRocksDataSyncExecutor] " + message);
+        if (callback != null) callback.onProgress(0, -1, message);
+        return true;
     }
 
     @Override

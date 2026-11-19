@@ -564,7 +564,8 @@ public class StarRocksCatalogFullImportTest {
             runFullSync(f, checkpoints, ErDataTransfer.DIRECT_IMPORT_JDBC_CATALOG, "src_mysql");
             fail("Explicit Catalog failure must propagate");
         } catch (IllegalArgumentException expected) { assertTrue(expected.getMessage().contains("必须为 JDBC Catalog")); }
-        assertTrue(f.sourceSql.isEmpty());
+        assertEquals(1, f.sourceSql.size());
+        assertTrue(f.sourceSql.toString(), f.sourceSql.stream().allMatch(sql -> sql.endsWith("WHERE 1=0")));
         assertTrue(f.inserts.isEmpty());
         assertTrue(checkpoints.isEmpty());
         assertEquals(Collections.singletonList("SHOW CREATE CATALOG `src_mysql`"), f.targetSql);
@@ -652,9 +653,13 @@ public class StarRocksCatalogFullImportTest {
                             return rows(fields.toArray(new Object[0][]), Types.VARCHAR, "VARCHAR");
                         }
                         if (sql.contains("WHERE 1=0")) {
-                            if (sql.startsWith("SELECT \"id\", ")) return rows(new Object[0][],
-                                    new int[]{Types.BIGINT, timestampType, Types.VARCHAR},
-                                    new String[]{nativeIdType, timestampTypeName, nativeJsonType});
+                            if (sql.startsWith("SELECT \"id\", ") || sql.startsWith("SELECT `id`, ")) {
+                                return rows(new Object[0][], jsonColumn
+                                                ? new int[]{Types.BIGINT, timestampType, Types.VARCHAR}
+                                                : new int[]{Types.BIGINT, timestampType},
+                                        jsonColumn ? new String[]{nativeIdType, timestampTypeName, nativeJsonType}
+                                                : new String[]{nativeIdType, timestampTypeName});
+                            }
                             return rows(new Object[0][], timestampType, timestampTypeName);
                         }
                         if (sql.startsWith("SELECT COUNT")) return rows(new Object[][]{jsonColumn ? new Object[]{count, jsonBytes} : new Object[]{count}}, Types.BIGINT, "BIGINT");
@@ -722,6 +727,7 @@ public class StarRocksCatalogFullImportTest {
             if (method.equals("next")) return ++index[0] < data.length;
             if (method.equals("wasNull")) return wasNull[0];
             if (method.equals("getMetaData")) return proxy(ResultSetMetaData.class, (name, values) -> {
+                if (name.equals("getColumnCount")) return types.length;
                 int column = Math.min(((Integer) values[0]) - 1, types.length - 1);
                 if (name.equals("getColumnType")) return types[column];
                 if (name.equals("getColumnTypeName")) return typeNames[column];

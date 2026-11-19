@@ -200,6 +200,139 @@ public class ErDataTransferStopTest
         assertEquals("3", fixture.task.getSyncStatus());
     }
 
+    @Test
+    public void recoveringAnOrphanStopRequiresExplicitConfirmationAndPreservesWatermark() throws Exception
+    {
+        Fixture fixture = new Fixture();
+        fixture.task.setSyncStatus("5");
+        fixture.task.setLastSyncValue("1760000000000");
+        Map<String, Object> refused = fixture.service.recoverStoppedTransfer(fixture.id, false);
+        assertEquals(false, refused.get("success"));
+        assertEquals("5", refused.get("syncStatus"));
+        assertEquals(true, refused.get("recoverable"));
+        assertEquals(0, fixture.recoveryAttempts);
+
+        Map<String, Object> recovered = fixture.service.recoverStoppedTransfer(fixture.id, true);
+        assertEquals(true, recovered.get("success"));
+        assertEquals("4", recovered.get("syncStatus"));
+        assertEquals(false, recovered.get("localRunning"));
+        assertEquals(false, recovered.get("recoverable"));
+        assertTrue(fixture.task.getLastSyncResult().contains("\"recovered\":true"));
+        assertTrue(fixture.task.getSyncProgress().contains("已恢复为已停止"));
+        assertEquals("1760000000000", fixture.task.getLastSyncValue());
+        assertNotNull(fixture.task.getLastSyncTime());
+        assertEquals(1, fixture.recoveryAttempts);
+
+        assertEquals(true, fixture.service.recoverStoppedTransfer(fixture.id, true).get("success"));
+        assertEquals(1, fixture.recoveryAttempts); // Already-stopped recovery is idempotent.
+    }
+
+    @Test
+    public void recoveryNeverLabelsAnActiveWorkerStoppedOrDropsItsRunLock() throws Exception
+    {
+        Fixture fixture = new Fixture();
+        try {
+            fixture.start();
+            Map<String, Object> refused = fixture.service.recoverStoppedTransfer(fixture.id, true);
+            assertEquals(false, refused.get("success"));
+            assertEquals("5", refused.get("syncStatus"));
+            assertEquals(true, refused.get("localRunning"));
+            assertEquals(false, refused.get("recoverable"));
+            assertTrue(fixture.executor.isStopRequested());
+            assertTrue(map("runningTransfers").containsKey(fixture.id));
+            assertEquals(0, fixture.recoveryAttempts);
+            assertEquals(false, fixture.service.executeTransfer(fixture.id).get("success"));
+        } finally {
+            fixture.close();
+        }
+        assertEquals("4", fixture.task.getSyncStatus());
+    }
+
+    @Test
+    public void recoveryAlsoRejectsThePreparationStageBeforeExecutorRegistration() throws Exception
+    {
+        Fixture fixture = new Fixture();
+        fixture.blockCreation = true;
+        try {
+            assertEquals(true, fixture.service.executeTransfer(fixture.id).get("success"));
+            assertTrue(fixture.creationEntered.await(3, TimeUnit.SECONDS));
+            assertEquals(false, fixture.service.recoverStoppedTransfer(fixture.id, true).get("success"));
+            assertEquals("5", fixture.task.getSyncStatus());
+            assertEquals(0, fixture.recoveryAttempts);
+            assertFalse(map("activeExecutors").containsKey(fixture.id));
+            fixture.allowCreation.countDown();
+            assertTrue(fixture.executor.entered.await(3, TimeUnit.SECONDS));
+            assertTrue(fixture.executor.isStopRequested());
+        } finally {
+            fixture.close();
+        }
+        assertEquals("4", fixture.task.getSyncStatus());
+    }
+
+    @Test
+    public void orphanedLocalExecutorStillPreventsRecoveryAndReceivesCancellation() throws Exception
+    {
+        Fixture fixture = new Fixture();
+        fixture.task.setSyncStatus("5");
+        map("activeExecutors").put(fixture.id, fixture.executor);
+        try {
+            Map<String, Object> response = fixture.service.recoverStoppedTransfer(fixture.id, true);
+            assertEquals(false, response.get("success"));
+            assertEquals("5", response.get("syncStatus"));
+            assertEquals(true, response.get("localRunning"));
+            assertEquals(false, response.get("recoverable"));
+            assertTrue(fixture.executor.isStopRequested());
+            assertEquals("5", fixture.task.getSyncStatus());
+            assertEquals(0, fixture.recoveryAttempts);
+        } finally {
+            map("activeExecutors").remove(fixture.id);
+        }
+    }
+
+    @Test
+    public void recoveryCannotOverwriteRunningOrOtherTerminalStates() throws Exception
+    {
+        for (String status : new String[]{"0", "1", "2", "3"}) {
+            Fixture fixture = new Fixture();
+            fixture.task.setSyncStatus(status);
+            Map<String, Object> response = fixture.service.recoverStoppedTransfer(fixture.id, true);
+            assertEquals(false, response.get("success"));
+            assertEquals(status, response.get("syncStatus"));
+            assertEquals(status, fixture.task.getSyncStatus());
+            assertEquals(0, fixture.recoveryAttempts);
+        }
+    }
+
+    @Test
+    public void concurrentDatabaseStateChangeWinsOverManualRecovery() throws Exception
+    {
+        Fixture fixture = new Fixture();
+        fixture.task.setSyncStatus("5");
+        fixture.newRunAtRecovery = true;
+        Map<String, Object> response = fixture.service.recoverStoppedTransfer(fixture.id, true);
+        assertEquals(false, response.get("success"));
+        assertEquals("1", response.get("syncStatus"));
+        assertEquals("1", fixture.task.getSyncStatus());
+        assertEquals(1, fixture.recoveryAttempts);
+        assertNull(fixture.task.getLastSyncResult());
+    }
+
+    @Test
+    public void stopResponsesReportTheActualStateRatherThanAssumingStopping() throws Exception
+    {
+        Fixture fixture = new Fixture();
+        fixture.task.setSyncStatus("1");
+        Map<String, Object> pending = fixture.service.stopTransfer(fixture.id);
+        assertEquals("5", pending.get("syncStatus"));
+        assertEquals(false, pending.get("localRunning"));
+        assertEquals(true, pending.get("recoverable"));
+        fixture.task.setSyncStatus("4");
+        Map<String, Object> ended = fixture.service.stopTransfer(fixture.id);
+        assertEquals(true, ended.get("success"));
+        assertEquals("4", ended.get("syncStatus"));
+        assertEquals(false, ended.get("recoverable"));
+    }
+
     @SuppressWarnings("unchecked")
     private static ConcurrentHashMap<Long, Object> map(String name) throws Exception
     {
@@ -221,6 +354,8 @@ public class ErDataTransferStopTest
         volatile boolean failDatasourceLookup;
         volatile int finishWrites;
         volatile int claimAttempts;
+        volatile int recoveryAttempts;
+        volatile boolean newRunAtRecovery;
         final ErDataTransferServiceImpl service = new ErDataTransferServiceImpl() {
             @Override
             protected DataSyncExecutor createExecutor(ErDatasource target) {
@@ -279,6 +414,16 @@ public class ErDataTransferStopTest
                                     task.setSyncStatus("5".equals(task.getSyncStatus()) || "4".equals(task.getSyncStatus())
                                             ? "4" : finish.getSyncStatus());
                                     task.setLastSyncResult(finish.getLastSyncResult());
+                                    return 1;
+                                case "recoverStoppedTransfer":
+                                    recoveryAttempts++;
+                                    if (newRunAtRecovery) task.setSyncStatus("1");
+                                    if (!"5".equals(task.getSyncStatus())) return 0;
+                                    ErDataTransfer recovered = (ErDataTransfer) args[0];
+                                    task.setSyncStatus("4");
+                                    task.setSyncProgress(recovered.getSyncProgress());
+                                    task.setLastSyncResult(recovered.getLastSyncResult());
+                                    task.setLastSyncTime(recovered.getLastSyncTime());
                                     return 1;
                                 default: throw new AssertionError("Unexpected mapper method: " + method.getName());
                             }

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import cn.easyreport.common.annotation.Log;
 import cn.easyreport.common.core.controller.BaseController;
@@ -210,5 +211,16 @@ public class ErDataTransferController extends BaseController
         {
             return error((String) result.get("message"));
         }
+    }
+
+    /** 恢复执行已退出后遗留的停止中状态，不执行强制终止 SQL。 */
+    @PreAuthorize("@ss.hasPermi('system:datatransfer:execute')")
+    @Log(title = "恢复数据传输停止状态", businessType = BusinessType.UPDATE)
+    @PostMapping("/recoverStop/{transferId}")
+    public AjaxResult recoverStoppedTransfer(@PathVariable Long transferId,
+            @RequestParam(defaultValue = "false") boolean confirmedExecutionEnded)
+    {
+        Map<String, Object> result = erDataTransferService.recoverStoppedTransfer(transferId, confirmedExecutionEnded);
+        return Boolean.TRUE.equals(result.get("success")) ? success(result) : error((String) result.get("message"));
     }
 }

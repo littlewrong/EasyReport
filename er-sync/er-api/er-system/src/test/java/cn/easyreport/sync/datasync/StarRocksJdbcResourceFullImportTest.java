@@ -202,13 +202,22 @@ public class StarRocksJdbcResourceFullImportTest {
             f.textBytes = 32;
             f.actualTextBytes = 20L;
             f.targetTextType = "VARCHAR(20)";
-            f.runFullSync("time_stamp", 50, "YEAR");
+            boolean binary = nativeType.startsWith("VARBINARY");
+            if (binary) {
+                // Retain coverage of the opt-in scanner HEX component. The executor now
+                // handles binary-to-text mappings through strict application UTF-8 decoding.
+                try (StarRocksJdbcResourceFullImport importer = f.prepare("time_stamp", 50, "YEAR")) {
+                    importer.execute();
+                }
+            } else {
+                f.runFullSync("time_stamp", 50, "YEAR");
+            }
             assertTrue(f.targetSql.stream().anyMatch(sql -> sql.startsWith("CREATE EXTERNAL TABLE")
                     && sql.contains("`Name` VARCHAR(1048576) NULL")));
             assertTrue(f.inserts.get(0), f.inserts.get(0).contains("SELECT `Id`, `Name`, `time_stamp` FROM"));
             assertTrue(f.targetSql.stream().anyMatch(sql -> sql.startsWith("SELECT MAX(LENGTH(`Name`))")
                     && sql.endsWith("WHERE `time_stamp` IS NOT NULL")));
-            assertEquals(1, f.checkpoints.size());
+            assertEquals(binary ? 0 : 1, f.checkpoints.size());
             f.assertUserResourceUntouched();
 
             Fixture narrow = new Fixture("TIDB");
@@ -217,7 +226,18 @@ public class StarRocksJdbcResourceFullImportTest {
             narrow.textBytes = 32;
             narrow.actualTextBytes = 21L;
             narrow.targetTextType = "VARCHAR(20)";
-            narrow.expectPreclearFailure("time_stamp", "实际 UTF-8 字节数超出目标字段容量");
+            if (binary) {
+                try {
+                    narrow.prepare("time_stamp", 50, "YEAR");
+                    fail("Scanner HEX text must still obey the target byte capacity");
+                } catch (IllegalArgumentException expected) {
+                    assertTrue(expected.getMessage(), expected.getMessage().contains("实际 UTF-8 字节数超出目标字段容量"));
+                }
+                assertEquals(-1, indexOf(narrow.targetSql, "TRUNCATE TABLE"));
+                assertTrue(narrow.checkpoints.isEmpty());
+            } else {
+                narrow.expectPreclearFailure("time_stamp", "实际 UTF-8 字节数超出目标字段容量");
+            }
             assertEquals(1, narrow.dropCount());
         }
     }

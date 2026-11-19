@@ -592,8 +592,12 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
         synchronized (run)
         {
         // 发布运行锁时就持有它，停止请求需等本轮原子认领完成再判断状态。
-        if (runningTransfers.putIfAbsent(transferId, run) != null)
-        {
+        boolean alreadyRunning;
+        synchronized (runningTransfers) {
+            // 与人工恢复共用发布锁，恢复检查到没有执行器后不能再插入准备中的新执行。
+            alreadyRunning = runningTransfers.putIfAbsent(transferId, run) != null;
+        }
+        if (alreadyRunning) {
             result.put("success", false);
             result.put("message", "任务正在同步中，请勿重复执行");
             return result;
@@ -1440,41 +1444,108 @@ public class ErDataTransferServiceImpl implements IErDataTransferService
             if (transferTask == null) {
                 result.put("success", false);
                 result.put("message", "同步任务不存在");
-                return result;
+                return stopResult(result, transferId, null);
             }
-            boolean localRunning = run != null && runningTransfers.get(transferId) == run;
+            boolean localRun = run != null && runningTransfers.get(transferId) == run;
+            DataSyncExecutor executor = activeExecutors.get(transferId);
+            boolean localRunning = localRun || executor != null;
             String status = transferTask.getSyncStatus();
             if ("4".equals(status) && !localRunning) {
                 result.put("success", true);
                 result.put("message", "任务已停止");
-                return result;
+                return stopResult(result, transferId, transferTask);
             }
             if (!localRunning && !"1".equals(status) && !"5".equals(status)) {
                 result.put("success", false);
                 result.put("message", "任务未在同步中");
-                return result;
+                return stopResult(result, transferId, transferTask);
             }
-            if (localRunning) {
+            if (localRun) {
                 run.stopRequested = true;
                 stopFlags.put(transferId, true);
-                DataSyncExecutor executor = activeExecutors.get(transferId);
-                if (executor != null) executor.requestStop();
             }
+            if (executor != null) executor.requestStop();
             // 无本地执行器可能表示任务在其他实例执行，不能据此宣称已经停止。
             int changed = erDataTransferMapper.requestTransferStop(transferId, STOPPING_PROGRESS, localRunning);
+            ErDataTransfer latest = erDataTransferMapper.selectErDataTransferByTransferId(transferId);
             if (changed == 0) {
-                ErDataTransfer latest = erDataTransferMapper.selectErDataTransferByTransferId(transferId);
                 if (latest == null || (!"5".equals(latest.getSyncStatus()) && !"4".equals(latest.getSyncStatus()))) {
                     result.put("success", false);
                     result.put("message", "任务已结束，无需停止");
-                    return result;
+                    return stopResult(result, transferId, latest);
                 }
             }
             log.info("已提交同步任务 [{}] 的停止请求", transferId);
             result.put("success", true);
-            result.put("message", "已提交停止请求，正在取消当前SQL并清理临时表");
+            result.put("message", latest != null && "4".equals(latest.getSyncStatus())
+                    ? "任务已停止" : "已提交停止请求，正在取消当前SQL并清理临时表");
+            return stopResult(result, transferId, latest);
+        }
+    }
+
+    private Map<String, Object> stopResult(Map<String, Object> result, Long transferId, ErDataTransfer task)
+    {
+        boolean localRunning = runningTransfers.containsKey(transferId) || activeExecutors.containsKey(transferId);
+        String status = task == null ? null : task.getSyncStatus();
+        result.put("syncStatus", status);
+        result.put("localRunning", localRunning);
+        // 仅提示存在人工恢复入口，不用“无本地执行器”替代执行已结束的人工确认。
+        result.put("recoverable", "5".equals(status) && !localRunning);
+        return result;
+    }
+
+    @Override
+    public Map<String, Object> recoverStoppedTransfer(Long transferId, boolean confirmedExecutionEnded)
+    {
+        Map<String, Object> result = new HashMap<>();
+        if (!confirmedExecutionEnded) {
+            result.put("success", false);
+            result.put("message", "请先确认后台执行和数据库中的同步 SQL 已结束，再恢复停止状态");
+            return stopResult(result, transferId, erDataTransferMapper.selectErDataTransferByTransferId(transferId));
+        }
+        synchronized (runningTransfers) {
+            if (!runningTransfers.containsKey(transferId) && !activeExecutors.containsKey(transferId)) {
+                ErDataTransfer task = erDataTransferMapper.selectErDataTransferByTransferId(transferId);
+                if (task == null) {
+                    result.put("success", false);
+                    result.put("message", "同步任务不存在");
+                    return stopResult(result, transferId, null);
+                }
+                if ("4".equals(task.getSyncStatus())) {
+                    result.put("success", true);
+                    result.put("message", "任务已停止");
+                    return stopResult(result, transferId, task);
+                }
+                if (!"5".equals(task.getSyncStatus())) {
+                    result.put("success", false);
+                    result.put("message", "任务状态已变化，仅可恢复停止中任务，请刷新后重试");
+                    return stopResult(result, transferId, task);
+                }
+                ErDataTransfer recovered = new ErDataTransfer();
+                recovered.setTransferId(transferId);
+                recovered.setSyncProgress(SyncProgressPayload.summary(0, 0, "后台执行已退出，已恢复为已停止"));
+                recovered.setLastSyncResult("{\"message\":\"后台执行已退出，已恢复为已停止\",\"recovered\":true}");
+                recovered.setLastSyncTime(DateUtils.getNowDate());
+                int changed = erDataTransferMapper.recoverStoppedTransfer(recovered);
+                ErDataTransfer latest = erDataTransferMapper.selectErDataTransferByTransferId(transferId);
+                boolean stopped = latest != null && "4".equals(latest.getSyncStatus());
+                result.put("success", stopped);
+                result.put("message", stopped ? "已恢复为已停止，可重新执行任务"
+                        : "任务状态已变化，未修改当前状态，请刷新后重试");
+                if (changed == 1) log.info("同步任务 [{}] 经人工确认执行已退出，恢复为已停止", transferId);
+                return stopResult(result, transferId, latest);
+            }
+        }
+        // 不持有发布锁调用 stopTransfer，避免与启动线程持有的运行锁形成锁顺序反转。
+        result = stopTransfer(transferId);
+        if ("4".equals(result.get("syncStatus")) && !Boolean.TRUE.equals(result.get("localRunning"))) {
             return result;
         }
+        result.put("success", false);
+        result.put("message", Boolean.TRUE.equals(result.get("localRunning"))
+                ? "后台执行尚未退出，已再次请求取消；待执行和资源清理结束后再恢复状态"
+                : "任务状态已变化，请刷新确认执行已退出后再恢复状态");
+        return result;
     }
 
     // ================= 数据同步核心实现 =================

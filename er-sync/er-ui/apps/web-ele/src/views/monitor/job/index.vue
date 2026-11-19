@@ -147,9 +147,12 @@
       <el-table-column
         label="操作"
         align="center"
+        fixed="right"
+        width="230"
         class-name="small-padding fixed-width"
       >
         <template #default="scope">
+          <div class="bi-row-actions">
           <el-button
             size="small"
             link
@@ -203,6 +206,7 @@
               </el-dropdown-menu></template
             >
           </el-dropdown>
+          </div>
         </template>
       </el-table-column>
     </el-table>

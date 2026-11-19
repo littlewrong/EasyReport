@@ -122,6 +122,12 @@ public abstract class DataSyncExecutor {
             String sourceTable, String targetTable) throws Exception {
     }
 
+    /** Prepare per-column read rules before either full or incremental transfer. */
+    protected void prepareColumnTransfer(ErDataTransfer task, ErDatasource sourceDs,
+            Connection sourceConn, Connection targetConn, String schema, String table,
+            String targetTable, List<String> sourceCols, List<String> targetCols) throws Exception {
+    }
+
     /**
      * 可选的数据库直连全量导入。准备和源表可读校验须在清空目标表之前完成。
      * 返回 null 时沿用 JDBC 批量搬运；调用方在成功、失败时均关闭导入资源。
@@ -518,7 +524,19 @@ public abstract class DataSyncExecutor {
      */
     private Connection openManagedConnection(ErDatasource ds) throws Exception {
         checkStopped();
-        Connection conn = cancellation.wrap(DriverManager.getConnection(ds.getJdbcUrl(), ds.getUsername(), ds.getPassword()));
+        Connection conn = cancellation.wrap(DriverManager.getConnection(ds.getJdbcUrl(), ds.getUsername(), ds.getPassword()), () -> {
+            // An aborted session cannot be reused: a delayed cancel may still target it.
+            // Only finally-block cleanup is allowed to open this isolated replacement.
+            Connection cleanup = DriverManager.getConnection(ds.getJdbcUrl(), ds.getUsername(), ds.getPassword());
+            try {
+                cleanup.setAutoCommit(false);
+                initializeConnection(ds, cleanup);
+                return cleanup;
+            } catch (Exception failure) {
+                closeQuietly(cleanup);
+                throw failure;
+            }
+        });
         try {
             checkStopped();
             conn.setAutoCommit(false);
@@ -622,6 +640,8 @@ public abstract class DataSyncExecutor {
         }
 
         loader.prepareTarget(targetConn, targetTableSqlName);
+        prepareColumnTransfer(task, sourceDs, sourceConn, targetConn, schema, table,
+                targetTableSqlName, sourceCols, targetCols);
 
         if ("0".equals(task.getSyncMode())) {
             tr = syncFull(task, sourceDs, schema, table, targetTableSqlName, sourceCols, targetCols, targetPk, extractor, loader, sourceConn, targetConn, batchSize, tsField, doInsert, doUpdate, callback);
@@ -842,8 +862,7 @@ public abstract class DataSyncExecutor {
                     if (hasTimestampField && rawTimestamp == null) continue;
                     Object[] rowData = new Object[sourceCols.size()];
                     for (int i = 0; i < sourceCols.size(); i++) {
-                        Object val = rs.getObject(sourceCols.get(i));
-                        val = convertColumnValue(val, sourceTypeNames.get(i));
+                        Object val = readColumnValue(rs, sourceCols.get(i), sourceTypeNames.get(i));
                         rowData[i] = val;
                         if (!useBufferedFullInsert()) psIns.setObject(i + 1, val);
                     }
@@ -966,8 +985,7 @@ public abstract class DataSyncExecutor {
                     checkStopped();
                     Object[] rowData = new Object[sourceCols.size()];
                     for (int i = 0; i < sourceCols.size(); i++) {
-                        Object val = rs.getObject(sourceCols.get(i));
-                        val = convertColumnValue(val, sourceTypeNames.get(i));
+                        Object val = readColumnValue(rs, sourceCols.get(i), sourceTypeNames.get(i));
                         rowData[i] = val;
                         if (!useBufferedUpsert()) psIns.setObject(i + 1, val);
                     }
@@ -1504,6 +1522,10 @@ public abstract class DataSyncExecutor {
 
     protected Object convertColumnValue(Object value, String sourceTypeName) {
         return valueConverter.convertColumnValue(value, sourceTypeName);
+    }
+
+    protected Object readColumnValue(ResultSet rows, String column, String sourceTypeName) throws Exception {
+        return convertColumnValue(rows.getObject(column), sourceTypeName);
     }
 
     private Timestamp readTimestampColumn(ResultSet rs, String tsField) throws Exception {

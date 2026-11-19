@@ -180,6 +180,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         WHERE combine_id = #{combineId}
     </update>
 
+    <update id="updateJobId" parameterType="ErCombineSync">
+        UPDATE er_combine_sync SET job_id = #{jobId,jdbcType=BIGINT} WHERE combine_id = #{combineId}
+    </update>
+
     <delete id="deleteErCombineSyncByCombineId" parameterType="Long">
         DELETE FROM er_combine_sync WHERE combine_id = #{combineId}
     </delete>

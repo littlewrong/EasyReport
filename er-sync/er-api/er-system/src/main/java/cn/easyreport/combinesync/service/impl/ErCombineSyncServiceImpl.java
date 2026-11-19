@@ -29,6 +29,9 @@ import cn.easyreport.sync.domain.ErDatasource;
 import cn.easyreport.combinesync.mapper.ErCombineSyncMapper;
 import cn.easyreport.combinesync.mapper.ErCombineSyncLogMapper;
 import cn.easyreport.combinesync.mapper.ErCombineSyncProgressMapper;
+import cn.easyreport.quartz.domain.SysJob;
+import cn.easyreport.quartz.service.ISysJobService;
+import cn.easyreport.quartz.util.CronUtils;
 import cn.easyreport.sync.mapper.ErDatasourceMapper;
 import cn.easyreport.combinesync.service.IErCombineSyncService;
 
@@ -59,6 +62,9 @@ public class ErCombineSyncServiceImpl implements IErCombineSyncService
     @Autowired
     private ErDatasourceMapper erDatasourceMapper;
 
+    @Autowired(required = false)
+    private ISysJobService jobService;
+
     // ==================== CRUD方法 ====================
 
     @Override
@@ -74,7 +80,7 @@ public class ErCombineSyncServiceImpl implements IErCombineSyncService
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int insertErCombineSync(ErCombineSync erCombineSync)
     {
         validateDatasources(erCombineSync.getSourceDatasourceId(), erCombineSync.getTargetDatasourceId());
@@ -92,40 +98,86 @@ public class ErCombineSyncServiceImpl implements IErCombineSyncService
         {
             erCombineSync.setStatus("0");
         }
-        return erCombineSyncMapper.insertErCombineSync(erCombineSync);
+        erCombineSync.setStatus(normalizeStatus(erCombineSync.getStatus()));
+        erCombineSync.setCronExpression(normalizeCron(erCombineSync.getCronExpression()));
+        validateSchedule(erCombineSync.getCronExpression(), null);
+        // 调度关联只能由服务端创建，不能接受表单里过期或手工填写的 jobId。
+        erCombineSync.setJobId(null);
+        int rows = erCombineSyncMapper.insertErCombineSync(erCombineSync);
+
+        // 如果配置了cron表达式，创建Quartz定时任务
+        if (rows > 0 && StringUtils.isNotEmpty(erCombineSync.getCronExpression()))
+        {
+            createQuartzJobForCombine(erCombineSync);
+        }
+        return rows;
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int updateErCombineSync(ErCombineSync erCombineSync)
     {
-        Long sourceId = erCombineSync.getSourceDatasourceId();
-        Long targetId = erCombineSync.getTargetDatasourceId();
-        // Mapper 按非空字段更新，校验的是更新后的配置，不能让单边修改绕过限制。
-        if ((sourceId == null || targetId == null) && erCombineSync.getCombineId() != null)
+        ErCombineSync existing = erCombineSync.getCombineId() == null ? null
+            : erCombineSyncMapper.selectErCombineSyncByCombineId(erCombineSync.getCombineId());
+        if (existing == null)
         {
-            ErCombineSync existing = erCombineSyncMapper.selectErCombineSyncByCombineId(erCombineSync.getCombineId());
-            if (existing != null)
-            {
-                sourceId = sourceId != null ? sourceId : existing.getSourceDatasourceId();
-                targetId = targetId != null ? targetId : existing.getTargetDatasourceId();
-            }
+            throw new ServiceException("合并同步任务不存在，请刷新后重试");
         }
+        Long sourceId = erCombineSync.getSourceDatasourceId() != null
+            ? erCombineSync.getSourceDatasourceId() : existing.getSourceDatasourceId();
+        Long targetId = erCombineSync.getTargetDatasourceId() != null
+            ? erCombineSync.getTargetDatasourceId() : existing.getTargetDatasourceId();
         validateDatasources(sourceId, targetId);
+        // 在写入之前保留真实关联，再合并状态开关等部分更新的有效调度配置。
+        Long existingJobId = existing.getJobId();
+        ErCombineSync schedule = new ErCombineSync();
+        schedule.setCombineId(existing.getCombineId());
+        schedule.setCombineName(StringUtils.isNotEmpty(erCombineSync.getCombineName())
+            ? erCombineSync.getCombineName() : existing.getCombineName());
+        schedule.setCronExpression(normalizeCron(erCombineSync.getCronExpression() != null
+            ? erCombineSync.getCronExpression() : existing.getCronExpression()));
+        schedule.setStatus(normalizeStatus(erCombineSync.getStatus() != null
+            ? erCombineSync.getStatus() : existing.getStatus()));
+        schedule.setCreateBy(existing.getCreateBy());
+        schedule.setUpdateBy(erCombineSync.getUpdateBy());
+        validateSchedule(schedule.getCronExpression(), existingJobId);
+        if (erCombineSync.getCronExpression() != null)
+        {
+            erCombineSync.setCronExpression(schedule.getCronExpression());
+        }
+        if (erCombineSync.getStatus() != null || StringUtils.isEmpty(existing.getStatus()))
+        {
+            erCombineSync.setStatus(schedule.getStatus());
+        }
+        erCombineSync.setJobId(existingJobId);
         if (erCombineSync.getSourceSchemaPattern() != null && erCombineSync.getSourceSchemaPattern().trim().isEmpty())
         {
             erCombineSync.setSourceSchemaPattern(null);
         }
         erCombineSync.setUpdateTime(DateUtils.getNowDate());
-        return erCombineSyncMapper.updateErCombineSync(erCombineSync);
+        int rows = erCombineSyncMapper.updateErCombineSync(erCombineSync);
+
+        if (rows > 0)
+        {
+            if (StringUtils.isNotEmpty(schedule.getCronExpression()))
+            {
+                syncQuartzJobForCombine(schedule, existingJobId);
+            }
+            else if (existingJobId != null)
+            {
+                deleteQuartzJobForCombine(erCombineSync.getCombineId(), existingJobId);
+            }
+        }
+        return rows;
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int deleteErCombineSyncByCombineIds(Long[] combineIds)
     {
         for (Long combineId : combineIds)
         {
+            deleteLinkedQuartzJob(combineId);
             erCombineSyncLogMapper.deleteErCombineSyncLogByCombineId(combineId);
             erCombineSyncProgressMapper.deleteByCombineId(combineId);
         }
@@ -133,9 +185,10 @@ public class ErCombineSyncServiceImpl implements IErCombineSyncService
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public int deleteErCombineSyncByCombineId(Long combineId)
     {
+        deleteLinkedQuartzJob(combineId);
         erCombineSyncLogMapper.deleteErCombineSyncLogByCombineId(combineId);
         erCombineSyncProgressMapper.deleteByCombineId(combineId);
         return erCombineSyncMapper.deleteErCombineSyncByCombineId(combineId);
@@ -151,6 +204,206 @@ public class ErCombineSyncServiceImpl implements IErCombineSyncService
             return false;
         }
         return true;
+    }
+
+    // ==================== Quartz定时任务联动 ====================
+
+    private static String normalizeCron(String cron)
+    {
+        return cron == null ? null : cron.trim();
+    }
+
+    private static String normalizeStatus(String status)
+    {
+        if (StringUtils.isEmpty(status)) return "0";
+        if (!"0".equals(status) && !"1".equals(status)) throw new ServiceException("合并同步任务状态无效");
+        return status;
+    }
+
+    private void validateSchedule(String cron, Long jobId)
+    {
+        if (StringUtils.isNotEmpty(cron))
+        {
+            if (!CronUtils.isValid(cron))
+            {
+                throw new ServiceException("Cron 表达式无效，请检查合并同步的定时配置");
+            }
+            if (CronUtils.getNextExecution(cron) == null)
+            {
+                throw new ServiceException("Cron 表达式没有后续执行时间，请检查合并同步的定时配置");
+            }
+        }
+        if ((StringUtils.isNotEmpty(cron) || jobId != null) && jobService == null)
+        {
+            throw new ServiceException("定时任务服务不可用，无法保存合并同步的定时配置");
+        }
+    }
+
+    private void saveJobId(Long combineId, Long jobId)
+    {
+        ErCombineSync link = new ErCombineSync();
+        link.setCombineId(combineId);
+        link.setJobId(jobId);
+        if (erCombineSyncMapper.updateJobId(link) != 1)
+        {
+            throw new ServiceException("合并同步定时任务关联保存失败，请刷新后重试");
+        }
+    }
+
+    private ServiceException scheduleFailure(Long combineId, Exception failure)
+    {
+        log.error("合并同步任务[{}]定时任务联动失败", combineId, failure);
+        return new ServiceException("合并同步定时任务联动失败，本次保存未成功，请检查定时任务配置及服务日志");
+    }
+
+    /**
+     * 为合并同步任务创建Quartz定时任务（新增时调用）
+     */
+    private void createQuartzJobForCombine(ErCombineSync erCombineSync)
+    {
+        SysJob job = buildQuartzJob(erCombineSync);
+        try
+        {
+            if (jobService.insertJob(job) != 1 || job.getJobId() == null)
+            {
+                throw new ServiceException("创建定时任务失败");
+            }
+
+            // 新任务最初为暂停，关联成功后才按业务状态启用。
+            saveJobId(erCombineSync.getCombineId(), job.getJobId());
+
+            if ("0".equals(erCombineSync.getStatus()))
+            {
+                job.setStatus("0");
+                if (jobService.changeStatus(job) != 1)
+                {
+                    throw new ServiceException("启用定时任务失败");
+                }
+            }
+            log.info("合并同步任务[{}]创建Quartz定时任务成功，jobId={}", erCombineSync.getCombineId(), job.getJobId());
+        }
+        catch (Exception e)
+        {
+            // 数据库事务会回滚；RAMJobStore 不参加数据库事务，额外清理新建调度。
+            if (job.getJobId() != null)
+            {
+                try { jobService.deleteJob(job); }
+                catch (Exception cleanup) { log.error("清理合并同步任务[{}]新建调度失败", erCombineSync.getCombineId(), cleanup); }
+            }
+            throw scheduleFailure(erCombineSync.getCombineId(), e);
+        }
+    }
+
+    /**
+     * 同步合并同步任务对应的Quartz定时任务（修改时调用）
+     *
+     * @param erCombineSync 合并任务（cron/名称/状态已按旧配置补全为有效值）
+     * @param oldJobId 修改前关联的Quartz任务ID（可为null）
+     */
+    private void syncQuartzJobForCombine(ErCombineSync erCombineSync, Long oldJobId)
+    {
+        try
+        {
+            if (oldJobId != null)
+            {
+                // 已有定时任务，更新
+                SysJob job = jobService.selectJobById(oldJobId);
+                if (job != null)
+                {
+                    SysJob update = buildQuartzJob(erCombineSync);
+                    update.setJobId(oldJobId);
+                    if (jobService.updateJob(update) != 1)
+                    {
+                        throw new ServiceException("更新定时任务失败");
+                    }
+                    log.info("合并同步任务[{}]更新Quartz定时任务成功，jobId={}", erCombineSync.getCombineId(), oldJobId);
+                }
+                else
+                {
+                    // job_id存在但任务已被删除，重新创建
+                    createQuartzJobForCombine(erCombineSync);
+                }
+            }
+            else
+            {
+                // 没有定时任务，新建
+                createQuartzJobForCombine(erCombineSync);
+            }
+        }
+        catch (Exception e)
+        {
+            throw scheduleFailure(erCombineSync.getCombineId(), e);
+        }
+    }
+
+    /**
+     * 删除合并同步任务关联的Quartz定时任务
+     */
+    private void deleteLinkedQuartzJob(Long combineId)
+    {
+        ErCombineSync task = erCombineSyncMapper.selectErCombineSyncByCombineId(combineId);
+        if (task != null && task.getJobId() != null)
+        {
+            validateSchedule(null, task.getJobId());
+            deleteQuartzJobForCombine(combineId, task.getJobId());
+        }
+    }
+
+    /**
+     * 删除指定的Quartz定时任务并清空任务表关联
+     */
+    private void deleteQuartzJobForCombine(Long combineId, Long jobId)
+    {
+        if (jobId == null)
+        {
+            return;
+        }
+        try
+        {
+            SysJob job = jobService.selectJobById(jobId);
+            if (job != null && jobService.deleteJob(job) != 1)
+            {
+                throw new ServiceException("删除定时任务失败");
+            }
+            // 使用专用 SQL 支持将关联写为 NULL，通用动态更新会跳过 NULL 字段。
+            saveJobId(combineId, null);
+            log.info("合并同步任务[{}]删除Quartz定时任务成功，jobId={}", combineId, jobId);
+        }
+        catch (Exception e)
+        {
+            throw scheduleFailure(combineId, e);
+        }
+    }
+
+    /**
+     * 构建合并同步任务的Quartz任务对象
+     */
+    private SysJob buildQuartzJob(ErCombineSync erCombineSync)
+    {
+        SysJob job = new SysJob();
+        job.setCreateBy(erCombineSync.getCreateBy());
+        applyQuartzJobFields(job, erCombineSync);
+        return job;
+    }
+
+    /**
+     * 填充/同步Quartz任务的业务字段（名称、调用目标、cron、状态）
+     */
+    private void applyQuartzJobFields(SysJob job, ErCombineSync erCombineSync)
+    {
+        job.setJobName("合并同步-" + erCombineSync.getCombineName());
+        job.setJobGroup("DATA_SYNC");
+        // 使用专门的Job方法来执行合并同步（参数加L后缀表示Long类型）
+        job.setInvokeTarget("dataSyncTask.executeCombineSyncById(" + erCombineSync.getCombineId() + "L)");
+        job.setCronExpression(erCombineSync.getCronExpression());
+        job.setMisfirePolicy("2"); // 错过调度时补执行一次
+        job.setConcurrent("1"); // 不允许并发
+        // 使用业务任务的状态（0正常 1停用）
+        if (erCombineSync.getStatus() != null)
+        {
+            job.setStatus(erCombineSync.getStatus());
+        }
+        job.setUpdateBy(erCombineSync.getUpdateBy());
     }
 
     /**

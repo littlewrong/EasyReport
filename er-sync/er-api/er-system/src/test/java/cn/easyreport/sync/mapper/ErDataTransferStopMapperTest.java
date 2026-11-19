@@ -85,6 +85,21 @@ public class ErDataTransferStopMapperTest
         assertFalse(sql.contains("set sync_status"));
     }
 
+    @Test
+    public void manualRecoveryOnlyTransitionsStoppingToStoppedWithoutChangingWatermarks()
+    {
+        ErDataTransfer task = new ErDataTransfer();
+        task.setTransferId(7L);
+        task.setSyncProgress("{}");
+        task.setLastSyncResult("{}");
+        String sql = sql("recoverStoppedTransfer", task);
+        assertTrue(sql.contains("set sync_status = '4'"));
+        assertTrue(sql.contains("where transfer_id = ? and sync_status = '5'"));
+        assertFalse(sql.contains("last_sync_value"));
+        assertFalse(sql.contains("external_table_enabled"));
+        assertFalse(sql.contains("sync_status = '1'"));
+    }
+
     private static Map<String, Object> stopParameters(boolean legacyActive)
     {
         Map<String, Object> parameters = new HashMap<>();

@@ -21,6 +21,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -302,6 +303,9 @@ public class DataSyncTargetNamespaceTest {
                 if (sql.contains("information_schema.COLUMNS")) return rows(Collections.emptyList());
                 throw new AssertionError("Unexpected target query: " + sql);
             }
+            if (sql.startsWith("SELECT ") && sql.endsWith(" WHERE 1=0")) {
+                return dataRows(sourceSchema(sql), true);
+            }
             if (sql.startsWith("SELECT *")) {
                 dataQueries.add(new Query(sql, parameters));
                 return dataRows(sourceSchema(sql));
@@ -321,11 +325,18 @@ public class DataSyncTargetNamespaceTest {
         }
 
         ResultSet dataRows(String schema) {
+            return dataRows(schema, false);
+        }
+
+        ResultSet dataRows(String schema, boolean metadataOnly) {
             List<Object> parameters = rowParameters(schema);
-            ResultSet data = rows(Arrays.asList(row("id", parameters.get(0), "modified_at", parameters.get(1)),
+            ResultSet data = rows(metadataOnly ? Collections.emptyList()
+                    : Arrays.asList(row("id", parameters.get(0), "modified_at", parameters.get(1)),
                     row("id", parameters.get(2), "modified_at", parameters.get(3))));
             return proxy(ResultSet.class, (p, m, a) -> {
                 if ("getMetaData".equals(m.getName())) return proxy(ResultSetMetaData.class, (mp, mm, ma) -> {
+                    if ("getColumnCount".equals(mm.getName())) return 2;
+                    if ("getColumnType".equals(mm.getName())) return (Integer) ma[0] == 1 ? Types.BIGINT : Types.TIMESTAMP;
                     if ("getColumnTypeName".equals(mm.getName())) return (Integer) ma[0] == 1 ? "BIGINT" : "TIMESTAMP";
                     return defaultValue(mm.getReturnType());
                 });

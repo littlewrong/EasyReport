@@ -127,10 +127,13 @@ public interface IErDataTransferService
     public ErDataTransfer getSyncProgress(Long transferId);
 
     /**
-     * 停止同步任务（优雅停止，当前表处理完成后停止）
+     * 停止同步任务，取消当前 SQL 并等待执行器清理结束。
      *
      * @param transferId 同步任务ID
      * @return 停止结果
      */
     public Map<String, Object> stopTransfer(Long transferId);
+
+    /** 单实例执行已退出后，人工确认并恢复遗留的停止中状态。 */
+    public Map<String, Object> recoverStoppedTransfer(Long transferId, boolean confirmedExecutionEnded);
 }

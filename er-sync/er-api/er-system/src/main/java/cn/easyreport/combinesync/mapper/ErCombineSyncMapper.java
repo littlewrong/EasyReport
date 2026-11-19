@@ -43,6 +43,9 @@ public interface ErCombineSyncMapper
      */
     public int updateErCombineSync(ErCombineSync erCombineSync);
 
+    /** 更新服务端调度关联，jobId 为 null 时清空关联。 */
+    public int updateJobId(ErCombineSync erCombineSync);
+
     /**
      * 删除合并同步任务
      *

@@ -233,6 +233,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         WHERE transfer_id = #{transferId} AND sync_status = '1'
     </update>
 
+    <update id="recoverStoppedTransfer" parameterType="ErDataTransfer">
+        UPDATE er_data_transfer
+        SET sync_status = '4', sync_progress = #{syncProgress},
+            last_sync_result = #{lastSyncResult}, last_sync_time = #{lastSyncTime}, update_time = SYSDATE()
+        WHERE transfer_id = #{transferId} AND sync_status = '5'
+    </update>
+
     <delete id="deleteErDataTransferByTransferId" parameterType="Long">
         DELETE FROM er_data_transfer WHERE transfer_id = #{transferId}
     </delete>

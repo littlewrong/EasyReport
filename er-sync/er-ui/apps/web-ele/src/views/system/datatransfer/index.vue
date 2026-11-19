@@ -26,6 +26,7 @@ import {
   listDataTransfer,
   listTransferLog,
   previewTransfer,
+  recoverStoppedTransfer,
   refreshTransferProgress,
   stopTransfer,
   updateDataTransfer,
@@ -128,7 +129,8 @@ export default {
       syncProgressLoading: false,
       syncProgressData: {},
       syncProgressTimer: null,
-      stopping: false, // 停止中状态
+      stopRequestTaskId: null,
+      stopRequestAction: null,
       // 自动刷新定时器
       refreshTimer: null,
       // 同步操作复选框
@@ -934,7 +936,6 @@ export default {
       this.syncProgressOpen = true;
       this.syncProgressLoading = true;
       this.syncProgressData = { transferId };
-      this.stopping = false;
       // 立即获取一次进度
       this.fetchSyncProgress(transferId);
       // 启动轮询（每1秒刷新一次）
@@ -962,9 +963,7 @@ export default {
           this.syncProgressData = response.data || { transferId };
           this.syncProgressLoading = false;
           // 如果同步完成，停止轮询
-          if (this.syncProgressData.syncStatus === '5') this.stopping = true;
           if (!this.isTransferRunning(this.syncProgressData.syncStatus)) {
-            this.stopping = false;
             this.stopSyncProgressPolling();
             this.getList();
           }
@@ -1042,24 +1041,63 @@ export default {
       }
     },
     /** 停止同步 */
-    handleStopSync() {
-      this.$modal
-        .confirm('确认要停止当前同步任务吗？')
-        .then(() => {
-          this.stopping = true;
-          return stopTransfer(this.syncProgressData.transferId);
+    handleStopSync(row = this.syncProgressData) {
+      return this.requestTransferStop(row, false);
+    },
+    /** 恢复后台已退出后遗留的停止中状态 */
+    handleRecoverStopped(row = this.syncProgressData) {
+      return this.requestTransferStop(row, true);
+    },
+    requestTransferStop(row, recover) {
+      const transferId = row && row.transferId;
+      if (!transferId || this.stopRequestTaskId !== null) return;
+      const message = recover
+        ? '仅用于后台执行已经退出、状态仍为“停止中”的任务。请确认同步 SQL 已结束后，再恢复为“已停止”。'
+        : row.syncStatus === '5'
+          ? '确认重新提交停止请求并检查任务状态吗？'
+          : '确认要停止当前同步任务吗？';
+      return this.$modal
+        .confirm(message)
+        .then(async () => {
+          if (this.stopRequestTaskId !== null) return;
+          this.stopRequestTaskId = transferId;
+          this.stopRequestAction = recover ? 'recover' : 'stop';
+          try {
+            const response = recover
+              ? await recoverStoppedTransfer(transferId)
+              : await stopTransfer(transferId);
+            const data = response.data || {};
+            this.$modal.msgSuccess(data.message || '操作成功');
+            // 只显示后端确认的状态，停止请求与后台实际结束分别处理。
+            if (data.syncStatus != null) {
+              const status = String(data.syncStatus);
+              const task = this.dataTransferList.find(
+                (item) => item.transferId === transferId,
+              );
+              if (task) task.syncStatus = status;
+              if (this.activeProgressTaskId === transferId) {
+                this.syncProgressData.syncStatus = status;
+              }
+            }
+          } finally {
+            this.stopRequestTaskId = null;
+            this.stopRequestAction = null;
+            this.startAutoRefresh();
+            this.getList();
+            if (
+              this.syncProgressOpen &&
+              this.activeProgressTaskId === transferId
+            ) {
+              // 丢弃停止前发出的旧进度响应，重新读取真实状态。
+              this.progressRequestVersion += 1;
+              this.progressRequestTaskId = null;
+              this.syncProgressLoading = true;
+              this.startSyncProgressPolling(transferId);
+              this.fetchSyncProgress(transferId);
+            }
+          }
         })
-        .then(() => {
-          this.$modal.msgSuccess('已提交停止请求');
-          this.syncProgressData.syncStatus = '5';
-          this.startAutoRefresh();
-          // 自动刷新一次进度和列表
-          this.handleRefreshSyncProgress();
-          this.getList();
-        })
-        .catch(() => {
-          this.stopping = false;
-        });
+        .catch(() => {});
     },
     /** 格式化同步结果 */
     formatSyncResult(result) {
@@ -1425,6 +1463,24 @@ D
 </el-button>
               <template #dropdown>
 <el-dropdown-menu>
+                  <el-dropdown-item
+                    :icon="RotateCw"
+                    v-hasPermi="['system:datatransfer:execute']"
+                    v-if="isTransferRunning(scope.row.syncStatus)"
+                    :disabled="stopRequestTaskId !== null"
+                    @click="handleStopSync(scope.row)"
+                  >
+                    {{ scope.row.syncStatus === '5' ? '重试停止' : '停止同步' }}
+                  </el-dropdown-item>
+                  <el-dropdown-item
+                    :icon="Check"
+                    v-hasPermi="['system:datatransfer:execute']"
+                    v-if="scope.row.syncStatus === '5'"
+                    :disabled="stopRequestTaskId !== null"
+                    @click="handleRecoverStopped(scope.row)"
+                  >
+                    恢复为已停止
+                  </el-dropdown-item>
                   <el-dropdown-item
                     :icon="ArrowRightLeft"
                     v-hasPermi="['system:datatransfer:query']"
@@ -2346,16 +2402,33 @@ D
 刷新进度
 </el-button>
           <el-button
-            @click="handleStopSync"
+            @click="handleStopSync()"
             type="danger"
+            v-hasPermi="['system:datatransfer:execute']"
             v-if="isTransferRunning(syncProgressData.syncStatus)"
-            :loading="stopping || syncProgressData.syncStatus === '5'"
-            :disabled="syncProgressData.syncStatus === '5'"
+            :loading="
+              stopRequestTaskId === syncProgressData.transferId &&
+              stopRequestAction === 'stop'
+            "
+            :disabled="stopRequestTaskId !== null"
             >
 {{
-              syncProgressData.syncStatus === '5' ? '停止中' : '停止同步'
+              syncProgressData.syncStatus === '5' ? '重试停止' : '停止同步'
             }}
 </el-button>
+          <el-button
+            @click="handleRecoverStopped()"
+            type="warning"
+            v-hasPermi="['system:datatransfer:execute']"
+            v-if="syncProgressData.syncStatus === '5'"
+            :loading="
+              stopRequestTaskId === syncProgressData.transferId &&
+              stopRequestAction === 'recover'
+            "
+            :disabled="stopRequestTaskId !== null"
+          >
+            恢复为已停止
+          </el-button>
           <el-button
             @click="handleViewLogFromProgress"
             type="primary"

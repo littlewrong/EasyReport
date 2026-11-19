@@ -99,3 +99,12 @@ export function stopTransfer(transferId) {
     method: 'post'
   })
 }
+
+// 后台执行已退出后，将遗留的停止中状态恢复为已停止
+export function recoverStoppedTransfer(transferId) {
+  return request({
+    url: '/system/datatransfer/recoverStop/' + transferId,
+    method: 'post',
+    params: { confirmedExecutionEnded: true }
+  })
+}
