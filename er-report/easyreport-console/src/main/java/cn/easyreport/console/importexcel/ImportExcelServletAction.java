@@ -15,81 +15,124 @@
  ******************************************************************************/
 package cn.easyreport.console.importexcel;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.servlet.ServletException;
+import javax.servlet.ServletInputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.apache.commons.fileupload.FileItem;
-import org.apache.commons.fileupload.FileItemFactory;
-import org.apache.commons.fileupload.disk.DiskFileItemFactory;
+import org.apache.commons.fileupload.FileItemIterator;
+import org.apache.commons.fileupload.FileItemStream;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
 
 import cn.easyreport.console.RenderPageServletAction;
 import cn.easyreport.console.cache.TempObjectCache;
 import cn.easyreport.definition.ReportDefinition;
 
-/**
- * @author Jacky.gao
- * @since 2017年5月25日
- */
 public class ImportExcelServletAction extends RenderPageServletAction {
-	private List<ExcelParser> excelParsers=new ArrayList<ExcelParser>();
-	public ImportExcelServletAction(){
-		excelParsers.add(new HSSFExcelParser());
-		excelParsers.add(new XSSFExcelParser());
-	}
-	@Override
-	public void execute(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-		String tempDir=System.getProperty("java.io.tmpdir");
-		FileItemFactory factory=new DiskFileItemFactory(1000240,new File(tempDir));
-		ServletFileUpload upload=new ServletFileUpload(factory);
-		ReportDefinition report=null;
-		String errorInfo=null;
-		try {
-			List<FileItem> items=upload.parseRequest(req);
-			for(FileItem item:items){
-				String fieldName=item.getFieldName();
-				String name=item.getName().toLowerCase();
-				if(fieldName.equals("_excel_file") && (name.endsWith(".xls") || name.endsWith(".xlsx"))){
-					InputStream inputStream=item.getInputStream();
-					for(ExcelParser parser:excelParsers){
-						if(parser.support(name)){
-							report=parser.parse(inputStream);
-							break;
-						}
-					}
-					inputStream.close();
-					break;
-				}
-			}
-			errorInfo="请选择一个合法的Excel导入";
-		} catch (Exception e) {
-			e.printStackTrace();
-			errorInfo=e.getMessage();
-		}
-		Map<String,Object> result=new HashMap<String,Object>();
-		if(report!=null){
-			result.put("result", true);
-			TempObjectCache.putObject("classpath:template/template.easyreport.xml", report);
-		}else{
-			result.put("result", false);
-			if(errorInfo!=null){
-				result.put("errorInfo", errorInfo);
-			}
-		}
-		writeObjectToJson(resp, result);
-	}
-	
-	@Override
-	public String url() {
-		return "/import";
-	}
+    static final long MAX_FILE_BYTES = 10L * 1024 * 1024;
+    static final long MAX_REQUEST_BYTES = 20L * 1024 * 1024;
+    private static final Logger LOGGER = Logger.getLogger(ImportExcelServletAction.class.getName());
+
+    @Override
+    public void execute(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        if (!"POST".equalsIgnoreCase(req.getMethod())) {
+            resp.setHeader("Allow", "POST");
+            respond(resp, 405, false);
+            return;
+        }
+        if (!ServletFileUpload.isMultipartContent(req)) {
+            respond(resp, 400, false);
+            return;
+        }
+        Path directory = null;
+        Path uploadFile = null;
+        ReportDefinition report = null;
+        try (ServletInputStream requestStream = req.getInputStream()) {
+            ServletFileUpload upload = new ServletFileUpload();
+            upload.setHeaderEncoding("UTF-8");
+            upload.setSizeMax(MAX_REQUEST_BYTES);
+            upload.setFileSizeMax(MAX_FILE_BYTES);
+            FileItemIterator items = upload.getItemIterator(req);
+            String name = null;
+            int count = 0;
+            while (items.hasNext()) {
+                FileItemStream item = items.next();
+                // Streaming bounds parts before allocating a list of FileItem objects.
+                if (++count > 1 || item.isFormField() || !"_excel_file".equals(item.getFieldName())) {
+                    throw new IOException("Expected one Excel upload.");
+                }
+                name = ExcelUploadValidator.validateName(item.getName());
+                directory = createUploadDirectory();
+                uploadFile = directory.resolve("upload.tmp");
+                try (InputStream source = item.openStream(); OutputStream output = Files.newOutputStream(uploadFile,
+                        StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+                    byte[] buffer = new byte[8192];
+                    long size = 0;
+                    int read;
+                    while ((read = source.read(buffer)) != -1) {
+                        size += read;
+                        if (size > MAX_FILE_BYTES) throw new IOException("Upload is too large.");
+                        output.write(buffer, 0, read);
+                    }
+                    if (size == 0) throw new IOException("Upload is empty.");
+                }
+            }
+            if (count != 1) throw new IOException("Expected one Excel upload.");
+            ExcelUploadValidator.validate(uploadFile, name);
+            ExcelParser parser = name.endsWith(".xlsx") ? new XSSFExcelParser() : new HSSFExcelParser();
+            try (InputStream source = Files.newInputStream(uploadFile)) {
+                report = parser.parse(source);
+            }
+        } catch (Exception invalid) {
+            // Parser exceptions may contain absolute paths or user-controlled XML.
+            LOGGER.log(Level.FINE, "Rejected Excel upload.", invalid);
+        } finally {
+            boolean fileRemoved = deleteTemporary(uploadFile);
+            boolean directoryRemoved = deleteTemporary(directory);
+            if (!fileRemoved || !directoryRemoved) report = null;
+        }
+        if (report == null) {
+            respond(resp, 400, false);
+            return;
+        }
+        TempObjectCache.putObject("classpath:template/template.easyreport.xml", report);
+        respond(resp, 200, true);
+    }
+
+    Path createUploadDirectory() throws IOException {
+        // The client filename never participates in any filesystem path.
+        return Files.createTempDirectory("easyreport-import-");
+    }
+
+    private boolean deleteTemporary(Path path) {
+        try {
+            if (path != null) Files.deleteIfExists(path);
+            return true;
+        } catch (IOException | SecurityException cleanupFailure) {
+            LOGGER.log(Level.WARNING, "Unable to remove temporary Excel upload.", cleanupFailure);
+            return false;
+        }
+    }
+
+    private void respond(HttpServletResponse resp, int status, boolean success) throws ServletException, IOException {
+        resp.setStatus(status);
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("result", success);
+        if (!success) result.put("errorInfo", "Invalid Excel upload or import limits exceeded.");
+        writeObjectToJson(resp, result);
+    }
+
+    @Override
+    public String url() { return "/import"; }
 }

@@ -46,6 +46,7 @@ import cn.easyreport.dsl.ReportParserParser;
 import cn.easyreport.dsl.ReportParserParser.DatasetContext;
 import cn.easyreport.export.ReportRender;
 import cn.easyreport.exception.ReportFileException;
+import cn.easyreport.exception.ReportParseException;
 import cn.easyreport.expression.ErrorInfo;
 import cn.easyreport.expression.ScriptErrorListener;
 import cn.easyreport.parser.ReportParser;
@@ -119,12 +120,8 @@ public class DesignerServletAction extends RenderPageServletAction {
 		writeObjectToJson(resp, result);
 	}
 	public void savePreviewData(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-		String content=req.getParameter("content");
-		content=decodeContent(content);
-		InputStream inputStream=IOUtils.toInputStream(content,"utf-8");
-		ReportDefinition reportDef=reportParser.parse(inputStream,"p");
-		reportRender.rebuildReportDefinition(reportDef);
-		IOUtils.closeQuietly(inputStream);
+		requirePost(req, resp);
+		ReportDefinition reportDef=parseReportContent(reportContent(req), "p");
 		TempObjectCache.putObject(PREVIEW_KEY, reportDef);
 	}
 	
@@ -143,6 +140,7 @@ public class DesignerServletAction extends RenderPageServletAction {
 	}
 	
 	public void deleteReportFile(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+		requirePost(req, resp);
 		String file=req.getParameter("file");
 		// Delete callers send the raw report name, unlike load/save callers.
 		if(file==null || file.trim().isEmpty()){
@@ -231,10 +229,9 @@ public class DesignerServletAction extends RenderPageServletAction {
 	
 	
 	public void saveReportFile(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+		requirePost(req, resp);
 		String file=req.getParameter("file");
 		file=ReportUtils.decodeFileName(file);
-		String content=req.getParameter("content");
-		content=decodeContent(content);
 		ReportProvider targetReportProvider=null;
 		for(ReportProvider provider:reportProviders){
 			if(file.startsWith(provider.getPrefix())){
@@ -245,12 +242,37 @@ public class DesignerServletAction extends RenderPageServletAction {
 		if(targetReportProvider==null){
 			throw new ReportFileException(400, "Invalid report provider.");
 		}
+		String content=reportContent(req);
+		ReportDefinition reportDef=parseReportContent(content, file);
+		// Publish only a fully validated definition; a failure must leave file and cache intact.
 		targetReportProvider.saveReport(file, content);
-		InputStream inputStream=IOUtils.toInputStream(content,"utf-8");
-		ReportDefinition reportDef=reportParser.parse(inputStream, file);
-		reportRender.rebuildReportDefinition(reportDef);
 		CacheUtils.cacheReportDefinition(file, reportDef);
-		IOUtils.closeQuietly(inputStream);
+	}
+
+	private void requirePost(HttpServletRequest req, HttpServletResponse resp) {
+		if(!"POST".equalsIgnoreCase(req.getMethod())){
+			resp.setHeader("Allow", "POST");
+			throw new ReportFileException(405, "This operation requires POST.");
+		}
+	}
+
+	private String reportContent(HttpServletRequest req) {
+		String content=req.getParameter("content");
+		// Legacy clients URL-encode the content once in addition to form encoding.
+		if(content!=null && content.length()>(long)ReportParser.MAX_REPORT_BYTES*3){
+			throw new ReportFileException(413, "Report file content is too large.");
+		}
+		return decodeContent(content);
+	}
+
+	private ReportDefinition parseReportContent(String content, String file) {
+		try {
+			ReportDefinition reportDef=reportParser.parseContent(content, file);
+			reportRender.rebuildReportDefinition(reportDef);
+			return reportDef;
+		} catch (ReportParseException e) {
+			throw new ReportFileException(400, "Invalid report file content.");
+		}
 	}
 	
 	public void loadReportProviders(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {

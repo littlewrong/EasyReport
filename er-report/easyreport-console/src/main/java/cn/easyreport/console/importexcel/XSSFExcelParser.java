@@ -1,12 +1,12 @@
 /*******************************************************************************
  * Copyright 2017 Bstek
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy
  * of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
@@ -18,6 +18,7 @@ package cn.easyreport.console.importexcel;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.CellType;
@@ -55,95 +56,95 @@ import cn.easyreport.definition.value.SimpleValue;
 public class XSSFExcelParser extends ExcelParser {
 	@Override
 	public ReportDefinition parse(InputStream inputStream) throws Exception {
-		ReportDefinition report=new ReportDefinition();
-		List<RowDefinition> rowDefs=new ArrayList<RowDefinition>();
-		report.setRows(rowDefs);
-		List<ColumnDefinition> columnDefs=new ArrayList<ColumnDefinition>();
-		report.setColumns(columnDefs);
-		List<CellDefinition> cellDefs=new ArrayList<CellDefinition>();
-		report.setCells(cellDefs);
-		XSSFWorkbook book=new XSSFWorkbook(inputStream);
-		XSSFSheet sheet=book.getSheetAt(0);
-		int firstRow=0;
-		int rowCount=sheet.getPhysicalNumberOfRows();
-		int maxColumnCount=buildMaxColumn(sheet);
-		for(int i=firstRow;i<rowCount;i++){
-			XSSFRow row=sheet.getRow(i);
-			if(row==null){
+		try (InputStream source=inputStream; XSSFWorkbook book=new XSSFWorkbook(source)) {
+			ReportDefinition report=new ReportDefinition();
+			List<RowDefinition> rowDefs=new ArrayList<RowDefinition>();
+			report.setRows(rowDefs);
+			List<ColumnDefinition> columnDefs=new ArrayList<ColumnDefinition>();
+			report.setColumns(columnDefs);
+			List<CellDefinition> cellDefs=new ArrayList<CellDefinition>();
+			report.setCells(cellDefs);
+			ExcelImportLimits.validateWorkbook(book);
+			XSSFSheet sheet=book.getSheetAt(0);
+			int firstRow=0;
+			int rowCount=ExcelImportLimits.rowCount(sheet);
+			int maxColumnCount=ExcelImportLimits.columnCount(sheet);
+			for(int i=firstRow;i<rowCount;i++){
+				XSSFRow row=sheet.getRow(i);
+				if(row==null){
+					RowDefinition rowDef=new RowDefinition();
+					rowDef.setHeight(20);
+					rowDef.setRowNumber(i+1);
+					rowDefs.add(rowDef);
+					addBlankCells(cellDefs, i+1, maxColumnCount);
+					continue;
+				}
 				RowDefinition rowDef=new RowDefinition();
-				rowDef.setHeight(20);
+				int height=row.getHeight()/20;
+				rowDef.setHeight(height);
 				rowDef.setRowNumber(i+1);
 				rowDefs.add(rowDef);
-				addBlankCells(cellDefs, i+1, maxColumnCount);
-				continue;
-			}
-			RowDefinition rowDef=new RowDefinition();
-			int height=row.getHeight()/20;
-			rowDef.setHeight(height);
-			rowDef.setRowNumber(i+1);
-			rowDefs.add(rowDef);
-			for(int j=0;j<maxColumnCount;j++){
-				boolean isMergeRegion=isMergedRegion(sheet, i, j);
-				if(isMergeRegion){
-					continue;
-				}
-				XSSFCell cell=row.getCell(j);
-				if(cell==null){
+				for(int j=0;j<maxColumnCount;j++){
+					boolean isMergeRegion=isMergedRegion(sheet, i, j);
+					if(isMergeRegion){
+						continue;
+					}
+					XSSFCell cell=row.getCell(j);
+					if(cell==null){
+						CellDefinition cellDef=new CellDefinition();
+						cellDef.setValue(new SimpleValue(""));
+						cellDef.setRowNumber(i+1);
+						cellDef.setColumnNumber(j+1);
+						cellDefs.add(cellDef);
+						continue;
+					}
+					Span span=getSpan(sheet, i, j);
+
+					Object value=null;
+					CellType cellType=cell.getCellTypeEnum();
+					switch(cellType){
+					case STRING:
+						value=cell.getStringCellValue();
+						break;
+					case BOOLEAN:
+						value=cell.getBooleanCellValue();
+						break;
+					case NUMERIC:
+						value=cell.getNumericCellValue();
+						break;
+					case FORMULA:
+						value=cell.getCellFormula();
+						break;
+					default:
+						value="";
+					}
 					CellDefinition cellDef=new CellDefinition();
-					cellDef.setValue(new SimpleValue(""));
+					cellDef.setValue(new SimpleValue(value !=null ? value.toString() : ""));
 					cellDef.setRowNumber(i+1);
 					cellDef.setColumnNumber(j+1);
+					cellDef.setRowSpan(span.getRowSpan());
+					cellDef.setColSpan(span.getColSpan());
+					cellDef.setCellStyle(buildCellStyle(cell,book));
 					cellDefs.add(cellDef);
-					continue;
 				}
-				Span span=getSpan(sheet, i, j);
-				
-				Object value=null;
-				CellType cellType=cell.getCellTypeEnum();
-				switch(cellType){
-				case STRING:
-					value=cell.getStringCellValue();
-					break;
-				case BOOLEAN:
-					value=cell.getBooleanCellValue();
-					break;
-				case NUMERIC:
-					value=cell.getNumericCellValue();
-					break;
-				case FORMULA:
-					value=cell.getCellFormula();
-					break;
-				default:
-					value="";
-				}
-				CellDefinition cellDef=new CellDefinition();
-				cellDef.setValue(new SimpleValue(value !=null ? value.toString() : ""));
-				cellDef.setRowNumber(i+1);
-				cellDef.setColumnNumber(j+1);
-				cellDef.setRowSpan(span.getRowSpan());
-				cellDef.setColSpan(span.getColSpan());
-				cellDef.setCellStyle(buildCellStyle(cell,book));
-				cellDefs.add(cellDef);
 			}
+			for(int i=0;i<maxColumnCount;i++){
+				ColumnDefinition col=new ColumnDefinition();
+				int width=sheet.getColumnWidth(i);
+				col.setWidth(width/37);
+				col.setColumnNumber(i+1);
+				columnDefs.add(col);
+			}
+			Paper paper=new Paper();
+			paper.setPaperType(PaperType.A4);
+			paper.setOrientation(Orientation.portrait);
+			paper.setPagingMode(PagingMode.fitpage);
+			PaperSize pageSize=PaperType.A4.getPaperSize();
+			paper.setWidth(pageSize.getWidth());
+			paper.setHeight(paper.getHeight());
+			report.setPaper(paper);
+			return report;
 		}
-		for(int i=0;i<maxColumnCount;i++){
-			ColumnDefinition col=new ColumnDefinition();
-			int width=sheet.getColumnWidth(i);
-			col.setWidth(width/37);
-			col.setColumnNumber(i+1);
-			columnDefs.add(col);
-		}
-		book.close();
-		inputStream.close();
-		Paper paper=new Paper();
-		paper.setPaperType(PaperType.A4);
-		paper.setOrientation(Orientation.portrait);
-		paper.setPagingMode(PagingMode.fitpage);
-		PaperSize pageSize=PaperType.A4.getPaperSize();
-		paper.setWidth(pageSize.getWidth());
-		paper.setHeight(paper.getHeight());
-		report.setPaper(paper);
-		return report;
 	}
 
 	private CellStyle buildCellStyle(XSSFCell cell,XSSFWorkbook book){
@@ -182,14 +183,14 @@ public class XSSFExcelParser extends ExcelParser {
 			String rgb=color.getARGBHex();
 			style.setForecolor(hex2Rgb(rgb));
 		}else{
-			style.setForecolor("0,0,0");			
+			style.setForecolor("0,0,0");
 		}
 		FillPatternType pattern=cellStyle.getFillPatternEnum();
 		if(pattern!=null && pattern.equals(FillPatternType.SOLID_FOREGROUND)){
 			XSSFColor bgcolor=cellStyle.getFillForegroundColorColor();
 			if(bgcolor!=null){
 				String hex=bgcolor.getARGBHex();
-				style.setBgcolor(hex2Rgb(hex));					
+				style.setBgcolor(hex2Rgb(hex));
 			}
 		}
 		int fontSize=font.getFontHeight()/20;
@@ -234,15 +235,15 @@ public class XSSFExcelParser extends ExcelParser {
 				Integer.valueOf( colorStr.substring( 4, 6 ), 16 )+","+
 	            Integer.valueOf( colorStr.substring( 6, 8 ), 16 );
 	}
-	
+
 	private Span getSpan(XSSFSheet sheet,int row ,int column){
-		int sheetMergeCount = sheet.getNumMergedRegions(); 
+		int sheetMergeCount = sheet.getNumMergedRegions();
 		for (int i = 0; i < sheetMergeCount; i++) {
 			CellRangeAddress range = sheet.getMergedRegion(i);
 			int firstColumn = range.getFirstColumn();
 			int lastColumn = range.getLastColumn();
 			int firstRow = range.getFirstRow();
-			if(row == firstRow && column==firstColumn){  
+			if(row == firstRow && column==firstColumn){
 				int lastRow = range.getLastRow();
 				int rowSpan=lastRow-firstRow;
 				if(rowSpan>0){
@@ -274,23 +275,7 @@ public class XSSFExcelParser extends ExcelParser {
 		}
 		return false;
 	}
-	
-	private int buildMaxColumn(XSSFSheet sheet){
-		int rowCount=sheet.getPhysicalNumberOfRows();
-		int maxColumnCount=0;
-		for(int i=0;i<rowCount;i++){
-			XSSFRow row=sheet.getRow(i);
-			if(row==null){
-				continue;
-			}
-			int columnCount=row.getPhysicalNumberOfCells();
-			if(columnCount>maxColumnCount){
-				maxColumnCount=columnCount;
-			}
-		}
-		return maxColumnCount;
-	}
-	
+
 	protected void addBlankCells(List<CellDefinition> cellDefs,int rowNumber,int totalColumn){
 		for(int i=0;i<totalColumn;i++){
 			CellDefinition cellDef=new CellDefinition();
@@ -300,9 +285,9 @@ public class XSSFExcelParser extends ExcelParser {
 			cellDefs.add(cellDef);
 		}
 	}
-	
+
 	@Override
 	public boolean support(String name) {
-		return name.toLowerCase().endsWith(".xlsx");
+		return name.toLowerCase(Locale.ROOT).endsWith(".xlsx");
 	}
 }

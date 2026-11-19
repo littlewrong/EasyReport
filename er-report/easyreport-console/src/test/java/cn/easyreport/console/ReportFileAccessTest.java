@@ -3,6 +3,7 @@ package cn.easyreport.console;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -32,18 +33,102 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.Before;
+import org.junit.After;
 import org.junit.rules.TemporaryFolder;
 
 import cn.easyreport.console.designer.DesignerServletAction;
 import cn.easyreport.console.html.HtmlPreviewServletAction;
+import cn.easyreport.cache.CacheUtils;
+import cn.easyreport.cache.DefaultMemoryReportDefinitionCache;
+import cn.easyreport.definition.ReportDefinition;
 import cn.easyreport.exception.ReportFileException;
 import cn.easyreport.export.ExportManager;
+import cn.easyreport.export.ReportRender;
+import cn.easyreport.parser.ReportParser;
 import cn.easyreport.provider.report.ReportProvider;
 import cn.easyreport.provider.report.file.FileReportProvider;
 
 public class ReportFileAccessTest {
     @Rule
     public TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+    private Field definitionCache;
+    private Object previousCache;
+
+    @Before
+    public void initializeDefinitionCache() throws Exception {
+        definitionCache = CacheUtils.class.getDeclaredField("reportDefinitionCache");
+        definitionCache.setAccessible(true);
+        previousCache = definitionCache.get(null);
+        definitionCache.set(null, new DefaultMemoryReportDefinitionCache());
+    }
+
+    @After
+    public void restoreDefinitionCache() throws Exception {
+        definitionCache.set(null, previousCache);
+    }
+
+    @Test
+    public void invalidContentCannotOverwriteCreateOrReplaceCachedReports() throws Exception {
+        Path base = temporaryFolder.newFolder("reports").toPath();
+        Path report = base.resolve("report.xml");
+        String original = "<easyreport>original sentinel</easyreport>";
+        Files.write(report, original.getBytes(StandardCharsets.UTF_8));
+        DesignerServletAction action = designer(fileProvider(base));
+        ReportDefinition cached = new ReportDefinition();
+        CacheUtils.cacheReportDefinition("file:report.xml", cached);
+        for (String content : Arrays.asList(null, "", "not XML", "<report/>", "<easyreport>",
+                "<!DOCTYPE easyreport [<!ENTITY test 'untrusted'>]><easyreport>&test;</easyreport>",
+                "<easyreport><cell name='A1' row='1' col='1' left-cell='A1'><simple-value>x</simple-value></cell></easyreport>")) {
+            assertEquals(400, invoke(action, "saveReportFile", "file:report.xml", content, "POST").status);
+            assertEquals(original, new String(Files.readAllBytes(report), StandardCharsets.UTF_8));
+            assertSame(cached, CacheUtils.getReportDefinition("file:report.xml"));
+            assertEquals(400, invoke(action, "saveReportFile", "file:new.xml", content, "POST").status);
+            assertFalse(Files.exists(base.resolve("new.xml")));
+            try (java.util.stream.Stream<Path> files = Files.list(base)) {
+                assertEquals("No temporary files should remain after rejected saves", 1L, files.count());
+            }
+        }
+    }
+
+    @Test
+    public void validUnicodeReportIsSavedAndThenPublishedToCache() throws Exception {
+        Path base = temporaryFolder.newFolder("reports").toPath();
+        String content = "<easyreport><row row-number='1' height='20'/><column col-number='1' width='60'/>"
+                + "<cell name='A1' col='1' row='1'><simple-value><![CDATA[中文内容]]></simple-value></cell></easyreport>";
+        String file = "file:月度 报表.easyreport.xml";
+        assertEquals(200, invoke(designer(fileProvider(base)), "saveReportFile", file, content, "POST").status);
+        assertEquals(content, new String(Files.readAllBytes(base.resolve("月度 报表.easyreport.xml")), StandardCharsets.UTF_8));
+        assertEquals("中文内容", CacheUtils.getReportDefinition(file).getCells().get(0).getValue().getValue());
+    }
+
+    @Test
+    public void failedPersistenceDoesNotPublishNewDefinitionToCache() throws Exception {
+        ReportDefinition cached = new ReportDefinition();
+        CacheUtils.cacheReportDefinition("file:report.xml", cached);
+        FileReportProvider failing = new FileReportProvider() {
+            @Override
+            public void saveReport(String file, String content) {
+                throw new ReportFileException(500, "Unable to access report file.");
+            }
+        };
+        Response response = invoke(designer(failing), "saveReportFile", "file:report.xml", "<easyreport/>", "POST");
+        assertEquals(500, response.status);
+        assertSame(cached, CacheUtils.getReportDefinition("file:report.xml"));
+    }
+
+    @Test
+    public void writeEndpointsRejectGetAndPreviewUsesTheSameContentValidation() throws Exception {
+        Path base = temporaryFolder.newFolder("reports").toPath();
+        DesignerServletAction action = designer(fileProvider(base));
+        for (String method : Arrays.asList("saveReportFile", "savePreviewData", "deleteReportFile")) {
+            assertEquals(405, invoke(action, method, "file:report.xml", "<easyreport/>", "GET").status);
+        }
+        assertEquals(400, invoke(action, "savePreviewData", null,
+                "<!DOCTYPE easyreport><easyreport/>", "POST").status);
+        assertFalse(Files.exists(base.resolve("report.xml")));
+    }
 
     @Test
     public void servletRejectsTraversalAndDoesNotExposeServerPaths() throws Exception {
@@ -205,10 +290,16 @@ public class ReportFileAccessTest {
         Field providers = DesignerServletAction.class.getDeclaredField("reportProviders");
         providers.setAccessible(true);
         providers.set(action, Collections.singletonList(provider));
+        action.setReportParser(new ReportParser());
+        action.setReportRender(new ReportRender());
         return action;
     }
 
     private static Response invoke(DesignerServletAction action, String method, String file) throws Exception {
+        return invoke(action, method, file, "<easyreport/>", "POST");
+    }
+
+    private static Response invoke(DesignerServletAction action, String method, String file, String content, String httpMethod) throws Exception {
         UReportServlet servlet = new UReportServlet();
         Field actions = UReportServlet.class.getDeclaredField("actionMap");
         actions.setAccessible(true);
@@ -217,18 +308,25 @@ public class ReportFileAccessTest {
         if (file != null) {
             parameters.put("file", file);
         }
-        parameters.put("content", "<report/> ");
+        if (content != null) {
+            parameters.put("content", content);
+        }
         Response response = new Response();
-        servlet.service(request("/easyreport/designer/" + method, parameters), response.proxy());
+        servlet.service(request("/easyreport/designer/" + method, parameters, httpMethod), response.proxy());
         assertNull("Request thread-local must be cleared even for file errors", RequestHolder.getRequest());
         return response;
     }
 
     private static HttpServletRequest request(final String uri, final Map<String, String> parameters) {
+        return request(uri, parameters, "POST");
+    }
+
+    private static HttpServletRequest request(final String uri, final Map<String, String> parameters, final String httpMethod) {
         return proxy(HttpServletRequest.class, (object, method, arguments) -> {
             switch (method.getName()) {
                 case "getContextPath": return "";
                 case "getRequestURI": return uri;
+                case "getMethod": return httpMethod;
                 case "getParameter": return parameters.get(arguments[0]);
                 case "getParameterNames": return Collections.enumeration(parameters.keySet());
                 default: return defaultValue(method.getReturnType());

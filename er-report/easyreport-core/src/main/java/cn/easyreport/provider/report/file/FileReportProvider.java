@@ -16,10 +16,12 @@
 package cn.easyreport.provider.report.file;
 
 import java.io.File;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -28,6 +30,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -41,13 +44,14 @@ import java.util.logging.Logger;
 
 import javax.servlet.ServletContext;
 
-import org.apache.commons.io.IOUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.web.context.WebApplicationContext;
 
 import cn.easyreport.exception.ReportFileException;
+import cn.easyreport.exception.ReportParseException;
+import cn.easyreport.parser.ReportParser;
 import cn.easyreport.provider.report.ReportFile;
 import cn.easyreport.provider.report.ReportProvider;
 
@@ -60,6 +64,7 @@ public class FileReportProvider implements ReportProvider,ApplicationContextAwar
 	private String prefix="file:";
 	private String fileStoreDir;
 	private boolean disabled;
+	private final ReportParser reportParser=new ReportParser();
 	@Override
 	public InputStream loadReport(String file) {
 		try {
@@ -120,15 +125,40 @@ public class FileReportProvider implements ReportProvider,ApplicationContextAwar
 	
 	@Override
 	public void saveReport(String file,String content) {
+		Path temporary=null;
 		try {
 			Path path=resolveReportPath(file, false);
-			try (OutputStream out=Channels.newOutputStream(Files.newByteChannel(path,
-					StandardOpenOption.WRITE, StandardOpenOption.CREATE,
-					StandardOpenOption.TRUNCATE_EXISTING, LinkOption.NOFOLLOW_LINKS))) {
-				IOUtils.write(content, out,"utf-8");
+			// Validate here too: callers other than the designer must not bypass validation.
+			byte[] bytes=ReportParser.validateContent(content);
+			reportParser.parse(new ByteArrayInputStream(bytes), file);
+			temporary=Files.createTempFile(path.getParent(), ".easyreport-", ".tmp");
+			try (FileChannel channel=FileChannel.open(temporary,
+					StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+				ByteBuffer buffer=ByteBuffer.wrap(bytes);
+				while(buffer.hasRemaining()){
+					channel.write(buffer);
+				}
+				channel.force(true);
 			}
+			// Recheck the destination after writing, before publishing the new file.
+			if(!path.equals(resolveReportPath(file, false))){
+				throw invalidPath();
+			}
+			// Fail closed if the filesystem cannot replace atomically; never truncate the old file.
+			Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			temporary=null;
+		} catch (ReportParseException e) {
+			throw new ReportFileException(400, "Invalid report file content.");
 		} catch (IOException | SecurityException e) {
 			throw fileAccessException(e);
+		} finally {
+			if(temporary!=null){
+				try {
+					Files.deleteIfExists(temporary);
+				} catch (IOException | SecurityException e) {
+					LOGGER.log(Level.WARNING, "Unable to clean temporary report file.", e);
+				}
+			}
 		}
 	}
 

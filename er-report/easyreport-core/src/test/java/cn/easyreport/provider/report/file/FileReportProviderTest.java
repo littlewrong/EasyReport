@@ -27,8 +27,8 @@ import cn.easyreport.exception.ReportFileException;
 import cn.easyreport.provider.report.ReportFile;
 
 public class FileReportProviderTest {
-    private static final String ORIGINAL = "<ureport>original sentinel</ureport>";
-    private static final String REPLACEMENT = "<ureport>replacement</ureport>";
+    private static final String ORIGINAL = "<easyreport>original sentinel</easyreport>";
+    private static final String REPLACEMENT = "<easyreport>replacement</easyreport>";
 
     @Rule
     public TemporaryFolder temporaryFolder = new TemporaryFolder();
@@ -53,7 +53,7 @@ public class FileReportProviderTest {
 
     @Test
     public void readsWritesAndDeletesXmlReportsWithAndWithoutPrefix() throws IOException {
-        String[] names = {"report.xml", "report.ureport.xml", "月度 销售报表.xml"};
+        String[] names = {"report.xml", "report.easyreport.xml", "月度 销售报表.xml"};
         for (String name : names) {
             provider.saveReport("file:" + name, ORIGINAL);
             assertEquals(ORIGINAL, readReport(name));
@@ -68,11 +68,44 @@ public class FileReportProviderTest {
     @Test
     public void allowsReportsInExistingRelativeSubdirectories() throws IOException {
         Files.createDirectories(reportRoot.resolve("年度 报表").resolve("销售"));
-        String name = "年度 报表/销售/明细.ureport.xml";
+        String name = "年度 报表/销售/明细.easyreport.xml";
         provider.saveReport("file:" + name, ORIGINAL);
         assertEquals(ORIGINAL, readReport(name));
         provider.deleteReport(name);
         assertFalse(Files.exists(reportRoot.resolve(name)));
+    }
+
+    @Test
+    public void invalidContentNeverCreatesOrTruncatesReports() throws IOException {
+        Path existing = reportRoot.resolve("existing.xml");
+        write(existing, ORIGINAL);
+        for (String content : Arrays.asList(null, "", "<% harmless marker %>", "<report/>", "<easyreport>",
+                "<!DOCTYPE easyreport><easyreport/>")) {
+            expectFailure(400, () -> provider.saveReport("file:existing.xml", content));
+            assertEquals(ORIGINAL, read(existing));
+            expectFailure(400, () -> provider.saveReport("file:new.xml", content));
+            assertFalse(Files.exists(reportRoot.resolve("new.xml")));
+            try (java.util.stream.Stream<Path> files = Files.list(reportRoot)) {
+                assertEquals("Invalid saves must not leave temporary files", 1L, files.count());
+            }
+        }
+    }
+
+    @Test
+    public void atomicReplacementDoesNotTruncateAnOutsideHardLinkTarget() throws IOException {
+        Path linkedReport = reportRoot.resolve("linked.xml");
+        try {
+            Files.createLink(linkedReport, outsideFile);
+        } catch (IOException | UnsupportedOperationException | SecurityException error) {
+            Assume.assumeNoException("Hard links are unavailable on this platform", error);
+        }
+        provider.saveReport("file:linked.xml", REPLACEMENT);
+        assertEquals(REPLACEMENT, readReport("linked.xml"));
+        assertEquals(ORIGINAL, read(outsideFile));
+        assertFalse(Files.isSameFile(linkedReport, outsideFile));
+        try (java.util.stream.Stream<Path> files = Files.list(reportRoot)) {
+            assertEquals("Successful replacement must remove its temporary file", 1L, files.count());
+        }
     }
 
     @Test
@@ -189,7 +222,7 @@ public class FileReportProviderTest {
     @Test
     public void listsOnlyOrdinaryXmlReportsInTheStorageDirectory() throws IOException {
         write(reportRoot.resolve("monthly.xml"), ORIGINAL);
-        write(reportRoot.resolve("年度 汇总.ureport.xml"), ORIGINAL);
+        write(reportRoot.resolve("年度 汇总.easyreport.xml"), ORIGINAL);
         write(reportRoot.resolve("application.yml"), ORIGINAL);
         write(reportRoot.resolve("source.jar"), ORIGINAL);
         write(reportRoot.resolve("monthly.xml.bak"), ORIGINAL);
@@ -202,7 +235,7 @@ public class FileReportProviderTest {
             names.add(report.getName());
             assertNotNull(report.getUpdateDate());
         }
-        assertEquals(new HashSet<String>(Arrays.asList("monthly.xml", "年度 汇总.ureport.xml")), names);
+        assertEquals(new HashSet<String>(Arrays.asList("monthly.xml", "年度 汇总.easyreport.xml")), names);
     }
 
     @Test
